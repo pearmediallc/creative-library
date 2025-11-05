@@ -21,24 +21,32 @@ export interface Editor {
 
 export interface MediaFile {
   id: string;
-  user_id: string;
+  uploaded_by: string;
   editor_id: string;
+  editor_name: string;
+  filename: string;
   original_filename: string;
-  file_type: string;
+  file_type: 'image' | 'video' | 'other';
+  mime_type: string;
   file_size: number;
   s3_key: string;
-  s3_bucket: string;
-  media_type: 'image' | 'video' | 'other';
-  dimensions?: { width: number; height: number };
+  s3_url: string;
+  thumbnail_url?: string;
+  width?: number;
+  height?: number;
   duration?: number;
-  thumbnail_s3_key?: string;
   tags: string[];
   description?: string;
-  download_url?: string;
-  thumbnail_url?: string;
+  is_deleted: boolean;
   created_at: string;
+  updated_at: string;
+  upload_date?: string;
+  // Joined fields from query
   uploader_name?: string;
-  editor_name?: string;
+  uploader_email?: string;
+  editor_display_name?: string;
+  // Generated URLs for display
+  download_url?: string;
 }
 
 export interface EditorPerformance {

@@ -94,7 +94,7 @@ export function MediaLibraryPage() {
                     />
                   ) : (
                     <div className="flex items-center justify-center h-full">
-                      {file.media_type === 'image' ? (
+                      {file.file_type === 'image' ? (
                         <ImageIcon className="w-16 h-16 text-muted-foreground" />
                       ) : (
                         <Video className="w-16 h-16 text-muted-foreground" />
@@ -103,7 +103,7 @@ export function MediaLibraryPage() {
                   )}
                   <div className="absolute top-2 right-2">
                     <span className="px-2 py-1 text-xs font-medium rounded bg-background/80 backdrop-blur">
-                      {file.media_type}
+                      {file.file_type}
                     </span>
                   </div>
                 </div>
