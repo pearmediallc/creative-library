@@ -1,0 +1,18 @@
+2025-11-05 02:30:17 [[32minfo[39m]: Connecting to database...
+2025-11-05 02:30:17 [[32minfo[39m]: Database connected at: Wed Nov 05 2025 02:30:17 GMT+0530 (India Standard Time)
+2025-11-05 02:30:17 [[32minfo[39m]: ✅ Database connected
+2025-11-05 02:30:17 [[32minfo[39m]: ======================================================================
+2025-11-05 02:30:17 [[32minfo[39m]: 🚀 CREATIVE ASSET LIBRARY - SERVER RUNNING
+2025-11-05 02:30:17 [[32minfo[39m]: ======================================================================
+2025-11-05 02:30:17 [[32minfo[39m]: 📍 Environment: undefined
+2025-11-05 02:30:17 [[32minfo[39m]: 🌐 Server: http://localhost:3001
+2025-11-05 02:30:17 [[32minfo[39m]: 📊 API: http://localhost:3001/api
+2025-11-05 02:30:17 [[32minfo[39m]: 🔧 Health: http://localhost:3001/health
+2025-11-05 02:30:17 [[32minfo[39m]: 🐍 Python Service: undefined
+2025-11-05 02:30:17 [[32minfo[39m]: ======================================================================
+2025-11-05 02:30:43 [[32minfo[39m]: GET /health {"ip":"::1","userAgent":"curl/8.4.0"}
+2025-11-05 02:31:00 [[32minfo[39m]: POST /api/auth/register {"ip":"::1","userAgent":"curl/8.4.0"}
+2025-11-05 02:31:00 [[32minfo[39m]: User registered {"userId":"6490a2b6-03a1-4266-a87e-4e7c7070a253","email":"test@test.com"}
+2025-11-05 02:31:00 [[31merror[39m]: Registration error {"error":"secretOrPrivateKey must have a value","email":"test@test.com"}
+2025-11-05 02:31:00 [[31merror[39m]: secretOrPrivateKey must have a value {"stack":"Error: secretOrPrivateKey must have a value\n    at module.exports [as sign] (/Users/mac/Desktop/creative-library/backend/node_modules/jsonwebtoken/sign.js:111:20)\n    at AuthService.generateToken (/Users/mac/Desktop/creative-library/backend/src/services/authService.js:83:16)\n    at AuthService.register (/Users/mac/Desktop/creative-library/backend/src/services/authService.js:33:24)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async AuthController.register (/Users/mac/Desktop/creative-library/backend/src/controllers/authController.js:15:22)","path":"/api/auth/register","method":"POST","ip":"::1"}
+2025-11-05 02:32:11 [[32minfo[39m]: SIGTERM received, shutting down gracefully...

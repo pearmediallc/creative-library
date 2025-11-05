@@ -1,0 +1,1 @@
+Frontend PID:  echo  sleep 20 tail -40 ../logs/frontend.log
