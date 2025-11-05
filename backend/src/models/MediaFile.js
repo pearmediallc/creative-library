@@ -18,7 +18,6 @@ class MediaFile extends BaseModel {
    * @param {string} data.file_type - File MIME type
    * @param {number} data.file_size - File size in bytes
    * @param {string} data.s3_key - S3 object key
-   * @param {string} data.s3_bucket - S3 bucket name
    * @param {string} data.media_type - Type: image, video, other
    * @param {Object} data.dimensions - Width/height for images/videos
    * @param {number} data.duration - Duration in seconds for videos
@@ -35,7 +34,6 @@ class MediaFile extends BaseModel {
       file_type: data.file_type,
       file_size: data.file_size,
       s3_key: data.s3_key,
-      s3_bucket: data.s3_bucket,
       media_type: data.media_type,
       dimensions: data.dimensions || null,
       duration: data.duration || null,

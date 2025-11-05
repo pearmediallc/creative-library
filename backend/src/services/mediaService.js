@@ -67,7 +67,6 @@ class MediaService {
         file_type: file.mimetype,
         file_size: file.size,
         s3_key: uploadResult.s3Key,
-        s3_bucket: uploadResult.s3Bucket,
         media_type: mediaType,
         dimensions,
         thumbnail_s3_key: thumbnailKey,
