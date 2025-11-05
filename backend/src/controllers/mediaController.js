@@ -66,10 +66,8 @@ class MediaController {
         offset: parseInt(req.query.offset) || 0
       };
 
-      // If not admin, filter by uploaded_by
-      if (req.user.role !== 'admin') {
-        filters.uploaded_by = req.user.id;
-      }
+      // All users can see all files (removed role restriction)
+      // Buyers need to see all creatives to use them in campaigns
 
       const result = await mediaService.getMediaFiles(filters, req.user.id);
 

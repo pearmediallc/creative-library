@@ -6,7 +6,7 @@ import { Card } from '../components/ui/Card';
 import { mediaApi, editorApi } from '../lib/api';
 import { MediaFile, Editor } from '../types';
 import { formatBytes, formatDate } from '../lib/utils';
-import { Image as ImageIcon, Video, X } from 'lucide-react';
+import { Image as ImageIcon, Video, X, Download, Trash2 } from 'lucide-react';
 
 export function MediaLibraryPage() {
   const [files, setFiles] = useState<MediaFile[]>([]);
@@ -15,6 +15,7 @@ export function MediaLibraryPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedEditor, setSelectedEditor] = useState('');
   const [showUploadModal, setShowUploadModal] = useState(false);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -42,6 +43,35 @@ export function MediaLibraryPage() {
       console.error('Error response:', error.response?.data);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDownload = async (file: MediaFile) => {
+    try {
+      const url = file.s3_url || file.download_url;
+      if (!url) return;
+
+      // Create temporary anchor element to trigger download
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = file.original_filename;
+      link.target = '_blank';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (error) {
+      console.error('Download failed:', error);
+    }
+  };
+
+  const handleDelete = async (fileId: string) => {
+    try {
+      await mediaApi.delete(fileId);
+      setDeleteConfirmId(null);
+      fetchData();
+    } catch (error: any) {
+      console.error('Delete failed:', error);
+      alert(error.response?.data?.error || 'Failed to delete file');
     }
   };
 
@@ -130,6 +160,26 @@ export function MediaLibraryPage() {
                       ))}
                     </div>
                   )}
+                  <div className="flex gap-2 mt-3 pt-3 border-t border-border">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1"
+                      onClick={() => handleDownload(file)}
+                    >
+                      <Download className="w-4 h-4 mr-1" />
+                      Download
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1 text-destructive hover:text-destructive"
+                      onClick={() => setDeleteConfirmId(file.id)}
+                    >
+                      <Trash2 className="w-4 h-4 mr-1" />
+                      Delete
+                    </Button>
+                  </div>
                 </div>
               </Card>
             ))}
@@ -149,6 +199,14 @@ export function MediaLibraryPage() {
             setShowUploadModal(false);
             fetchData();
           }}
+        />
+      )}
+
+      {deleteConfirmId && (
+        <DeleteConfirmModal
+          fileName={files.find(f => f.id === deleteConfirmId)?.original_filename || 'this file'}
+          onConfirm={() => handleDelete(deleteConfirmId)}
+          onCancel={() => setDeleteConfirmId(null)}
         />
       )}
     </DashboardLayout>
@@ -278,6 +336,57 @@ function UploadModal({
             </Button>
           </div>
         </form>
+      </Card>
+    </div>
+  );
+}
+
+function DeleteConfirmModal({
+  fileName,
+  onConfirm,
+  onCancel,
+}: {
+  fileName: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+      <Card className="w-full max-w-md bg-white dark:bg-gray-900">
+        <div className="p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-bold">Delete File</h2>
+            <button
+              type="button"
+              onClick={onCancel}
+              className="text-muted-foreground hover:text-foreground"
+            >
+              <X size={20} />
+            </button>
+          </div>
+
+          <div className="space-y-3">
+            <p className="text-muted-foreground">
+              Are you sure you want to delete <strong>{fileName}</strong>?
+            </p>
+            <p className="text-sm text-muted-foreground">
+              This action cannot be undone. The file will be permanently removed from the library.
+            </p>
+          </div>
+
+          <div className="flex gap-2">
+            <Button type="button" variant="outline" onClick={onCancel} className="flex-1">
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              className="flex-1 bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+              onClick={onConfirm}
+            >
+              Delete
+            </Button>
+          </div>
+        </div>
       </Card>
     </div>
   );

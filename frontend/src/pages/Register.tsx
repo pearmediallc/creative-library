@@ -9,6 +9,7 @@ export function RegisterPage() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [role, setRole] = useState<'creative' | 'buyer' | 'editor'>('creative');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -27,7 +28,7 @@ export function RegisterPage() {
     }
 
     try {
-      await register(name, email, password);
+      await register(name, email, password, role);
       navigate('/');
     } catch (err: any) {
       setError(err.response?.data?.error || 'Registration failed');
@@ -94,6 +95,26 @@ export function RegisterPage() {
               />
               <p className="text-xs text-muted-foreground">
                 Must be at least 8 characters
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <label htmlFor="role" className="text-sm font-medium">
+                Role
+              </label>
+              <select
+                id="role"
+                value={role}
+                onChange={(e) => setRole(e.target.value as 'creative' | 'buyer' | 'editor')}
+                className="h-10 w-full px-3 rounded-md border border-input bg-background text-sm"
+                required
+              >
+                <option value="creative">Creative (Upload & Manage Assets)</option>
+                <option value="buyer">Buyer (Use Assets in Campaigns)</option>
+                <option value="editor">Editor (Creative Team Member)</option>
+              </select>
+              <p className="text-xs text-muted-foreground">
+                Select your role in the team
               </p>
             </div>
 
