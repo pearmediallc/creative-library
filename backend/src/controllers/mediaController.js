@@ -66,12 +66,17 @@ class MediaController {
         offset: parseInt(req.query.offset) || 0
       };
 
-      // If not admin, filter by user_id
+      // If not admin, filter by uploaded_by
       if (req.user.role !== 'admin') {
-        filters.user_id = req.user.id;
+        filters.uploaded_by = req.user.id;
       }
 
       const result = await mediaService.getMediaFiles(filters, req.user.id);
+
+      // Disable caching for media list
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
 
       res.json({
         success: true,
@@ -92,7 +97,7 @@ class MediaController {
       const mediaFile = await mediaService.getMediaFile(req.params.id);
 
       // Check permission (owner or admin)
-      if (mediaFile.user_id !== req.user.id && req.user.role !== 'admin') {
+      if (mediaFile.uploaded_by !== req.user.id && req.user.role !== 'admin') {
         return res.status(403).json({
           success: false,
           error: 'Permission denied'
