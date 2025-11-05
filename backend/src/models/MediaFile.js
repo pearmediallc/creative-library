@@ -121,7 +121,7 @@ class MediaFile extends BaseModel {
     params.push(limit, offset);
 
     const result = await this.raw(sql, params);
-    return result.rows;
+    return result; // raw() already returns rows array, not result object
   }
 
   /**
