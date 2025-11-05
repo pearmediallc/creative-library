@@ -32,6 +32,9 @@ const PORT = process.env.PORT || 3001;
 // MIDDLEWARE
 // ============================================
 
+// Trust proxy (required for Render)
+app.set('trust proxy', 1);
+
 // Security
 app.use(helmet());
 
