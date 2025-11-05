@@ -115,6 +115,9 @@ app.use('/api/editors', editorRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/admin', adminRoutes);
 
+// Log registered routes
+logger.info('API routes registered: /api/auth, /api/media, /api/editors, /api/analytics, /api/admin');
+
 // 404 handler
 app.use((req, res) => {
   res.status(404).json({
