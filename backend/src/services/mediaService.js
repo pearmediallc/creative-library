@@ -1,5 +1,6 @@
 const MediaFile = require('../models/MediaFile');
 const User = require('../models/User');
+const Editor = require('../models/Editor');
 const s3Service = require('./s3Service');
 const logger = require('../utils/logger');
 
@@ -33,6 +34,12 @@ class MediaService {
         throw new Error(sizeValidation.error);
       }
 
+      // Get editor details
+      const editor = await Editor.findById(editorId);
+      if (!editor) {
+        throw new Error('Editor not found');
+      }
+
       // Upload original file to S3
       const uploadResult = await s3Service.uploadFile(
         file.buffer,
@@ -41,13 +48,19 @@ class MediaService {
         'originals'
       );
 
+      // Generate S3 URL
+      const s3Url = `${process.env.AWS_CLOUDFRONT_URL}/${uploadResult.s3Key}`;
+
       // Process based on media type
-      let dimensions = null;
-      let thumbnailKey = null;
+      let width = null;
+      let height = null;
+      let thumbnailUrl = null;
 
       if (mediaType === 'image') {
         // Get image dimensions
-        dimensions = await s3Service.getImageDimensions(file.buffer);
+        const dimensions = await s3Service.getImageDimensions(file.buffer);
+        width = dimensions?.width || null;
+        height = dimensions?.height || null;
 
         // Generate thumbnail
         const thumbnailResult = await s3Service.generateThumbnail(
@@ -55,21 +68,29 @@ class MediaService {
           file.originalname
         );
         if (thumbnailResult) {
-          thumbnailKey = thumbnailResult.s3Key;
+          thumbnailUrl = `${process.env.AWS_CLOUDFRONT_URL}/${thumbnailResult.s3Key}`;
         }
       }
 
-      // Create database record
+      // Determine file type (image/video)
+      const fileType = mediaType === 'image' ? 'image' : mediaType === 'video' ? 'video' : 'other';
+
+      // Create database record matching schema
       const mediaFile = await MediaFile.createMediaFile({
-        user_id: userId,
+        uploaded_by: userId,
         editor_id: editorId,
+        editor_name: editor.name,
+        filename: uploadResult.filename || file.originalname,
         original_filename: file.originalname,
-        file_type: file.mimetype,
+        file_type: fileType,
+        mime_type: file.mimetype,
         file_size: file.size,
         s3_key: uploadResult.s3Key,
-        media_type: mediaType,
-        dimensions,
-        thumbnail_s3_key: thumbnailKey,
+        s3_url: s3Url,
+        width,
+        height,
+        duration: null,
+        thumbnail_url: thumbnailUrl,
         tags: metadata.tags || [],
         description: metadata.description || null
       });

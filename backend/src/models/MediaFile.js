@@ -14,14 +14,18 @@ class MediaFile extends BaseModel {
    * @param {Object} data - Media file data
    * @param {string} data.uploaded_by - Uploader user ID
    * @param {string} data.editor_id - Selected editor ID
+   * @param {string} data.editor_name - Editor name (denormalized)
+   * @param {string} data.filename - Generated filename
    * @param {string} data.original_filename - Original file name
-   * @param {string} data.file_type - File MIME type
+   * @param {string} data.file_type - File type (image/video)
+   * @param {string} data.mime_type - File MIME type
    * @param {number} data.file_size - File size in bytes
    * @param {string} data.s3_key - S3 object key
-   * @param {string} data.media_type - Type: image, video, other
-   * @param {Object} data.dimensions - Width/height for images/videos
+   * @param {string} data.s3_url - S3 URL
+   * @param {number} data.width - Image/video width
+   * @param {number} data.height - Image/video height
    * @param {number} data.duration - Duration in seconds for videos
-   * @param {string} data.thumbnail_s3_key - S3 key for thumbnail
+   * @param {string} data.thumbnail_url - Thumbnail URL
    * @param {Array<string>} data.tags - Tags array
    * @param {string} data.description - Description
    * @returns {Promise<Object>} Created media file record
@@ -30,14 +34,18 @@ class MediaFile extends BaseModel {
     return this.create({
       uploaded_by: data.uploaded_by,
       editor_id: data.editor_id,
+      editor_name: data.editor_name,
+      filename: data.filename,
       original_filename: data.original_filename,
       file_type: data.file_type,
+      mime_type: data.mime_type,
       file_size: data.file_size,
       s3_key: data.s3_key,
-      media_type: data.media_type,
-      dimensions: data.dimensions || null,
+      s3_url: data.s3_url,
+      width: data.width || null,
+      height: data.height || null,
       duration: data.duration || null,
-      thumbnail_s3_key: data.thumbnail_s3_key || null,
+      thumbnail_url: data.thumbnail_url || null,
       tags: data.tags || [],
       description: data.description || null
     });
