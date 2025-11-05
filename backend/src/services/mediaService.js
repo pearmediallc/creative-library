@@ -133,36 +133,21 @@ class MediaService {
         };
       }
 
-      // Generate presigned URLs for each file
-      const mediaFilesWithUrls = await Promise.all(
-        mediaFiles.map(async (file) => {
-          let downloadUrl = null;
-          let thumbnailUrl = null;
-
-          try {
-            downloadUrl = await s3Service.getDownloadUrl(file.s3_key);
-            if (file.thumbnail_s3_key) {
-              thumbnailUrl = await s3Service.getDownloadUrl(file.thumbnail_s3_key);
-            }
-          } catch (error) {
-            logger.warn('Failed to generate presigned URL', { error: error.message, fileId: file.id });
-            // Continue without URLs if S3 is not configured
-          }
-
-          return {
-            ...file,
-            download_url: downloadUrl,
-            thumbnail_url: thumbnailUrl
-          };
-        })
-      );
+      // Use CloudFront URLs stored in database (no presigned URL generation needed)
+      const mediaFilesWithUrls = mediaFiles.map((file) => {
+        return {
+          ...file,
+          download_url: file.s3_url, // CloudFront URL already in database
+          thumbnail_url: file.thumbnail_url // CloudFront URL already in database
+        };
+      });
 
       // Get total count for pagination
       const totalCount = await MediaFile.count({
-        deleted_at: null,
-        ...(filters.user_id && { user_id: filters.user_id }),
+        is_deleted: false,
+        ...(filters.uploaded_by && { uploaded_by: filters.uploaded_by }),
         ...(filters.editor_id && { editor_id: filters.editor_id }),
-        ...(filters.media_type && { media_type: filters.media_type })
+        ...(filters.media_type && { file_type: filters.media_type })
       });
 
       return {
@@ -193,22 +178,15 @@ class MediaService {
         throw new Error('Media file not found');
       }
 
-      if (mediaFile.deleted_at) {
+      if (mediaFile.is_deleted) {
         throw new Error('Media file has been deleted');
       }
 
-      // Generate presigned URLs
-      const downloadUrl = await s3Service.getDownloadUrl(mediaFile.s3_key);
-
-      let thumbnailUrl = null;
-      if (mediaFile.thumbnail_s3_key) {
-        thumbnailUrl = await s3Service.getDownloadUrl(mediaFile.thumbnail_s3_key);
-      }
-
+      // Use CloudFront URLs from database
       return {
         ...mediaFile,
-        download_url: downloadUrl,
-        thumbnail_url: thumbnailUrl
+        download_url: mediaFile.s3_url,
+        thumbnail_url: mediaFile.thumbnail_url
       };
     } catch (error) {
       logger.error('Get media file failed', { error: error.message, mediaFileId });

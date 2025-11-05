@@ -68,8 +68,8 @@ class MediaFile extends BaseModel {
     const params = [];
     let paramIndex = 1;
 
-    // Only active files
-    conditions.push(`deleted_at IS NULL`);
+    // Only active files (use is_deleted column)
+    conditions.push(`is_deleted = FALSE`);
 
     if (filters.uploaded_by) {
       conditions.push(`uploaded_by = $${paramIndex++}`);
