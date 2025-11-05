@@ -31,6 +31,8 @@ export function MediaLibraryPage() {
         editorApi.getAll(),
       ]);
 
+      console.log('Full files response:', filesRes.data);
+      console.log('Files array:', filesRes.data.data.files);
       setFiles(filesRes.data.data.files || []);
       const editorsList = editorsRes.data.data || [];
       console.log('Fetched editors:', editorsList);
