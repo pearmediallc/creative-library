@@ -118,10 +118,13 @@ class MediaService {
   async getMediaFiles(filters = {}, userId = null) {
     try {
       // Get media files
+      logger.info('getMediaFiles called with filters:', filters);
       const mediaFiles = await MediaFile.findWithFilters(filters);
+      logger.info(`Found ${mediaFiles?.length || 0} media files`);
 
       // If no files, return empty result early
       if (!mediaFiles || mediaFiles.length === 0) {
+        logger.warn('No media files found, returning empty array');
         return {
           files: [],
           pagination: {
