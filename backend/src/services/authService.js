@@ -42,6 +42,12 @@ class AuthService {
    * Login user
    */
   async login({ email, password }) {
+    console.log('========== LOGIN DEBUG START ==========');
+    console.log('JWT_SECRET exists:', !!process.env.JWT_SECRET);
+    console.log('JWT_SECRET length:', process.env.JWT_SECRET ? process.env.JWT_SECRET.length : 0);
+    console.log('JWT_SECRET first 20 chars:', process.env.JWT_SECRET ? process.env.JWT_SECRET.substring(0, 20) : 'UNDEFINED');
+    console.log('========== LOGIN DEBUG END ==========');
+
     // Find user
     const user = await User.findByEmail(email);
     if (!user) {
@@ -63,6 +69,7 @@ class AuthService {
 
     // Generate token
     const token = this.generateToken(user);
+    console.log('🎫 Generated token:', token.substring(0, 50) + '...');
 
     return {
       user: this.sanitizeUser(user),
@@ -80,9 +87,17 @@ class AuthService {
       role: user.role
     };
 
-    return jwt.sign(payload, process.env.JWT_SECRET, {
+    console.log('🔐 Generating token with payload:', payload);
+    console.log('🔑 Using JWT_SECRET (first 20 chars):', process.env.JWT_SECRET ? process.env.JWT_SECRET.substring(0, 20) : 'UNDEFINED');
+    console.log('⏰ Token expiry:', process.env.JWT_EXPIRY || '7d');
+
+    const token = jwt.sign(payload, process.env.JWT_SECRET, {
       expiresIn: process.env.JWT_EXPIRY || '7d'
     });
+
+    console.log('✅ Token generated successfully, length:', token.length);
+
+    return token;
   }
 
   /**

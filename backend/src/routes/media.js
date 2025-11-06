@@ -35,6 +35,12 @@ router.get('/stats',
   mediaController.getStats.bind(mediaController)
 );
 
+// Get files for library selector (campaign launcher integration)
+router.get('/select',
+  authenticateToken,
+  mediaController.selectFromLibrary.bind(mediaController)
+);
+
 // Get single file
 router.get('/:id',
   authenticateToken,

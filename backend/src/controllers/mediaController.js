@@ -204,6 +204,62 @@ class MediaController {
       next(error);
     }
   }
+
+  /**
+   * Get media files for library selector (campaign launcher integration)
+   * GET /api/media/select
+   * Query params: editor_id (required), start_date, end_date, file_type
+   */
+  async selectFromLibrary(req, res, next) {
+    try {
+      const { editor_id, start_date, end_date, file_type } = req.query;
+
+      // Validate required parameter
+      if (!editor_id) {
+        return res.status(400).json({
+          success: false,
+          error: 'editor_id is required'
+        });
+      }
+
+      // Build filters
+      const filters = {
+        editor_id: editor_id,
+        limit: 100, // Show up to 100 files
+        offset: 0
+      };
+
+      // Add file type filter if specified
+      if (file_type && file_type !== 'all') {
+        filters.file_type = file_type;
+      }
+
+      // Get files using existing service method
+      const result = await mediaService.getMediaFiles(filters, req.user.id);
+
+      // Filter by date range if specified
+      let files = result.files || [];
+      if (start_date || end_date) {
+        files = files.filter(file => {
+          const fileDate = new Date(file.created_at);
+          if (start_date && fileDate < new Date(start_date)) return false;
+          if (end_date && fileDate > new Date(end_date)) return false;
+          return true;
+        });
+      }
+
+      res.json({
+        success: true,
+        data: {
+          files: files,
+          total: files.length
+        }
+      });
+    } catch (error) {
+      logger.error('Select from library controller error', { error: error.message });
+      next(error);
+    }
+  }
 }
 
 module.exports = new MediaController();

@@ -12,7 +12,16 @@ function authenticateToken(req, res, next) {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
 
+  console.log('========== AUTH DEBUG START ==========');
+  console.log('JWT_SECRET exists:', !!process.env.JWT_SECRET);
+  console.log('JWT_SECRET length:', process.env.JWT_SECRET ? process.env.JWT_SECRET.length : 0);
+  console.log('JWT_SECRET first 20 chars:', process.env.JWT_SECRET ? process.env.JWT_SECRET.substring(0, 20) : 'UNDEFINED');
+  console.log('Token received:', token ? token.substring(0, 50) + '...' : 'NO TOKEN');
+  console.log('Auth header:', authHeader);
+  console.log('========== AUTH DEBUG END ==========');
+
   if (!token) {
+    console.log('❌ No token provided');
     return res.status(401).json({
       success: false,
       error: 'Access token required'
@@ -20,10 +29,16 @@ function authenticateToken(req, res, next) {
   }
 
   try {
+    console.log('🔍 Attempting to verify token with JWT_SECRET...');
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    console.log('✅ Token verified successfully:', { userId: decoded.id, email: decoded.email, role: decoded.role });
     req.user = decoded;
     next();
   } catch (error) {
+    console.log('❌ Token verification FAILED');
+    console.log('Error name:', error.name);
+    console.log('Error message:', error.message);
+    console.log('Full error:', error);
     logger.warn('Invalid token attempt', { error: error.message });
     return res.status(403).json({
       success: false,
