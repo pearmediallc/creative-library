@@ -260,6 +260,78 @@ class MediaController {
       next(error);
     }
   }
+
+  /**
+   * Download file - Proxy file from S3/CloudFront with CORS headers
+   * GET /api/media/:id/download
+   */
+  async downloadFile(req, res, next) {
+    try {
+      const { id } = req.params;
+
+      console.log('📥 Download request for file:', id);
+
+      // Get file metadata
+      const file = await mediaService.getFileById(id, req.user.id);
+
+      if (!file) {
+        console.log('❌ File not found:', id);
+        return res.status(404).json({
+          success: false,
+          error: 'File not found'
+        });
+      }
+
+      console.log('✅ File found:', file.original_filename);
+      console.log('📍 S3 URL:', file.s3_url);
+
+      // Fetch file from S3/CloudFront
+      const https = require('https');
+      const http = require('http');
+      const url = require('url');
+
+      const parsedUrl = url.parse(file.s3_url);
+      const protocol = parsedUrl.protocol === 'https:' ? https : http;
+
+      console.log('🔗 Fetching from:', parsedUrl.href);
+
+      protocol.get(parsedUrl.href, (proxyRes) => {
+        console.log('📡 Response status from S3:', proxyRes.statusCode);
+        console.log('📦 Content-Type:', proxyRes.headers['content-type']);
+        console.log('📏 Content-Length:', proxyRes.headers['content-length']);
+
+        // Set CORS headers
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Methods', 'GET');
+        res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
+
+        // Set content headers from S3 response
+        res.setHeader('Content-Type', proxyRes.headers['content-type'] || file.mime_type);
+        if (proxyRes.headers['content-length']) {
+          res.setHeader('Content-Length', proxyRes.headers['content-length']);
+        }
+        res.setHeader('Content-Disposition', `inline; filename="${file.original_filename}"`);
+
+        // Pipe S3 response to client
+        proxyRes.pipe(res);
+
+        proxyRes.on('end', () => {
+          console.log('✅ File download completed:', file.original_filename);
+        });
+      }).on('error', (err) => {
+        console.error('❌ Error fetching from S3:', err);
+        logger.error('Download proxy error', { error: err.message, fileId: id });
+        res.status(500).json({
+          success: false,
+          error: 'Failed to fetch file from storage'
+        });
+      });
+    } catch (error) {
+      console.error('❌ Download controller error:', error);
+      logger.error('Download file controller error', { error: error.message });
+      next(error);
+    }
+  }
 }
 
 module.exports = new MediaController();

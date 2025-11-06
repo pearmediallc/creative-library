@@ -41,6 +41,12 @@ router.get('/select',
   mediaController.selectFromLibrary.bind(mediaController)
 );
 
+// Download file (proxy from S3/CloudFront with CORS headers)
+router.get('/:id/download',
+  authenticateToken,
+  mediaController.downloadFile.bind(mediaController)
+);
+
 // Get single file
 router.get('/:id',
   authenticateToken,
