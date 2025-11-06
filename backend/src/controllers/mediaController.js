@@ -270,9 +270,10 @@ class MediaController {
       const { id } = req.params;
 
       console.log('📥 Download request for file:', id);
+      console.log('👤 Requested by user:', req.user.id, req.user.email);
 
       // Get file metadata
-      const file = await mediaService.getFileById(id, req.user.id);
+      const file = await mediaService.getMediaFile(id);
 
       if (!file) {
         console.log('❌ File not found:', id);
@@ -281,6 +282,8 @@ class MediaController {
           error: 'File not found'
         });
       }
+
+      console.log('📂 File belongs to user:', file.user_id);
 
       console.log('✅ File found:', file.original_filename);
       console.log('📍 S3 URL:', file.s3_url);
