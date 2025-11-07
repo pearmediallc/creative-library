@@ -2,11 +2,21 @@ import React, { useEffect, useState } from 'react';
 import { DashboardLayout } from '../components/layout/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
-import { Input } from '../components/ui/Input';
-import { analyticsApi } from '../lib/api';
+import { analyticsApi, facebookApi } from '../lib/api';
 import { EditorPerformance, AdNameChange } from '../types';
 import { formatNumber } from '../lib/utils';
-import { TrendingUp, AlertTriangle, RefreshCw, DollarSign, Eye, MousePointer } from 'lucide-react';
+import { TrendingUp, AlertTriangle, RefreshCw, DollarSign, Eye, MousePointer, Facebook, LogOut, CheckCircle, XCircle } from 'lucide-react';
+
+// Facebook App ID from environment or fallback to existing app
+const FACEBOOK_APP_ID = process.env.REACT_APP_FACEBOOK_APP_ID || '735375959485927';
+
+// Declare FB type for TypeScript
+declare global {
+  interface Window {
+    FB: any;
+    fbAsyncInit: () => void;
+  }
+}
 
 export function AnalyticsPage() {
   const [performance, setPerformance] = useState<EditorPerformance[]>([]);
@@ -14,12 +24,60 @@ export function AnalyticsPage() {
   const [adNameChanges, setAdNameChanges] = useState<AdNameChange[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
-  const [adAccountId, setAdAccountId] = useState('');
   const [error, setError] = useState('');
 
+  // Facebook connection state
+  const [fbConnected, setFbConnected] = useState(false);
+  const [fbAdAccount, setFbAdAccount] = useState<string | null>(null);
+  const [fbAdAccountName, setFbAdAccountName] = useState<string | null>(null);
+  const [fbAdAccounts, setFbAdAccounts] = useState<any[]>([]);
+  const [fbLoading, setFbLoading] = useState(false);
+  const [showAccountSelector, setShowAccountSelector] = useState(false);
+
   useEffect(() => {
+    initializeFacebookSDK();
+    checkFacebookStatus();
     fetchAnalytics();
   }, []);
+
+  // Initialize Facebook SDK
+  const initializeFacebookSDK = () => {
+    // Load Facebook SDK
+    if (!document.getElementById('facebook-jssdk')) {
+      const script = document.createElement('script');
+      script.id = 'facebook-jssdk';
+      script.src = 'https://connect.facebook.net/en_US/sdk.js';
+      script.async = true;
+      script.defer = true;
+      document.body.appendChild(script);
+    }
+
+    // Initialize FB SDK when loaded
+    window.fbAsyncInit = function() {
+      window.FB.init({
+        appId: FACEBOOK_APP_ID,
+        cookie: true,
+        xfbml: true,
+        version: 'v18.0'
+      });
+      console.log('✅ Facebook SDK initialized');
+    };
+  };
+
+  // Check if user has already connected Facebook
+  const checkFacebookStatus = async () => {
+    try {
+      const response = await facebookApi.getStatus();
+      if (response.data.success && response.data.data.connected) {
+        setFbConnected(true);
+        setFbAdAccount(response.data.data.adAccountId);
+        setFbAdAccountName(response.data.data.adAccountName);
+        console.log('✅ Facebook already connected:', response.data.data);
+      }
+    } catch (err) {
+      console.log('No Facebook connection found');
+    }
+  };
 
   const fetchAnalytics = async () => {
     try {
@@ -41,9 +99,99 @@ export function AnalyticsPage() {
     }
   };
 
+  // Login with Facebook
+  const handleFacebookLogin = () => {
+    setFbLoading(true);
+    setError('');
+
+    window.FB.login(
+      async (response: any) => {
+        if (response.authResponse) {
+          console.log('✅ Facebook login successful');
+          const accessToken = response.authResponse.accessToken;
+
+          try {
+            // Send access token to backend
+            await facebookApi.connect({ accessToken });
+            console.log('✅ Access token stored in backend');
+
+            // Fetch ad accounts
+            const accountsRes = await facebookApi.getAdAccounts();
+            const accounts = accountsRes.data.data || [];
+            console.log('✅ Fetched ad accounts:', accounts);
+
+            setFbAdAccounts(accounts);
+            setFbConnected(true);
+            setShowAccountSelector(true);
+
+            if (accounts.length === 1) {
+              // Auto-select if only one account
+              await handleSelectAdAccount(accounts[0]);
+            }
+          } catch (err: any) {
+            console.error('❌ Failed to connect Facebook:', err);
+            setError(err.response?.data?.error || 'Failed to connect Facebook account');
+          }
+        } else {
+          console.log('❌ Facebook login cancelled');
+          setError('Facebook login was cancelled');
+        }
+        setFbLoading(false);
+      },
+      {
+        scope: 'ads_read,ads_management',
+        auth_type: 'rerequest'
+      }
+    );
+  };
+
+  // Select ad account
+  const handleSelectAdAccount = async (account: any) => {
+    try {
+      setFbLoading(true);
+      await facebookApi.updateAdAccount({
+        adAccountId: account.id,
+        adAccountName: account.name
+      });
+
+      setFbAdAccount(account.id);
+      setFbAdAccountName(account.name);
+      setShowAccountSelector(false);
+      console.log('✅ Ad account selected:', account);
+    } catch (err: any) {
+      console.error('❌ Failed to update ad account:', err);
+      setError(err.response?.data?.error || 'Failed to select ad account');
+    } finally {
+      setFbLoading(false);
+    }
+  };
+
+  // Disconnect Facebook
+  const handleDisconnect = async () => {
+    if (!confirm('Are you sure you want to disconnect your Facebook account?')) {
+      return;
+    }
+
+    try {
+      setFbLoading(true);
+      await facebookApi.disconnect();
+      setFbConnected(false);
+      setFbAdAccount(null);
+      setFbAdAccountName(null);
+      setFbAdAccounts([]);
+      console.log('✅ Facebook disconnected');
+    } catch (err: any) {
+      console.error('❌ Failed to disconnect:', err);
+      setError(err.response?.data?.error || 'Failed to disconnect Facebook');
+    } finally {
+      setFbLoading(false);
+    }
+  };
+
+  // Sync ads from Facebook
   const handleSync = async () => {
-    if (!adAccountId) {
-      setError('Please enter an ad account ID');
+    if (!fbAdAccount) {
+      setError('Please connect Facebook and select an ad account first');
       return;
     }
 
@@ -51,11 +199,18 @@ export function AnalyticsPage() {
     setError('');
 
     try {
-      await analyticsApi.sync(adAccountId);
+      const response = await analyticsApi.sync(fbAdAccount);
       await fetchAnalytics();
-      setAdAccountId('');
-      alert('Ads synced successfully!');
+
+      const { totalAdsProcessed, adsWithEditor, adsWithoutEditor: adsNoEditor } = response.data.data;
+      alert(
+        `✅ Sync Complete!\n\n` +
+        `Total Ads: ${totalAdsProcessed}\n` +
+        `With Editor: ${adsWithEditor}\n` +
+        `Without Editor: ${adsNoEditor}`
+      );
     } catch (err: any) {
+      console.error('❌ Sync failed:', err);
       setError(err.response?.data?.error || 'Sync failed');
     } finally {
       setSyncing(false);
@@ -91,27 +246,125 @@ export function AnalyticsPage() {
           </Button>
         </div>
 
-        {/* Sync Facebook Ads */}
+        {/* Facebook Connection */}
         <Card>
           <CardHeader>
-            <CardTitle>Sync Facebook Ads</CardTitle>
-            <CardDescription>Import latest ad data from Facebook</CardDescription>
+            <CardTitle className="flex items-center gap-2">
+              <Facebook size={20} />
+              Facebook Connection
+            </CardTitle>
+            <CardDescription>
+              Connect your Facebook account to sync ad data
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="flex gap-2">
-              <Input
-                placeholder="Enter ad account ID (e.g., act_123456789)"
-                value={adAccountId}
-                onChange={(e) => setAdAccountId(e.target.value)}
-                className="max-w-md"
-              />
-              <Button onClick={handleSync} disabled={syncing}>
-                {syncing ? 'Syncing...' : 'Sync Ads'}
-              </Button>
+            <div className="space-y-4">
+              {/* Connection Status */}
+              <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
+                <div className="flex items-center gap-3">
+                  {fbConnected ? (
+                    <>
+                      <CheckCircle className="text-green-500" size={24} />
+                      <div>
+                        <p className="font-medium">Connected</p>
+                        {fbAdAccountName && (
+                          <p className="text-sm text-muted-foreground">
+                            Ad Account: {fbAdAccountName}
+                          </p>
+                        )}
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <XCircle className="text-muted-foreground" size={24} />
+                      <div>
+                        <p className="font-medium">Not Connected</p>
+                        <p className="text-sm text-muted-foreground">
+                          Connect to sync your Facebook ads
+                        </p>
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                <div className="flex gap-2">
+                  {fbConnected ? (
+                    <>
+                      <Button
+                        onClick={() => {
+                          setShowAccountSelector(!showAccountSelector);
+                          if (!showAccountSelector && fbAdAccounts.length === 0) {
+                            facebookApi.getAdAccounts().then(res => {
+                              setFbAdAccounts(res.data.data || []);
+                            });
+                          }
+                        }}
+                        variant="outline"
+                        size="sm"
+                      >
+                        Change Account
+                      </Button>
+                      <Button
+                        onClick={handleDisconnect}
+                        variant="outline"
+                        size="sm"
+                        disabled={fbLoading}
+                      >
+                        <LogOut size={16} className="mr-2" />
+                        Disconnect
+                      </Button>
+                    </>
+                  ) : (
+                    <Button
+                      onClick={handleFacebookLogin}
+                      disabled={fbLoading}
+                      className="bg-blue-600 hover:bg-blue-700"
+                    >
+                      <Facebook size={16} className="mr-2" />
+                      {fbLoading ? 'Connecting...' : 'Connect Facebook'}
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              {/* Ad Account Selector */}
+              {showAccountSelector && fbAdAccounts.length > 0 && (
+                <div className="border rounded-lg p-4">
+                  <p className="font-medium mb-3">Select Ad Account:</p>
+                  <div className="space-y-2">
+                    {fbAdAccounts.map((account) => (
+                      <button
+                        key={account.id}
+                        onClick={() => handleSelectAdAccount(account)}
+                        className={`w-full text-left p-3 rounded border hover:bg-muted transition ${
+                          fbAdAccount === account.id ? 'border-primary bg-muted' : ''
+                        }`}
+                        disabled={fbLoading}
+                      >
+                        <p className="font-medium">{account.name}</p>
+                        <p className="text-sm text-muted-foreground">{account.id}</p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Sync Button */}
+              {fbConnected && fbAdAccount && (
+                <Button
+                  onClick={handleSync}
+                  disabled={syncing}
+                  className="w-full"
+                >
+                  <RefreshCw size={16} className="mr-2" />
+                  {syncing ? 'Syncing Ads...' : 'Sync Facebook Ads'}
+                </Button>
+              )}
+
+              {error && (
+                <p className="text-sm text-destructive">{error}</p>
+              )}
             </div>
-            {error && (
-              <p className="text-sm text-destructive mt-2">{error}</p>
-            )}
           </CardContent>
         </Card>
 
@@ -189,7 +442,20 @@ export function AnalyticsPage() {
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-muted-foreground">No performance data available. Sync Facebook ads to see analytics.</p>
+              <div className="text-center py-8">
+                <p className="text-sm text-muted-foreground mb-4">
+                  No performance data available yet.
+                </p>
+                {fbConnected && fbAdAccount ? (
+                  <p className="text-sm text-muted-foreground">
+                    Click "Sync Facebook Ads" above to import your ad data.
+                  </p>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    Connect your Facebook account to get started.
+                  </p>
+                )}
+              </div>
             )}
           </CardContent>
         </Card>

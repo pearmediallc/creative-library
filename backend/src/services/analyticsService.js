@@ -1,34 +1,52 @@
-const axios = require('axios');
 const { query, transaction } = require('../config/database');
 const adNameParser = require('./adNameParser');
+const facebookGraphService = require('./facebookGraphService');
+const FacebookAuth = require('../models/FacebookAuth');
 const logger = require('../utils/logger');
-
-const PYTHON_SERVICE_URL = process.env.PYTHON_SERVICE_URL || 'http://localhost:5001';
 
 /**
  * Analytics Service
- * Fetches Facebook ad data via Python service and processes it
+ * Fetches Facebook ad data directly from Graph API and processes it
  */
 class AnalyticsService {
   /**
    * Sync Facebook ads for an account
-   * @param {string} adAccountId - Facebook ad account ID
+   * @param {string} adAccountId - Facebook ad account ID (with or without act_ prefix)
    * @param {string} userId - User ID (for auth check)
    * @returns {Promise<Object>} Sync result
    */
   async syncFacebookAds(adAccountId, userId) {
     try {
+      console.log('\n🚀 ========== FACEBOOK AD SYNC START ==========');
+      console.log(`📊 Ad Account ID: ${adAccountId}`);
+      console.log(`👤 User ID: ${userId}`);
+
       logger.info('Starting Facebook ad sync', { adAccountId, userId });
 
-      // Fetch campaigns from Python service
-      const campaignsResponse = await axios.post(
-        `${PYTHON_SERVICE_URL}/api/facebook/get-campaigns`,
-        { ad_account_id: adAccountId },
-        { headers: { 'X-User-ID': userId } }
-      );
+      // Get user's Facebook access token
+      const fbAuth = await FacebookAuth.getByUserId(userId);
+      if (!fbAuth || !fbAuth.access_token) {
+        throw new Error('Facebook account not connected. Please connect your Facebook account first.');
+      }
 
-      const campaigns = campaignsResponse.data.campaigns || [];
+      console.log('✅ Facebook auth found for user');
+
+      const accessToken = fbAuth.access_token;
+
+      // Fetch campaigns from Facebook Graph API
+      const campaigns = await facebookGraphService.getCampaigns(adAccountId, accessToken);
       logger.info('Fetched campaigns', { count: campaigns.length });
+
+      if (campaigns.length === 0) {
+        console.log('⚠️ No campaigns found in ad account');
+        return {
+          success: true,
+          totalAdsProcessed: 0,
+          adsWithEditor: 0,
+          adsWithoutEditor: 0,
+          message: 'No campaigns found in this ad account'
+        };
+      }
 
       let totalAdsProcessed = 0;
       let adsWithEditor = 0;
@@ -36,16 +54,9 @@ class AnalyticsService {
 
       // Process each campaign
       for (const campaign of campaigns) {
-        const adsResponse = await axios.post(
-          `${PYTHON_SERVICE_URL}/api/facebook/get-campaign-ads`,
-          {
-            ad_account_id: adAccountId,
-            campaign_id: campaign.id
-          },
-          { headers: { 'X-User-ID': userId } }
-        );
+        console.log(`\n📂 Processing campaign: ${campaign.name} (${campaign.id})`);
 
-        const ads = adsResponse.data.ads || [];
+        const ads = await facebookGraphService.getCampaignAds(campaign.id, accessToken);
         logger.info('Fetched ads for campaign', { campaignId: campaign.id, adCount: ads.length });
 
         // Process ads in batch
@@ -61,6 +72,12 @@ class AnalyticsService {
         }
       }
 
+      console.log('\n✅ ========== FACEBOOK AD SYNC COMPLETE ==========');
+      console.log(`📊 Total Ads Processed: ${totalAdsProcessed}`);
+      console.log(`✅ Ads with Editor: ${adsWithEditor}`);
+      console.log(`⚠️ Ads without Editor: ${adsWithoutEditor}`);
+      console.log('================================================\n');
+
       logger.info('Facebook ad sync completed', {
         adAccountId,
         totalAdsProcessed,
@@ -75,6 +92,10 @@ class AnalyticsService {
         adsWithoutEditor
       };
     } catch (error) {
+      console.error('\n❌ ========== FACEBOOK AD SYNC FAILED ==========');
+      console.error(`Error: ${error.message}`);
+      console.error('===============================================\n');
+
       logger.error('Facebook ad sync failed', { error: error.message, adAccountId });
       throw new Error(`Failed to sync Facebook ads: ${error.message}`);
     }

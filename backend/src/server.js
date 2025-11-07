@@ -18,6 +18,7 @@ const mediaRoutes = require('./routes/media');
 const editorRoutes = require('./routes/editors');
 const analyticsRoutes = require('./routes/analytics');
 const adminRoutes = require('./routes/admin');
+const facebookRoutes = require('./routes/facebook');
 
 // Import error handler
 const errorHandler = require('./middleware/errorHandler');
@@ -114,9 +115,10 @@ app.use('/api/media', mediaRoutes);
 app.use('/api/editors', editorRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/facebook', facebookRoutes);
 
 // Log registered routes
-logger.info('API routes registered: /api/auth, /api/media, /api/editors, /api/analytics, /api/admin');
+logger.info('API routes registered: /api/auth, /api/media, /api/editors, /api/analytics, /api/admin, /api/facebook');
 
 // 404 handler
 app.use((req, res) => {
@@ -156,7 +158,7 @@ async function startServer() {
       logger.info(`🌐 Server: http://localhost:${PORT}`);
       logger.info(`📊 API: http://localhost:${PORT}/api`);
       logger.info(`🔧 Health: http://localhost:${PORT}/health`);
-      logger.info(`🐍 Python Service: ${process.env.PYTHON_SERVICE_URL}`);
+      logger.info(`📘 Facebook API: Direct Graph API v18.0`);
       logger.info('='.repeat(70));
     });
   } catch (error) {

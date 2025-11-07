@@ -8,7 +8,8 @@
     "dev": "nodemon src/server.js",
     "test": "jest --coverage",
     "lint": "eslint src/",
-    "migrate": "node src/utils/migrate.js"
+    "migrate": "node src/utils/migrate.js",
+    "init-analytics": "node src/scripts/initAnalyticsTables.js"
   },
   "keywords": ["creative", "asset", "library", "facebook", "analytics"],
   "author": "",

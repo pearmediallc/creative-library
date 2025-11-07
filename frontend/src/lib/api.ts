@@ -83,6 +83,17 @@ export const mediaApi = {
   getStats: () => api.get('/media/stats'),
 };
 
+// Facebook endpoints
+export const facebookApi = {
+  connect: (data: { accessToken: string; adAccountId?: string; adAccountName?: string }) =>
+    api.post('/facebook/connect', data),
+  getAdAccounts: () => api.get('/facebook/ad-accounts'),
+  updateAdAccount: (data: { adAccountId: string; adAccountName: string }) =>
+    api.put('/facebook/ad-account', data),
+  getStatus: () => api.get('/facebook/status'),
+  disconnect: () => api.delete('/facebook/disconnect'),
+};
+
 // Analytics endpoints
 export const analyticsApi = {
   sync: (adAccountId: string) =>
