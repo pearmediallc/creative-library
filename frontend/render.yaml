@@ -1,0 +1,7 @@
+# Render configuration for Creative Library Frontend
+# This file configures client-side routing for the React SPA
+
+routes:
+  - type: rewrite
+    source: /*
+    destination: /index.html
