@@ -64,7 +64,7 @@ class FacebookAuth extends BaseModel {
       true
     ]);
 
-    return result.rows[0];
+    return result[0];
   }
 
   /**
@@ -78,7 +78,7 @@ class FacebookAuth extends BaseModel {
     `;
 
     const result = await this.raw(sql, [userId]);
-    return result.rows[0] || null;
+    return result[0] || null;
   }
 
   /**
@@ -93,7 +93,7 @@ class FacebookAuth extends BaseModel {
     `;
 
     const result = await this.raw(sql, [userId]);
-    return result.rows[0];
+    return result[0];
   }
 }
 
