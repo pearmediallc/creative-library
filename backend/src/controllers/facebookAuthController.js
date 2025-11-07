@@ -45,12 +45,12 @@ class FacebookAuthController {
       // Store in database
       console.log('💾 Storing Facebook auth in database...');
       const authData = {
-        accessToken: longLivedToken.access_token,
-        tokenType: longLivedToken.token_type,
-        expiresAt,
-        adAccountId: adAccountId || null,
-        adAccountName: adAccountName || null,
-        isActive: true
+        access_token: longLivedToken.access_token,
+        token_type: longLivedToken.token_type,
+        expires_at: expiresAt,
+        ad_account_id: adAccountId || null,
+        ad_account_name: adAccountName || null,
+        is_active: true
       };
 
       const fbAuth = await FacebookAuth.upsertAuth(req.user.id, authData);
@@ -186,12 +186,12 @@ class FacebookAuthController {
 
       // Update ad account
       const authData = {
-        accessToken: fbAuth.access_token,
-        tokenType: fbAuth.token_type,
-        expiresAt: fbAuth.expires_at,
-        adAccountId,
-        adAccountName: adAccountName || null,
-        isActive: true
+        access_token: fbAuth.access_token,
+        token_type: fbAuth.token_type,
+        expires_at: fbAuth.expires_at,
+        ad_account_id: adAccountId,
+        ad_account_name: adAccountName || null,
+        is_active: true
       };
 
       const updatedAuth = await FacebookAuth.upsertAuth(req.user.id, authData);
