@@ -53,21 +53,38 @@ class AnalyticsService {
       let adsWithoutEditor = 0;
 
       // Process each campaign
-      for (const campaign of campaigns) {
-        console.log(`\n📂 Processing campaign: ${campaign.name} (${campaign.id})`);
+      console.log(`\n📋 Processing ${campaigns.length} campaign(s)...`);
+      for (let i = 0; i < campaigns.length; i++) {
+        const campaign = campaigns[i];
+        console.log(`\n📂 [${i + 1}/${campaigns.length}] Campaign: ${campaign.name}`);
+        console.log(`   - Campaign ID: ${campaign.id}`);
+        console.log(`   - Status: ${campaign.status || 'N/A'}`);
+        console.log(`   - Objective: ${campaign.objective || 'N/A'}`);
 
         const ads = await facebookGraphService.getCampaignAds(campaign.id, accessToken);
+        console.log(`   - Found ${ads.length} ad(s) in this campaign`);
         logger.info('Fetched ads for campaign', { campaignId: campaign.id, adCount: ads.length });
 
         // Process ads in batch
-        for (const ad of ads) {
-          const processed = await this._processAndStoreAd(ad, campaign, adAccountId);
-          totalAdsProcessed++;
+        if (ads.length === 0) {
+          console.log(`   ⚠️ No ads to process in this campaign`);
+        } else {
+          for (let j = 0; j < ads.length; j++) {
+            const ad = ads[j];
+            console.log(`\n   📢 [${j + 1}/${ads.length}] Processing ad: ${ad.name}`);
+            console.log(`      - Ad ID: ${ad.id}`);
+            console.log(`      - Ad Status: ${ad.status || 'N/A'}`);
 
-          if (processed.hasEditor) {
-            adsWithEditor++;
-          } else {
-            adsWithoutEditor++;
+            const processed = await this._processAndStoreAd(ad, campaign, adAccountId);
+            totalAdsProcessed++;
+
+            if (processed.hasEditor) {
+              adsWithEditor++;
+              console.log(`      ✅ Editor detected: ${processed.editorName}`);
+            } else {
+              adsWithoutEditor++;
+              console.log(`      ⚠️ No editor name found in ad name`);
+            }
           }
         }
       }
@@ -107,8 +124,21 @@ class AnalyticsService {
    */
   async _processAndStoreAd(ad, campaign, adAccountId) {
     try {
+      console.log(`\n      🔍 Analyzing ad name: "${ad.name}"`);
+
       // Extract editor from ad name
       const editorMatch = await adNameParser.extractEditorFromAdName(ad.name);
+
+      if (editorMatch) {
+        console.log(`      ✅ Editor extraction successful:`);
+        console.log(`         - Editor Name: ${editorMatch.editor_name}`);
+        console.log(`         - Editor ID: ${editorMatch.editor_id || 'N/A'}`);
+        console.log(`         - Match Pattern: ${editorMatch.pattern || 'N/A'}`);
+      } else {
+        console.log(`      ⚠️ No editor name pattern found in ad name`);
+        console.log(`         - Ad name format may not match expected patterns`);
+        console.log(`         - Expected formats: "Ad Name - EDITORNAME" or "[Launcher] Campaign - Ad Date - EDITORNAME"`);
+      }
 
       // Extract insights
       const insights = ad.insights?.data?.[0] || {};
@@ -118,6 +148,13 @@ class AnalyticsService {
       const costPerResult = parseFloat(insights.cost_per_result) || 0;
       const impressions = parseInt(insights.impressions) || 0;
       const clicks = parseInt(insights.clicks) || 0;
+
+      console.log(`      📊 Ad Metrics:`);
+      console.log(`         - Spend: $${spend.toFixed(2)}`);
+      console.log(`         - Impressions: ${impressions.toLocaleString()}`);
+      console.log(`         - Clicks: ${clicks}`);
+      console.log(`         - CPM: $${cpm.toFixed(2)}`);
+      console.log(`         - CPC: $${cpc.toFixed(2)}`);
 
       // Check if ad already exists
       const existingAdResult = await query(
@@ -129,6 +166,8 @@ class AnalyticsService {
         // Update existing ad
         const existingAd = existingAdResult.rows[0];
         const oldAdName = existingAd.ad_name;
+
+        console.log(`      🔄 Updating existing ad in database`);
 
         await query(`
           UPDATE facebook_ads SET
@@ -159,10 +198,13 @@ class AnalyticsService {
 
         // Check for ad name change
         if (oldAdName !== ad.name) {
+          console.log(`      📝 Ad name changed: "${oldAdName}" → "${ad.name}"`);
           await this._logAdNameChange(ad.id, oldAdName, ad.name);
         }
       } else {
         // Insert new ad
+        console.log(`      ➕ Inserting new ad into database`);
+
         await query(`
           INSERT INTO facebook_ads (
             fb_ad_id, ad_name, ad_account_id, campaign_id, campaign_name,
@@ -178,11 +220,13 @@ class AnalyticsService {
       }
 
       return {
-        hasEditor: !!editorMatch
+        hasEditor: !!editorMatch,
+        editorName: editorMatch?.editor_name || null
       };
     } catch (error) {
+      console.error(`      ❌ Failed to process ad: ${error.message}`);
       logger.error('Failed to process ad', { error: error.message, adId: ad.id });
-      return { hasEditor: false };
+      return { hasEditor: false, editorName: null };
     }
   }
 
