@@ -112,6 +112,61 @@ export function AnalyticsPage() {
     }
   };
 
+  // Handle Facebook login response (separate async function)
+  const handleFBResponse = async (response: any) => {
+    console.log('📡 Facebook login response received:', response);
+
+    if (response.authResponse) {
+      console.log('✅ Facebook login successful!');
+      console.log('  - User ID:', response.authResponse.userID);
+      console.log('  - Access Token (first 20 chars):', response.authResponse.accessToken.substring(0, 20) + '...');
+
+      const accessToken = response.authResponse.accessToken;
+
+      try {
+        // Send access token to backend
+        console.log('📤 Sending access token to backend...');
+        await facebookApi.connect({ accessToken });
+        console.log('✅ Access token stored in backend');
+
+        // Fetch ad accounts
+        console.log('📊 Fetching ad accounts...');
+        const accountsRes = await facebookApi.getAdAccounts();
+        const accounts = accountsRes.data.data || [];
+        console.log('✅ Fetched ad accounts:', accounts.length);
+
+        if (accounts.length > 0) {
+          accounts.forEach((acc: any, idx: number) => {
+            console.log(`  ${idx + 1}. ${acc.name} (${acc.id})`);
+          });
+        }
+
+        setFbAdAccounts(accounts);
+        setFbConnected(true);
+        setShowAccountSelector(true);
+
+        if (accounts.length === 1) {
+          // Auto-select if only one account
+          console.log('ℹ️  Auto-selecting single account');
+          await handleSelectAdAccount(accounts[0]);
+        }
+
+        console.log('✅ ========== FACEBOOK LOGIN COMPLETE ==========\n');
+      } catch (err: any) {
+        console.error('\n❌ ========== FACEBOOK LOGIN FAILED ==========');
+        console.error('Error:', err);
+        console.error('Response:', err.response?.data);
+        console.error('=============================================\n');
+        setError(err.response?.data?.error || 'Failed to connect Facebook account');
+      }
+    } else {
+      console.log('❌ Facebook login cancelled or failed');
+      console.log('   Status:', response.status);
+      setError('Facebook login was cancelled');
+    }
+    setFbLoading(false);
+  };
+
   // Login with Facebook
   const handleFacebookLogin = () => {
     console.log('\n🔐 ========== FACEBOOK LOGIN START ==========');
@@ -129,59 +184,11 @@ export function AnalyticsPage() {
     setFbLoading(true);
     setError('');
 
+    // Call FB.login with non-async callback
     window.FB.login(
-      async (response: any) => {
-        console.log('📡 Facebook login response received:', response);
-
-        if (response.authResponse) {
-          console.log('✅ Facebook login successful!');
-          console.log('  - User ID:', response.authResponse.userID);
-          console.log('  - Access Token (first 20 chars):', response.authResponse.accessToken.substring(0, 20) + '...');
-
-          const accessToken = response.authResponse.accessToken;
-
-          try {
-            // Send access token to backend
-            console.log('📤 Sending access token to backend...');
-            await facebookApi.connect({ accessToken });
-            console.log('✅ Access token stored in backend');
-
-            // Fetch ad accounts
-            console.log('📊 Fetching ad accounts...');
-            const accountsRes = await facebookApi.getAdAccounts();
-            const accounts = accountsRes.data.data || [];
-            console.log('✅ Fetched ad accounts:', accounts.length);
-
-            if (accounts.length > 0) {
-              accounts.forEach((acc: any, idx: number) => {
-                console.log(`  ${idx + 1}. ${acc.name} (${acc.id})`);
-              });
-            }
-
-            setFbAdAccounts(accounts);
-            setFbConnected(true);
-            setShowAccountSelector(true);
-
-            if (accounts.length === 1) {
-              // Auto-select if only one account
-              console.log('ℹ️  Auto-selecting single account');
-              await handleSelectAdAccount(accounts[0]);
-            }
-
-            console.log('✅ ========== FACEBOOK LOGIN COMPLETE ==========\n');
-          } catch (err: any) {
-            console.error('\n❌ ========== FACEBOOK LOGIN FAILED ==========');
-            console.error('Error:', err);
-            console.error('Response:', err.response?.data);
-            console.error('=============================================\n');
-            setError(err.response?.data?.error || 'Failed to connect Facebook account');
-          }
-        } else {
-          console.log('❌ Facebook login cancelled or failed');
-          console.log('   Status:', response.status);
-          setError('Facebook login was cancelled');
-        }
-        setFbLoading(false);
+      (response: any) => {
+        // Call separate async function to handle response
+        handleFBResponse(response);
       },
       {
         scope: 'ads_read,ads_management',
