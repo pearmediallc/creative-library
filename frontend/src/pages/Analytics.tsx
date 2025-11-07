@@ -168,7 +168,7 @@ export function AnalyticsPage() {
 
   // Disconnect Facebook
   const handleDisconnect = async () => {
-    if (!confirm('Are you sure you want to disconnect your Facebook account?')) {
+    if (!window.confirm('Are you sure you want to disconnect your Facebook account?')) {
       return;
     }
 
