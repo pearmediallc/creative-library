@@ -33,6 +33,7 @@ export function AnalyticsPage() {
   const [fbAdAccounts, setFbAdAccounts] = useState<any[]>([]);
   const [fbLoading, setFbLoading] = useState(false);
   const [showAccountSelector, setShowAccountSelector] = useState(false);
+  const [accountSearchQuery, setAccountSearchQuery] = useState('');
 
   useEffect(() => {
     initializeFacebookSDK();
@@ -383,20 +384,46 @@ export function AnalyticsPage() {
               {showAccountSelector && fbAdAccounts.length > 0 && (
                 <div className="border rounded-lg p-4">
                   <p className="font-medium mb-3">Select Ad Account:</p>
-                  <div className="space-y-2">
-                    {fbAdAccounts.map((account) => (
-                      <button
-                        key={account.id}
-                        onClick={() => handleSelectAdAccount(account)}
-                        className={`w-full text-left p-3 rounded border hover:bg-muted transition ${
-                          fbAdAccount === account.id ? 'border-primary bg-muted' : ''
-                        }`}
-                        disabled={fbLoading}
-                      >
-                        <p className="font-medium">{account.name}</p>
-                        <p className="text-sm text-muted-foreground">{account.id}</p>
-                      </button>
-                    ))}
+
+                  {/* Search Input */}
+                  <input
+                    type="text"
+                    placeholder="Search ad accounts..."
+                    value={accountSearchQuery}
+                    onChange={(e) => setAccountSearchQuery(e.target.value)}
+                    className="w-full p-2 mb-3 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+
+                  {/* Account List */}
+                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                    {fbAdAccounts
+                      .filter((account) =>
+                        account.name.toLowerCase().includes(accountSearchQuery.toLowerCase()) ||
+                        account.id.toLowerCase().includes(accountSearchQuery.toLowerCase())
+                      )
+                      .map((account) => (
+                        <button
+                          key={account.id}
+                          onClick={() => handleSelectAdAccount(account)}
+                          className={`w-full text-left p-3 rounded border hover:bg-muted transition ${
+                            fbAdAccount === account.id ? 'border-primary bg-muted' : ''
+                          }`}
+                          disabled={fbLoading}
+                        >
+                          <p className="font-medium">{account.name}</p>
+                          <p className="text-sm text-muted-foreground">{account.id}</p>
+                        </button>
+                      ))}
+
+                    {/* No results message */}
+                    {fbAdAccounts.filter((account) =>
+                      account.name.toLowerCase().includes(accountSearchQuery.toLowerCase()) ||
+                      account.id.toLowerCase().includes(accountSearchQuery.toLowerCase())
+                    ).length === 0 && (
+                      <p className="text-sm text-muted-foreground text-center py-4">
+                        No ad accounts found matching "{accountSearchQuery}"
+                      </p>
+                    )}
                   </div>
                 </div>
               )}
