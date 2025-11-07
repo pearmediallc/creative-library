@@ -8,16 +8,28 @@ const S3_BUCKET = process.env.AWS_S3_BUCKET;
 
 class S3Service {
   /**
-   * Upload file to S3
+   * Upload file to S3 with hybrid structure support
    * @param {Buffer} fileBuffer - File buffer
    * @param {string} filename - Original filename
    * @param {string} mimeType - File MIME type
    * @param {string} folder - S3 folder (default: 'originals')
+   * @param {string|null} editorName - Editor name for new structure (optional)
+   * @param {string|null} mediaType - Media type for new structure (optional)
    * @returns {Promise<Object>} Upload result with s3Key
    */
-  async uploadFile(fileBuffer, filename, mimeType, folder = 'originals') {
+  async uploadFile(fileBuffer, filename, mimeType, folder = 'originals', editorName = null, mediaType = null) {
     try {
-      const s3Key = generateS3Key(filename, folder);
+      console.log('📤 S3Service.uploadFile called with:');
+      console.log(`  └─ Filename: ${filename}`);
+      console.log(`  └─ MIME Type: ${mimeType}`);
+      console.log(`  └─ Folder: ${folder}`);
+      console.log(`  └─ Editor Name: ${editorName || 'NOT PROVIDED (will use old structure)'}`);
+      console.log(`  └─ Media Type: ${mediaType || 'NOT PROVIDED (will use old structure)'}`);
+
+      // Generate S3 key using hybrid structure
+      const s3Key = generateS3Key(filename, folder, editorName, mediaType);
+
+      console.log(`🔑 Generated S3 Key: ${s3Key}`);
 
       const command = new PutObjectCommand({
         Bucket: S3_BUCKET,
@@ -29,27 +41,44 @@ class S3Service {
 
       await s3Client.send(command);
 
-      logger.info('File uploaded to S3', { s3Key, bucket: S3_BUCKET });
+      console.log(`✅ File uploaded successfully to S3`);
+      console.log(`  └─ Bucket: ${S3_BUCKET}`);
+      console.log(`  └─ Key: ${s3Key}`);
+      console.log(`  └─ Size: ${fileBuffer.length} bytes`);
+
+      logger.info('File uploaded to S3', {
+        s3Key,
+        bucket: S3_BUCKET,
+        editorName: editorName || 'none',
+        mediaType: mediaType || 'none',
+        structureType: (editorName && mediaType) ? 'NEW_HYBRID' : 'OLD_FALLBACK'
+      });
 
       return {
         s3Key,
         s3Bucket: S3_BUCKET,
-        fileSize: fileBuffer.length
+        fileSize: fileBuffer.length,
+        filename: filename
       };
     } catch (error) {
-      logger.error('S3 upload error', { error: error.message, filename });
+      console.error('❌ S3 upload failed:', error.message);
+      logger.error('S3 upload error', { error: error.message, filename, editorName, mediaType });
       throw new Error(`Failed to upload file to S3: ${error.message}`);
     }
   }
 
   /**
-   * Generate thumbnail for image
+   * Generate thumbnail for image with hybrid structure support
    * @param {Buffer} imageBuffer - Original image buffer
    * @param {string} originalFilename - Original filename
+   * @param {string|null} editorName - Editor name for new structure (optional)
    * @returns {Promise<Object>} Thumbnail upload result
    */
-  async generateThumbnail(imageBuffer, originalFilename) {
+  async generateThumbnail(imageBuffer, originalFilename, editorName = null) {
     try {
+      console.log('🖼️ Generating thumbnail for:', originalFilename);
+      console.log(`  └─ Editor: ${editorName || 'NOT PROVIDED (will use old structure)'}`);
+
       const thumbnailBuffer = await sharp(imageBuffer)
         .resize(300, 300, {
           fit: 'inside',
@@ -58,19 +87,34 @@ class S3Service {
         .jpeg({ quality: 80 })
         .toBuffer();
 
+      console.log(`✅ Thumbnail buffer created (${thumbnailBuffer.length} bytes)`);
+
       const thumbnailFilename = `thumb_${originalFilename}`;
+
+      // Upload thumbnail using new structure if editor name provided
+      // Pass 'image' as mediaType since thumbnails are always images
       const result = await this.uploadFile(
         thumbnailBuffer,
         thumbnailFilename,
         'image/jpeg',
-        'thumbnails'
+        'thumbnails',
+        editorName,      // Pass editor name for hybrid structure
+        'image'          // Thumbnails are always images
       );
 
-      logger.info('Thumbnail generated', { thumbnailKey: result.s3Key });
+      console.log(`✅ Thumbnail uploaded successfully`);
+      console.log(`  └─ Thumbnail Key: ${result.s3Key}`);
+
+      logger.info('Thumbnail generated', {
+        thumbnailKey: result.s3Key,
+        editorName: editorName || 'none',
+        structureType: editorName ? 'NEW_HYBRID' : 'OLD_FALLBACK'
+      });
 
       return result;
     } catch (error) {
-      logger.warn('Thumbnail generation failed', { error: error.message });
+      console.warn('⚠️ Thumbnail generation failed:', error.message);
+      logger.warn('Thumbnail generation failed', { error: error.message, editorName });
       // Non-critical error - return null
       return null;
     }

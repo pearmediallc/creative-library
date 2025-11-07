@@ -15,6 +15,14 @@ class MediaService {
    */
   async uploadMedia(file, userId, editorId, metadata = {}) {
     try {
+      console.log('\n🚀 ========== MEDIA UPLOAD START ==========');
+      console.log('📋 Upload Details:');
+      console.log(`  └─ User ID: ${userId}`);
+      console.log(`  └─ Editor ID: ${editorId}`);
+      console.log(`  └─ Filename: ${file.originalname}`);
+      console.log(`  └─ MIME Type: ${file.mimetype}`);
+      console.log(`  └─ File Size: ${file.size} bytes`);
+
       // Check user upload limit
       const hasReachedLimit = await User.hasReachedUploadLimit(userId);
       if (hasReachedLimit) {
@@ -27,6 +35,7 @@ class MediaService {
       }
 
       const mediaType = s3Service.getMediaType(file.mimetype);
+      console.log(`📁 Media Type Detected: ${mediaType}`);
 
       // Validate file size
       const sizeValidation = s3Service.validateFileSize(file.size, mediaType);
@@ -40,16 +49,23 @@ class MediaService {
         throw new Error('Editor not found');
       }
 
-      // Upload original file to S3
+      console.log(`✅ Editor Found: ${editor.name} (ID: ${editorId})`);
+      console.log('\n📤 Uploading to S3 with HYBRID STRUCTURE...');
+
+      // Upload original file to S3 with NEW HYBRID STRUCTURE
       const uploadResult = await s3Service.uploadFile(
         file.buffer,
         file.originalname,
         file.mimetype,
-        'originals'
+        'originals',
+        editor.name,  // ✨ NEW: Pass editor name for hybrid structure
+        mediaType     // ✨ NEW: Pass media type for hybrid structure
       );
 
       // Generate S3 URL
       const s3Url = `${process.env.AWS_CLOUDFRONT_URL}/${uploadResult.s3Key}`;
+
+      console.log(`\n🌐 CloudFront URL Generated: ${s3Url}`);
 
       // Process based on media type
       let width = null;
@@ -57,23 +73,33 @@ class MediaService {
       let thumbnailUrl = null;
 
       if (mediaType === 'image') {
+        console.log('\n🖼️ Processing image...');
+
         // Get image dimensions
         const dimensions = await s3Service.getImageDimensions(file.buffer);
         width = dimensions?.width || null;
         height = dimensions?.height || null;
 
-        // Generate thumbnail
+        console.log(`  └─ Dimensions: ${width}x${height}`);
+
+        // Generate thumbnail with NEW HYBRID STRUCTURE
         const thumbnailResult = await s3Service.generateThumbnail(
           file.buffer,
-          file.originalname
+          file.originalname,
+          editor.name  // ✨ NEW: Pass editor name for hybrid structure
         );
         if (thumbnailResult) {
           thumbnailUrl = `${process.env.AWS_CLOUDFRONT_URL}/${thumbnailResult.s3Key}`;
+          console.log(`  └─ Thumbnail URL: ${thumbnailUrl}`);
         }
+      } else if (mediaType === 'video') {
+        console.log('\n🎥 Video uploaded (no thumbnail generated)');
       }
 
       // Determine file type (image/video)
       const fileType = mediaType === 'image' ? 'image' : mediaType === 'video' ? 'video' : 'other';
+
+      console.log('\n💾 Creating database record...');
 
       // Create database record matching schema
       const mediaFile = await MediaFile.createMediaFile({
@@ -95,15 +121,27 @@ class MediaService {
         description: metadata.description || null
       });
 
+      console.log('✅ Database record created successfully');
+      console.log(`  └─ Media File ID: ${mediaFile.id}`);
+      console.log(`  └─ S3 Key: ${uploadResult.s3Key}`);
+      console.log(`  └─ Structure Type: ${(editor.name && mediaType) ? 'NEW HYBRID' : 'OLD FALLBACK'}`);
+
       logger.info('Media file uploaded successfully', {
         mediaFileId: mediaFile.id,
         userId,
         editorId,
-        s3Key: uploadResult.s3Key
+        editorName: editor.name,
+        s3Key: uploadResult.s3Key,
+        structureType: 'NEW_HYBRID'
       });
+
+      console.log('🎉 ========== MEDIA UPLOAD COMPLETE ==========\n');
 
       return mediaFile;
     } catch (error) {
+      console.error('\n❌ ========== MEDIA UPLOAD FAILED ==========');
+      console.error(`Error: ${error.message}`);
+      console.error('===========================================\n');
       logger.error('Media upload failed', { error: error.message, userId });
       throw error;
     }

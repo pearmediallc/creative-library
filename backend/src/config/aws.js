@@ -56,15 +56,91 @@ function getPublicUrl(s3Key) {
 }
 
 /**
- * Generate S3 key for file
+ * Sanitize editor name for use in S3 paths
+ * Removes special characters, converts to lowercase, replaces spaces with hyphens
+ * @param {string} editorName - Raw editor name
+ * @returns {string} Sanitized editor name safe for S3 paths
  */
-function generateS3Key(filename, folder = 'originals') {
+function sanitizeEditorName(editorName) {
+  if (!editorName || typeof editorName !== 'string') {
+    console.warn('⚠️ Invalid editor name provided, using fallback');
+    return null;
+  }
+
+  // Convert to lowercase, replace spaces with hyphens, remove special chars
+  let sanitized = editorName
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, '-')           // Replace spaces with hyphens
+    .replace(/[^a-z0-9-_]/g, '')    // Remove special characters except hyphens and underscores
+    .replace(/-+/g, '-')            // Replace multiple hyphens with single hyphen
+    .replace(/^-+|-+$/g, '');       // Remove leading/trailing hyphens
+
+  // Limit length to 50 characters
+  if (sanitized.length > 50) {
+    sanitized = sanitized.substring(0, 50);
+    console.log(`📏 Editor name truncated to 50 chars: ${sanitized}`);
+  }
+
+  // Validate result
+  if (sanitized.length === 0) {
+    console.warn('⚠️ Editor name sanitization resulted in empty string, using fallback');
+    return null;
+  }
+
+  console.log(`✅ Editor name sanitized: "${editorName}" → "${sanitized}"`);
+  return sanitized;
+}
+
+/**
+ * Generate S3 key for file with hybrid structure support
+ * NEW: Supports editor-based organization (editor-name/media-type/file)
+ * OLD: Falls back to date-based organization (folder/year/month/file)
+ *
+ * @param {string} filename - Original filename
+ * @param {string} folder - Folder type ('originals', 'thumbnails')
+ * @param {string|null} editorName - Editor name (optional, for new structure)
+ * @param {string|null} mediaType - Media type ('image', 'video', optional)
+ * @returns {string} S3 key path
+ */
+function generateS3Key(filename, folder = 'originals', editorName = null, mediaType = null) {
+  const uniqueId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  const uniqueFilename = `${uniqueId}-${filename}`;
+
+  // NEW HYBRID STRUCTURE: editor-name/media-type/uniqueid-filename
+  if (editorName && mediaType) {
+    const sanitizedEditor = sanitizeEditorName(editorName);
+
+    if (sanitizedEditor) {
+      let subFolder;
+
+      // Determine subfolder based on folder type and media type
+      if (folder === 'thumbnails') {
+        subFolder = 'thumbnails';
+      } else {
+        subFolder = mediaType === 'image' ? 'images' : 'videos';
+      }
+
+      const newPath = `${sanitizedEditor}/${subFolder}/${uniqueFilename}`;
+      console.log(`🆕 NEW S3 STRUCTURE: ${newPath}`);
+      console.log(`  └─ Editor: ${editorName} (sanitized: ${sanitizedEditor})`);
+      console.log(`  └─ Media Type: ${mediaType}`);
+      console.log(`  └─ Folder: ${subFolder}`);
+
+      return newPath;
+    }
+  }
+
+  // OLD STRUCTURE FALLBACK: folder/year/month/uniqueid-filename
   const date = new Date();
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
-  const uniqueId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
-  return `${folder}/${year}/${month}/${uniqueId}-${filename}`;
+  const oldPath = `${folder}/${year}/${month}/${uniqueFilename}`;
+  console.log(`🔙 OLD S3 STRUCTURE (fallback): ${oldPath}`);
+  console.log(`  └─ Reason: ${!editorName ? 'No editor name' : !mediaType ? 'No media type' : 'Sanitization failed'}`);
+
+  return oldPath;
 }
 
 module.exports = {
@@ -74,5 +150,6 @@ module.exports = {
   getPresignedDownloadUrl,
   getPresignedUploadUrl,
   getPublicUrl,
-  generateS3Key
+  generateS3Key,
+  sanitizeEditorName
 };
