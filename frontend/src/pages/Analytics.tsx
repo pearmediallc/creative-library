@@ -34,6 +34,8 @@ export function AnalyticsPage() {
   const [fbLoading, setFbLoading] = useState(false);
   const [showAccountSelector, setShowAccountSelector] = useState(false);
   const [accountSearchQuery, setAccountSearchQuery] = useState('');
+  const [accountPage, setAccountPage] = useState(1);
+  const accountsPerPage = 10;
 
   // Date range for syncing ads (default: last 30 days)
   const [syncDateFrom, setSyncDateFrom] = useState(() => {
@@ -399,27 +401,35 @@ export function AnalyticsPage() {
               </div>
 
               {/* Ad Account Selector */}
-              {showAccountSelector && fbAdAccounts.length > 0 && (
-                <div className="border rounded-lg p-4">
-                  <p className="font-medium mb-3">Select Ad Account:</p>
+              {showAccountSelector && fbAdAccounts.length > 0 && (() => {
+                const filteredAccounts = fbAdAccounts.filter((account) =>
+                  account.name.toLowerCase().includes(accountSearchQuery.toLowerCase()) ||
+                  account.id.toLowerCase().includes(accountSearchQuery.toLowerCase())
+                );
+                const totalPages = Math.ceil(filteredAccounts.length / accountsPerPage);
+                const startIdx = (accountPage - 1) * accountsPerPage;
+                const endIdx = startIdx + accountsPerPage;
+                const paginatedAccounts = filteredAccounts.slice(startIdx, endIdx);
 
-                  {/* Search Input */}
-                  <input
-                    type="text"
-                    placeholder="Search ad accounts..."
-                    value={accountSearchQuery}
-                    onChange={(e) => setAccountSearchQuery(e.target.value)}
-                    className="w-full p-2 mb-3 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-                  />
+                return (
+                  <div className="border rounded-lg p-4">
+                    <p className="font-medium mb-3">Select Ad Account:</p>
 
-                  {/* Account List */}
-                  <div className="space-y-2 max-h-64 overflow-y-auto">
-                    {fbAdAccounts
-                      .filter((account) =>
-                        account.name.toLowerCase().includes(accountSearchQuery.toLowerCase()) ||
-                        account.id.toLowerCase().includes(accountSearchQuery.toLowerCase())
-                      )
-                      .map((account) => (
+                    {/* Search Input */}
+                    <input
+                      type="text"
+                      placeholder="Search ad accounts..."
+                      value={accountSearchQuery}
+                      onChange={(e) => {
+                        setAccountSearchQuery(e.target.value);
+                        setAccountPage(1); // Reset to page 1 on search
+                      }}
+                      className="w-full p-2 mb-3 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                    />
+
+                    {/* Account List */}
+                    <div className="space-y-2">
+                      {paginatedAccounts.map((account) => (
                         <button
                           key={account.id}
                           onClick={() => handleSelectAdAccount(account)}
@@ -433,18 +443,46 @@ export function AnalyticsPage() {
                         </button>
                       ))}
 
-                    {/* No results message */}
-                    {fbAdAccounts.filter((account) =>
-                      account.name.toLowerCase().includes(accountSearchQuery.toLowerCase()) ||
-                      account.id.toLowerCase().includes(accountSearchQuery.toLowerCase())
-                    ).length === 0 && (
-                      <p className="text-sm text-muted-foreground text-center py-4">
-                        No ad accounts found matching "{accountSearchQuery}"
-                      </p>
+                      {/* No results message */}
+                      {filteredAccounts.length === 0 && (
+                        <p className="text-sm text-muted-foreground text-center py-4">
+                          No ad accounts found matching "{accountSearchQuery}"
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Pagination Controls */}
+                    {filteredAccounts.length > accountsPerPage && (
+                      <div className="flex items-center justify-between mt-4 pt-4 border-t">
+                        <p className="text-sm text-muted-foreground">
+                          Showing {startIdx + 1}-{Math.min(endIdx, filteredAccounts.length)} of {filteredAccounts.length}
+                        </p>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setAccountPage(p => Math.max(1, p - 1))}
+                            disabled={accountPage === 1}
+                          >
+                            Previous
+                          </Button>
+                          <span className="flex items-center px-3 text-sm">
+                            Page {accountPage} of {totalPages}
+                          </span>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setAccountPage(p => Math.min(totalPages, p + 1))}
+                            disabled={accountPage === totalPages}
+                          >
+                            Next
+                          </Button>
+                        </div>
+                      </div>
                     )}
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
               {/* Date Range Filter */}
               {fbConnected && fbAdAccount && (

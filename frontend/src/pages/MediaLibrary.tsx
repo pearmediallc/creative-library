@@ -16,9 +16,12 @@ export function MediaLibraryPage() {
   const [selectedEditor, setSelectedEditor] = useState('');
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const filesPerPage = 12;
 
   useEffect(() => {
     fetchData();
+    setCurrentPage(1); // Reset to page 1 when filters change
   }, [selectedEditor, searchTerm]);
 
   const fetchData = async () => {
@@ -114,76 +117,115 @@ export function MediaLibraryPage() {
             <p className="text-muted-foreground">Loading...</p>
           </div>
         ) : files.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {files.map((file) => (
-              <Card key={file.id} className="overflow-hidden">
-                <div className="aspect-video bg-muted relative">
-                  {file.thumbnail_url ? (
-                    <img
-                      src={file.thumbnail_url}
-                      alt={file.original_filename}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div className="flex items-center justify-center h-full">
-                      {file.file_type === 'image' ? (
-                        <ImageIcon className="w-16 h-16 text-muted-foreground" />
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {(() => {
+                const totalPages = Math.ceil(files.length / filesPerPage);
+                const startIdx = (currentPage - 1) * filesPerPage;
+                const endIdx = startIdx + filesPerPage;
+                const paginatedFiles = files.slice(startIdx, endIdx);
+
+                return paginatedFiles.map((file) => (
+                  <Card key={file.id} className="overflow-hidden">
+                    <div className="aspect-video bg-muted relative">
+                      {file.thumbnail_url ? (
+                        <img
+                          src={file.thumbnail_url}
+                          alt={file.original_filename}
+                          className="w-full h-full object-cover"
+                        />
                       ) : (
-                        <Video className="w-16 h-16 text-muted-foreground" />
+                        <div className="flex items-center justify-center h-full">
+                          {file.file_type === 'image' ? (
+                            <ImageIcon className="w-16 h-16 text-muted-foreground" />
+                          ) : (
+                            <Video className="w-16 h-16 text-muted-foreground" />
+                          )}
+                        </div>
                       )}
-                    </div>
-                  )}
-                  <div className="absolute top-2 right-2">
-                    <span className="px-2 py-1 text-xs font-medium rounded bg-background/80 backdrop-blur">
-                      {file.file_type}
-                    </span>
-                  </div>
-                </div>
-                <div className="p-4 space-y-2">
-                  <h3 className="font-medium truncate" title={file.original_filename}>
-                    {file.original_filename}
-                  </h3>
-                  <div className="text-sm text-muted-foreground space-y-1">
-                    <p>Editor: {file.editor_name || 'N/A'}</p>
-                    <p>Size: {formatBytes(file.file_size)}</p>
-                    <p>Uploaded: {formatDate(file.created_at)}</p>
-                  </div>
-                  {file.tags && file.tags.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mt-2">
-                      {file.tags.slice(0, 3).map((tag, idx) => (
-                        <span
-                          key={idx}
-                          className="px-2 py-0.5 text-xs rounded-full bg-accent/20 text-accent-foreground"
-                        >
-                          {tag}
+                      <div className="absolute top-2 right-2">
+                        <span className="px-2 py-1 text-xs font-medium rounded bg-background/80 backdrop-blur">
+                          {file.file_type}
                         </span>
-                      ))}
+                      </div>
                     </div>
-                  )}
-                  <div className="flex gap-2 mt-3 pt-3 border-t border-border">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="flex-1"
-                      onClick={() => handleDownload(file)}
-                    >
-                      <Download className="w-4 h-4 mr-1" />
-                      Download
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="flex-1 text-destructive hover:text-destructive"
-                      onClick={() => setDeleteConfirmId(file.id)}
-                    >
-                      <Trash2 className="w-4 h-4 mr-1" />
-                      Delete
-                    </Button>
-                  </div>
+                    <div className="p-4 space-y-2">
+                      <h3 className="font-medium truncate" title={file.original_filename}>
+                        {file.original_filename}
+                      </h3>
+                      <div className="text-sm text-muted-foreground space-y-1">
+                        <p>Editor: {file.editor_name || 'N/A'}</p>
+                        <p>Size: {formatBytes(file.file_size)}</p>
+                        <p>Uploaded: {formatDate(file.created_at)}</p>
+                      </div>
+                      {file.tags && file.tags.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-2">
+                          {file.tags.slice(0, 3).map((tag, idx) => (
+                            <span
+                              key={idx}
+                              className="px-2 py-0.5 text-xs rounded-full bg-accent/20 text-accent-foreground"
+                            >
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      <div className="flex gap-2 mt-3 pt-3 border-t border-border">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="flex-1"
+                          onClick={() => handleDownload(file)}
+                        >
+                          <Download className="w-4 h-4 mr-1" />
+                          Download
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="flex-1 text-destructive hover:text-destructive"
+                          onClick={() => setDeleteConfirmId(file.id)}
+                        >
+                          <Trash2 className="w-4 h-4 mr-1" />
+                          Delete
+                        </Button>
+                      </div>
+                    </div>
+                  </Card>
+                ));
+              })()}
+            </div>
+
+            {/* Pagination Controls */}
+            {files.length > filesPerPage && (
+              <div className="flex items-center justify-between mt-6 pt-4 border-t">
+                <p className="text-sm text-muted-foreground">
+                  Showing {((currentPage - 1) * filesPerPage) + 1}-{Math.min(currentPage * filesPerPage, files.length)} of {files.length} files
+                </p>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                  >
+                    Previous
+                  </Button>
+                  <span className="flex items-center px-3 text-sm">
+                    Page {currentPage} of {Math.ceil(files.length / filesPerPage)}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(p => Math.min(Math.ceil(files.length / filesPerPage), p + 1))}
+                    disabled={currentPage === Math.ceil(files.length / filesPerPage)}
+                  >
+                    Next
+                  </Button>
                 </div>
-              </Card>
-            ))}
-          </div>
+              </div>
+            )}
+          </>
         ) : (
           <Card className="p-12 text-center">
             <p className="text-muted-foreground">No files found</p>
