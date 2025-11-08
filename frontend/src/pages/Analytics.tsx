@@ -35,6 +35,16 @@ export function AnalyticsPage() {
   const [showAccountSelector, setShowAccountSelector] = useState(false);
   const [accountSearchQuery, setAccountSearchQuery] = useState('');
 
+  // Date range for syncing ads (default: last 30 days)
+  const [syncDateFrom, setSyncDateFrom] = useState(() => {
+    const date = new Date();
+    date.setDate(date.getDate() - 30);
+    return date.toISOString().split('T')[0]; // YYYY-MM-DD format
+  });
+  const [syncDateTo, setSyncDateTo] = useState(() => {
+    return new Date().toISOString().split('T')[0]; // Today
+  });
+
   useEffect(() => {
     initializeFacebookSDK();
     checkFacebookStatus();
@@ -248,16 +258,24 @@ export function AnalyticsPage() {
       return;
     }
 
+    // Validate dates
+    if (syncDateFrom && syncDateTo && new Date(syncDateFrom) > new Date(syncDateTo)) {
+      setError('Start date must be before or equal to end date');
+      return;
+    }
+
     setSyncing(true);
     setError('');
 
     try {
-      const response = await analyticsApi.sync(fbAdAccount);
+      console.log(`📅 Syncing ads from ${syncDateFrom} to ${syncDateTo}`);
+      const response = await analyticsApi.sync(fbAdAccount, syncDateFrom, syncDateTo);
       await fetchAnalytics();
 
       const { totalAdsProcessed, adsWithEditor, adsWithoutEditor: adsNoEditor } = response.data.data;
       alert(
         `✅ Sync Complete!\n\n` +
+        `Date Range: ${syncDateFrom} to ${syncDateTo}\n` +
         `Total Ads: ${totalAdsProcessed}\n` +
         `With Editor: ${adsWithEditor}\n` +
         `Without Editor: ${adsNoEditor}`
@@ -425,6 +443,86 @@ export function AnalyticsPage() {
                       </p>
                     )}
                   </div>
+                </div>
+              )}
+
+              {/* Date Range Filter */}
+              {fbConnected && fbAdAccount && (
+                <div className="border rounded-lg p-4">
+                  <p className="font-medium mb-3">Sync Date Range:</p>
+
+                  <div className="grid grid-cols-2 gap-3 mb-3">
+                    <div>
+                      <label className="block text-sm text-muted-foreground mb-1">From</label>
+                      <input
+                        type="date"
+                        value={syncDateFrom}
+                        onChange={(e) => setSyncDateFrom(e.target.value)}
+                        className="w-full p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm text-muted-foreground mb-1">To</label>
+                      <input
+                        type="date"
+                        value={syncDateTo}
+                        onChange={(e) => setSyncDateTo(e.target.value)}
+                        className="w-full p-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Quick filters */}
+                  <div className="flex gap-2 flex-wrap">
+                    <button
+                      onClick={() => {
+                        const date = new Date();
+                        date.setDate(date.getDate() - 7);
+                        setSyncDateFrom(date.toISOString().split('T')[0]);
+                        setSyncDateTo(new Date().toISOString().split('T')[0]);
+                      }}
+                      className="px-3 py-1 text-sm border rounded-md hover:bg-muted transition"
+                    >
+                      Last 7 Days
+                    </button>
+                    <button
+                      onClick={() => {
+                        const date = new Date();
+                        date.setDate(date.getDate() - 30);
+                        setSyncDateFrom(date.toISOString().split('T')[0]);
+                        setSyncDateTo(new Date().toISOString().split('T')[0]);
+                      }}
+                      className="px-3 py-1 text-sm border rounded-md hover:bg-muted transition"
+                    >
+                      Last 30 Days
+                    </button>
+                    <button
+                      onClick={() => {
+                        const date = new Date();
+                        date.setDate(date.getDate() - 90);
+                        setSyncDateFrom(date.toISOString().split('T')[0]);
+                        setSyncDateTo(new Date().toISOString().split('T')[0]);
+                      }}
+                      className="px-3 py-1 text-sm border rounded-md hover:bg-muted transition"
+                    >
+                      Last 90 Days
+                    </button>
+                    <button
+                      onClick={() => {
+                        setSyncDateFrom('');
+                        setSyncDateTo('');
+                      }}
+                      className="px-3 py-1 text-sm border rounded-md hover:bg-muted transition"
+                    >
+                      All Time
+                    </button>
+                  </div>
+
+                  {!syncDateFrom && !syncDateTo && (
+                    <p className="text-xs text-muted-foreground mt-2">
+                      ⚠️ "All Time" will fetch all ads (may be slow for large accounts)
+                    </p>
+                  )}
                 </div>
               )}
 

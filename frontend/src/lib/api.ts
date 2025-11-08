@@ -96,8 +96,12 @@ export const facebookApi = {
 
 // Analytics endpoints
 export const analyticsApi = {
-  sync: (adAccountId: string) =>
-    api.post('/analytics/sync', { ad_account_id: adAccountId }),
+  sync: (adAccountId: string, dateFrom?: string, dateTo?: string) =>
+    api.post('/analytics/sync', {
+      ad_account_id: adAccountId,
+      date_from: dateFrom || undefined,
+      date_to: dateTo || undefined
+    }),
   getEditorPerformance: (params?: {
     editor_id?: string;
     date_from?: string;

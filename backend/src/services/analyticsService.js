@@ -13,15 +13,23 @@ class AnalyticsService {
    * Sync Facebook ads for an account
    * @param {string} adAccountId - Facebook ad account ID (with or without act_ prefix)
    * @param {string} userId - User ID (for auth check)
+   * @param {string} dateFrom - Optional start date (YYYY-MM-DD)
+   * @param {string} dateTo - Optional end date (YYYY-MM-DD)
    * @returns {Promise<Object>} Sync result
    */
-  async syncFacebookAds(adAccountId, userId) {
+  async syncFacebookAds(adAccountId, userId, dateFrom = null, dateTo = null) {
     try {
       console.log('\n🚀 ========== FACEBOOK AD SYNC START ==========');
       console.log(`📊 Ad Account ID: ${adAccountId}`);
       console.log(`👤 User ID: ${userId}`);
 
-      logger.info('Starting Facebook ad sync', { adAccountId, userId });
+      if (dateFrom && dateTo) {
+        console.log(`📅 Date Range: ${dateFrom} to ${dateTo}`);
+      } else {
+        console.log(`📅 Date Range: All time (no filter)`);
+      }
+
+      logger.info('Starting Facebook ad sync', { adAccountId, userId, dateFrom, dateTo });
 
       // Get user's Facebook access token
       const fbAuth = await FacebookAuth.getByUserId(userId);
@@ -33,8 +41,8 @@ class AnalyticsService {
 
       const accessToken = fbAuth.access_token;
 
-      // Fetch campaigns from Facebook Graph API
-      const campaigns = await facebookGraphService.getCampaigns(adAccountId, accessToken);
+      // Fetch campaigns from Facebook Graph API with date filter
+      const campaigns = await facebookGraphService.getCampaigns(adAccountId, accessToken, dateFrom, dateTo);
       logger.info('Fetched campaigns', { count: campaigns.length });
 
       if (campaigns.length === 0) {

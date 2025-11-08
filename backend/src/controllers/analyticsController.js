@@ -9,7 +9,7 @@ class AnalyticsController {
    */
   async syncAds(req, res, next) {
     try {
-      const { ad_account_id } = req.body;
+      const { ad_account_id, date_from, date_to } = req.body;
 
       if (!ad_account_id) {
         return res.status(400).json({
@@ -18,9 +18,28 @@ class AnalyticsController {
         });
       }
 
+      // Validate dates if provided
+      if (date_from && date_to) {
+        const fromDate = new Date(date_from);
+        const toDate = new Date(date_to);
+
+        if (fromDate > toDate) {
+          return res.status(400).json({
+            success: false,
+            error: 'date_from must be before or equal to date_to'
+          });
+        }
+
+        console.log(`📅 Date filter: ${date_from} to ${date_to}`);
+      } else if (!date_from && !date_to) {
+        console.log(`📅 No date filter - fetching all ads`);
+      }
+
       const result = await analyticsService.syncFacebookAds(
         ad_account_id,
-        req.user.id
+        req.user.id,
+        date_from,
+        date_to
       );
 
       res.json({

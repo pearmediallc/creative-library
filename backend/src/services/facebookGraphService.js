@@ -12,24 +12,48 @@ class FacebookGraphService {
    * Get campaigns from ad account
    * @param {string} adAccountId - Ad account ID (with or without act_ prefix)
    * @param {string} accessToken - Facebook access token
+   * @param {string} dateFrom - Optional start date (YYYY-MM-DD)
+   * @param {string} dateTo - Optional end date (YYYY-MM-DD)
    * @returns {Promise<Array>} Campaigns
    */
-  async getCampaigns(adAccountId, accessToken) {
+  async getCampaigns(adAccountId, accessToken, dateFrom = null, dateTo = null) {
     try {
       // Ensure ad account ID has act_ prefix
       const accountId = adAccountId.startsWith('act_') ? adAccountId : `act_${adAccountId}`;
 
       console.log(`\n📊 Fetching campaigns for account: ${accountId}`);
 
+      const params = {
+        access_token: accessToken,
+        fields: 'id,name,status,objective,created_time,updated_time',
+        limit: 1000
+      };
+
+      // Add date filtering if provided
+      if (dateFrom && dateTo) {
+        const fromTimestamp = Math.floor(new Date(dateFrom).getTime() / 1000);
+        const toTimestamp = Math.floor(new Date(dateTo).getTime() / 1000);
+
+        console.log(`📅 Applying date filter: ${dateFrom} to ${dateTo}`);
+        console.log(`   Unix timestamps: ${fromTimestamp} to ${toTimestamp}`);
+
+        params.filtering = JSON.stringify([
+          {
+            field: 'updated_time',
+            operator: 'GREATER_THAN',
+            value: fromTimestamp
+          },
+          {
+            field: 'updated_time',
+            operator: 'LESS_THAN',
+            value: toTimestamp
+          }
+        ]);
+      }
+
       const response = await axios.get(
         `${FACEBOOK_GRAPH_API_URL}/${accountId}/campaigns`,
-        {
-          params: {
-            access_token: accessToken,
-            fields: 'id,name,status,objective,created_time,updated_time',
-            limit: 1000
-          }
-        }
+        { params }
       );
 
       const campaigns = response.data.data || [];
