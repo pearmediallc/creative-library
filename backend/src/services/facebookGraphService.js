@@ -140,6 +140,142 @@ class FacebookGraphService {
   }
 
   /**
+   * Get ad sets from campaign with pagination
+   * @param {string} campaignId - Campaign ID
+   * @param {string} accessToken - Facebook access token
+   * @returns {Promise<Array>} Ad sets
+   */
+  async getCampaignAdSets(campaignId, accessToken) {
+    try {
+      console.log(`\n   📦 Fetching ad sets for campaign: ${campaignId}`);
+
+      let allAdSets = [];
+      let currentPage = 1;
+      let nextUrl = `${FACEBOOK_GRAPH_API_URL}/${campaignId}/adsets`;
+      let hasMore = true;
+
+      const params = {
+        access_token: accessToken,
+        fields: 'id,name,status,created_time,updated_time,daily_budget,lifetime_budget',
+        limit: 1000
+      };
+
+      // Fetch all pages of ad sets using pagination
+      while (hasMore) {
+        console.log(`      📄 Fetching page ${currentPage} of ad sets...`);
+
+        const response = await axios.get(nextUrl, {
+          params: currentPage === 1 ? params : { access_token: accessToken }
+        });
+
+        const adSets = response.data.data || [];
+        console.log(`      ✅ Page ${currentPage}: Found ${adSets.length} ad sets`);
+
+        // Log each ad set name for visibility
+        if (adSets.length > 0) {
+          adSets.forEach((adSet, idx) => {
+            console.log(`         ${idx + 1}. Ad Set ID: ${adSet.id} | Name: "${adSet.name}" | Status: ${adSet.status}`);
+          });
+        }
+
+        allAdSets = allAdSets.concat(adSets);
+
+        // Check if there's a next page
+        if (response.data.paging && response.data.paging.next) {
+          nextUrl = response.data.paging.next;
+          currentPage++;
+          console.log(`      ➡️  More ad sets available, fetching next page...`);
+        } else {
+          hasMore = false;
+          console.log(`      ✅ No more pages - completed fetching all ad sets`);
+        }
+      }
+
+      console.log(`\n   ✅ Total ad sets fetched: ${allAdSets.length} ad sets across ${currentPage} page(s)`);
+
+      return allAdSets;
+    } catch (error) {
+      console.error(`   ❌ Failed to fetch ad sets for campaign ${campaignId}:`, error.response?.data || error.message);
+      logger.error('Get campaign ad sets failed', {
+        error: error.message,
+        responseData: error.response?.data,
+        campaignId
+      });
+
+      // Don't throw error for individual campaign failures - return empty array
+      return [];
+    }
+  }
+
+  /**
+   * Get ads from ad set with insights and pagination
+   * @param {string} adSetId - Ad Set ID
+   * @param {string} accessToken - Facebook access token
+   * @returns {Promise<Array>} Ads with insights
+   */
+  async getAdSetAds(adSetId, accessToken) {
+    try {
+      console.log(`\n      📢 Fetching ads for ad set: ${adSetId}`);
+
+      let allAds = [];
+      let currentPage = 1;
+      let nextUrl = `${FACEBOOK_GRAPH_API_URL}/${adSetId}/ads`;
+      let hasMore = true;
+
+      const params = {
+        access_token: accessToken,
+        fields: 'id,name,status,created_time,updated_time,insights{spend,cpm,cpc,cost_per_action_type,impressions,clicks,actions,action_values}',
+        limit: 1000
+      };
+
+      // Fetch all pages of ads using pagination
+      while (hasMore) {
+        console.log(`         📄 Fetching page ${currentPage} of ads...`);
+
+        const response = await axios.get(nextUrl, {
+          params: currentPage === 1 ? params : { access_token: accessToken }
+        });
+
+        const ads = response.data.data || [];
+        console.log(`         ✅ Page ${currentPage}: Found ${ads.length} ads`);
+
+        // Log each ad name for visibility
+        if (ads.length > 0) {
+          ads.forEach((ad, idx) => {
+            console.log(`            ${idx + 1}. Ad ID: ${ad.id} | Name: "${ad.name}" | Status: ${ad.status}`);
+          });
+        }
+
+        allAds = allAds.concat(ads);
+
+        // Check if there's a next page
+        if (response.data.paging && response.data.paging.next) {
+          nextUrl = response.data.paging.next;
+          currentPage++;
+          console.log(`         ➡️  More ads available, fetching next page...`);
+        } else {
+          hasMore = false;
+          console.log(`         ✅ No more pages - completed fetching all ads`);
+        }
+      }
+
+      console.log(`\n      ✅ Total ads fetched: ${allAds.length} ads across ${currentPage} page(s)`);
+
+      return allAds;
+    } catch (error) {
+      console.error(`      ❌ Failed to fetch ads for ad set ${adSetId}:`, error.response?.data || error.message);
+      logger.error('Get ad set ads failed', {
+        error: error.message,
+        responseData: error.response?.data,
+        adSetId
+      });
+
+      // Don't throw error for individual ad set failures - return empty array
+      return [];
+    }
+  }
+
+  /**
    * Get ad accounts accessible by access token
    * @param {string} accessToken - Facebook access token
    * @returns {Promise<Array>} Ad accounts

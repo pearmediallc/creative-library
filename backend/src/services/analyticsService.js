@@ -69,45 +69,61 @@ class AnalyticsService {
         console.log(`   - Status: ${campaign.status || 'N/A'}`);
         console.log(`   - Objective: ${campaign.objective || 'N/A'}`);
 
-        const ads = await facebookGraphService.getCampaignAds(campaign.id, accessToken);
-        console.log(`   - Found ${ads.length} ad(s) in this campaign`);
-        logger.info('Fetched ads for campaign', { campaignId: campaign.id, adCount: ads.length });
+        // Fetch ad sets for this campaign
+        const adSets = await facebookGraphService.getCampaignAdSets(campaign.id, accessToken);
+        console.log(`   - Found ${adSets.length} ad set(s) in this campaign`);
+        logger.info('Fetched ad sets for campaign', { campaignId: campaign.id, adSetCount: adSets.length });
 
-        // Process ads in batch
-        if (ads.length === 0) {
-          console.log(`   ⚠️ No ads to process in this campaign`);
+        // Process each ad set
+        if (adSets.length === 0) {
+          console.log(`   ⚠️ No ad sets to process in this campaign`);
         } else {
-          console.log(`\n   📊 CAMPAIGN SUMMARY: Found ${ads.length} total ad(s) in this campaign`);
-          console.log(`   📋 Processing each ad individually...\n`);
-
           let campaignAdsWithEditor = 0;
           let campaignAdsWithoutEditor = 0;
+          let campaignTotalAds = 0;
 
-          for (let j = 0; j < ads.length; j++) {
-            const ad = ads[j];
-            console.log(`\n   📢 ========== AD ${j + 1}/${ads.length} ==========`);
-            console.log(`      📝 Ad Name: "${ad.name}"`);
-            console.log(`      🆔 Ad ID: ${ad.id}`);
-            console.log(`      📊 Status: ${ad.status || 'N/A'}`);
-            console.log(`      📅 Created: ${ad.created_time || 'N/A'}`);
-            console.log(`      📅 Updated: ${ad.updated_time || 'N/A'}`);
+          for (let j = 0; j < adSets.length; j++) {
+            const adSet = adSets[j];
+            console.log(`\n   📦 [Ad Set ${j + 1}/${adSets.length}] ${adSet.name}`);
+            console.log(`      Ad Set ID: ${adSet.id}`);
+            console.log(`      Status: ${adSet.status}`);
 
-            const processed = await this._processAndStoreAd(ad, campaign, adAccountId);
-            totalAdsProcessed++;
+            // Fetch ads for this ad set
+            const ads = await facebookGraphService.getAdSetAds(adSet.id, accessToken);
+            console.log(`      Found ${ads.length} ad(s) in this ad set`);
+            logger.info('Fetched ads for ad set', { adSetId: adSet.id, adCount: ads.length });
 
-            if (processed.hasEditor) {
-              adsWithEditor++;
-              campaignAdsWithEditor++;
-              console.log(`      ✅ RESULT: Editor detected → ${processed.editorName}`);
+            if (ads.length === 0) {
+              console.log(`      ⚠️ No ads to process in this ad set`);
             } else {
-              adsWithoutEditor++;
-              campaignAdsWithoutEditor++;
-              console.log(`      ⚠️  RESULT: No editor name found in ad name`);
+              for (let k = 0; k < ads.length; k++) {
+                const ad = ads[k];
+                console.log(`\n      📢 ========== AD ${k + 1}/${ads.length} (from Ad Set: ${adSet.name}) ==========`);
+                console.log(`         📝 Ad Name: "${ad.name}"`);
+                console.log(`         🆔 Ad ID: ${ad.id}`);
+                console.log(`         📊 Status: ${ad.status || 'N/A'}`);
+                console.log(`         📅 Created: ${ad.created_time || 'N/A'}`);
+                console.log(`         📅 Updated: ${ad.updated_time || 'N/A'}`);
+
+                const processed = await this._processAndStoreAd(ad, campaign, adAccountId);
+                totalAdsProcessed++;
+                campaignTotalAds++;
+
+                if (processed.hasEditor) {
+                  adsWithEditor++;
+                  campaignAdsWithEditor++;
+                  console.log(`         ✅ RESULT: Editor detected → ${processed.editorName}`);
+                } else {
+                  adsWithoutEditor++;
+                  campaignAdsWithoutEditor++;
+                  console.log(`         ⚠️  RESULT: No editor name found in ad name`);
+                }
+                console.log(`      ========================================\n`);
+              }
             }
-            console.log(`   ========================================\n`);
           }
 
-          console.log(`\n   ✅ CAMPAIGN COMPLETE: Processed ${ads.length} ads`);
+          console.log(`\n   ✅ CAMPAIGN COMPLETE: Processed ${campaignTotalAds} ads from ${adSets.length} ad sets`);
           console.log(`      - With Editor: ${campaignAdsWithEditor}`);
           console.log(`      - Without Editor: ${campaignAdsWithoutEditor}`);
         }
