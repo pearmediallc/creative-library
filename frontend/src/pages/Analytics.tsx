@@ -613,8 +613,8 @@ export function AnalyticsPage() {
                     <div className="text-right">${formatNumber(Math.round(editor.total_spend || 0))}</div>
                     <div className="text-right">{formatNumber(editor.total_impressions || 0)}</div>
                     <div className="text-right">{formatNumber(editor.total_clicks || 0)}</div>
-                    <div className="text-right">${(editor.avg_cpm || 0).toFixed(2)}</div>
-                    <div className="text-right">${(editor.avg_cpc || 0).toFixed(2)}</div>
+                    <div className="text-right">${(parseFloat(editor.avg_cpm) || 0).toFixed(2)}</div>
+                    <div className="text-right">${(parseFloat(editor.avg_cpc) || 0).toFixed(2)}</div>
                   </div>
                 ))}
               </div>
@@ -659,7 +659,7 @@ export function AnalyticsPage() {
                     </div>
                     <div className="text-right">
                       <p className="text-sm font-medium">${Math.round(ad.spend || 0)}</p>
-                      <p className="text-xs text-muted-foreground">CPM: ${(ad.cpm || 0).toFixed(2)}</p>
+                      <p className="text-xs text-muted-foreground">CPM: ${(parseFloat(ad.cpm) || 0).toFixed(2)}</p>
                     </div>
                   </div>
                 ))}
