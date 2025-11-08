@@ -50,6 +50,7 @@ class AdNameParser {
    */
   async extractEditorFromAdName(adName) {
     if (!adName || typeof adName !== 'string') {
+      console.log(`         ⚠️  Invalid ad name: ${adName}`);
       return null;
     }
 
@@ -57,35 +58,37 @@ class AdNameParser {
     await this._loadEditorCache();
 
     if (!this.editorNamesCache || this.editorNamesCache.length === 0) {
+      console.log(`         ⚠️  Editor cache is empty - no editors to match against`);
       logger.warn('Editor cache is empty');
       return null;
     }
 
+    console.log(`         📋 Available editors in cache: ${this.editorNamesCache.map(e => e.name).join(', ')}`);
+
     // Clean ad name: uppercase and trim
     const cleanAdName = adName.toUpperCase().trim();
+    console.log(`         🔍 Cleaned ad name for matching: "${cleanAdName}"`);
 
     // Try multiple patterns
     const patterns = [
-      // Pattern 1: [REVIEW] Campaign - EDITOR - Ad 1
-      /\s-\s([A-Z]+(?:VERMA)?)\s-\s/,
-
-      // Pattern 2: Campaign - EDITOR - Ad 1 (without [REVIEW])
-      /-\s([A-Z]+(?:VERMA)?)\s-/,
-
-      // Pattern 3: EDITOR in parentheses: Campaign (EDITOR)
-      /\(([A-Z]+(?:VERMA)?)\)/,
-
-      // Pattern 4: EDITOR at the end: Campaign - EDITOR
-      /-\s([A-Z]+(?:VERMA)?)$/,
-
-      // Pattern 5: EDITOR at the start: EDITOR - Campaign
-      /^([A-Z]+(?:VERMA)?)\s-/
+      { name: 'Pattern 1: [Launcher] Campaign - Ad Date - EDITOR', regex: /\s-\s([A-Z]+(?:\s[A-Z]+)?)\s*$/ },
+      { name: 'Pattern 2: Campaign - EDITOR - Ad', regex: /\s-\s([A-Z]+(?:VERMA)?)\s-\s/ },
+      { name: 'Pattern 3: EDITOR in parentheses', regex: /\(([A-Z]+(?:VERMA)?)\)/ },
+      { name: 'Pattern 4: EDITOR at the end', regex: /-\s([A-Z]+(?:VERMA)?)$/ },
+      { name: 'Pattern 5: EDITOR at the start', regex: /^([A-Z]+(?:VERMA)?)\s-/ }
     ];
 
-    for (const pattern of patterns) {
-      const match = cleanAdName.match(pattern);
+    console.log(`         🎯 Trying ${patterns.length} pattern(s)...`);
+
+    for (let i = 0; i < patterns.length; i++) {
+      const { name, regex } = patterns[i];
+      const match = cleanAdName.match(regex);
+
+      console.log(`            ${i + 1}. ${name}`);
+
       if (match && match[1]) {
         const extractedName = match[1].trim();
+        console.log(`               ✓ Match found: "${extractedName}"`);
 
         // Find matching editor in cache
         const editor = this.editorNamesCache.find(e =>
@@ -93,6 +96,7 @@ class AdNameParser {
         );
 
         if (editor) {
+          console.log(`               ✅ Editor verified in database: ${editor.display_name} (ID: ${editor.id})`);
           logger.debug('Editor extracted from ad name', {
             adName,
             extractedName,
@@ -101,13 +105,19 @@ class AdNameParser {
 
           return {
             editor_id: editor.id,
-            editor_name: editor.name
+            editor_name: editor.name,
+            pattern: name
           };
+        } else {
+          console.log(`               ⚠️  Extracted "${extractedName}" but NOT found in editor database`);
         }
+      } else {
+        console.log(`               ✗ No match`);
       }
     }
 
     // No match found
+    console.log(`         ❌ No editor pattern matched in ad name`);
     logger.debug('No editor found in ad name', { adName });
     return null;
   }

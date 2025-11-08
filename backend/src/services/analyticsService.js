@@ -77,23 +77,39 @@ class AnalyticsService {
         if (ads.length === 0) {
           console.log(`   ⚠️ No ads to process in this campaign`);
         } else {
+          console.log(`\n   📊 CAMPAIGN SUMMARY: Found ${ads.length} total ad(s) in this campaign`);
+          console.log(`   📋 Processing each ad individually...\n`);
+
+          let campaignAdsWithEditor = 0;
+          let campaignAdsWithoutEditor = 0;
+
           for (let j = 0; j < ads.length; j++) {
             const ad = ads[j];
-            console.log(`\n   📢 [${j + 1}/${ads.length}] Processing ad: ${ad.name}`);
-            console.log(`      - Ad ID: ${ad.id}`);
-            console.log(`      - Ad Status: ${ad.status || 'N/A'}`);
+            console.log(`\n   📢 ========== AD ${j + 1}/${ads.length} ==========`);
+            console.log(`      📝 Ad Name: "${ad.name}"`);
+            console.log(`      🆔 Ad ID: ${ad.id}`);
+            console.log(`      📊 Status: ${ad.status || 'N/A'}`);
+            console.log(`      📅 Created: ${ad.created_time || 'N/A'}`);
+            console.log(`      📅 Updated: ${ad.updated_time || 'N/A'}`);
 
             const processed = await this._processAndStoreAd(ad, campaign, adAccountId);
             totalAdsProcessed++;
 
             if (processed.hasEditor) {
               adsWithEditor++;
-              console.log(`      ✅ Editor detected: ${processed.editorName}`);
+              campaignAdsWithEditor++;
+              console.log(`      ✅ RESULT: Editor detected → ${processed.editorName}`);
             } else {
               adsWithoutEditor++;
-              console.log(`      ⚠️ No editor name found in ad name`);
+              campaignAdsWithoutEditor++;
+              console.log(`      ⚠️  RESULT: No editor name found in ad name`);
             }
+            console.log(`   ========================================\n`);
           }
+
+          console.log(`\n   ✅ CAMPAIGN COMPLETE: Processed ${ads.length} ads`);
+          console.log(`      - With Editor: ${campaignAdsWithEditor}`);
+          console.log(`      - Without Editor: ${campaignAdsWithoutEditor}`);
         }
       }
 

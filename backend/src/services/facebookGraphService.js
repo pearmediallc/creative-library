@@ -81,21 +81,51 @@ class FacebookGraphService {
     try {
       console.log(`\n📢 Fetching ads for campaign: ${campaignId}`);
 
-      const response = await axios.get(
-        `${FACEBOOK_GRAPH_API_URL}/${campaignId}/ads`,
-        {
-          params: {
-            access_token: accessToken,
-            fields: 'id,name,status,created_time,updated_time,insights{spend,cpm,cpc,cost_per_action_type,impressions,clicks,actions,action_values}',
-            limit: 1000
-          }
+      let allAds = [];
+      let currentPage = 1;
+      let nextUrl = `${FACEBOOK_GRAPH_API_URL}/${campaignId}/ads`;
+      let hasMore = true;
+
+      const params = {
+        access_token: accessToken,
+        fields: 'id,name,status,created_time,updated_time,insights{spend,cpm,cpc,cost_per_action_type,impressions,clicks,actions,action_values}',
+        limit: 1000
+      };
+
+      // Fetch all pages of ads using pagination
+      while (hasMore) {
+        console.log(`   📄 Fetching page ${currentPage} of ads...`);
+
+        const response = await axios.get(nextUrl, {
+          params: currentPage === 1 ? params : { access_token: accessToken }
+        });
+
+        const ads = response.data.data || [];
+        console.log(`   ✅ Page ${currentPage}: Found ${ads.length} ads`);
+
+        // Log each ad name for visibility
+        if (ads.length > 0) {
+          ads.forEach((ad, idx) => {
+            console.log(`      ${idx + 1}. Ad ID: ${ad.id} | Name: "${ad.name}" | Status: ${ad.status}`);
+          });
         }
-      );
 
-      const ads = response.data.data || [];
-      console.log(`✅ Found ${ads.length} ads in campaign ${campaignId}`);
+        allAds = allAds.concat(ads);
 
-      return ads;
+        // Check if there's a next page
+        if (response.data.paging && response.data.paging.next) {
+          nextUrl = response.data.paging.next;
+          currentPage++;
+          console.log(`   ➡️  More ads available, fetching next page...`);
+        } else {
+          hasMore = false;
+          console.log(`   ✅ No more pages - completed fetching all ads`);
+        }
+      }
+
+      console.log(`\n✅ Total ads fetched for campaign ${campaignId}: ${allAds.length} ads across ${currentPage} page(s)`);
+
+      return allAds;
     } catch (error) {
       console.error(`❌ Failed to fetch ads for campaign ${campaignId}:`, error.response?.data || error.message);
       logger.error('Get campaign ads failed', {
