@@ -688,19 +688,56 @@ export function AnalyticsPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-2">
-                {adsWithoutEditor.slice(0, 10).map((ad) => (
-                  <div key={ad.fb_ad_id} className="flex items-center justify-between py-2 border-b">
-                    <div className="flex-1">
-                      <p className="font-medium text-sm">{ad.ad_name}</p>
-                      <p className="text-xs text-muted-foreground">{ad.campaign_name}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm font-medium">${Math.round(ad.spend || 0)}</p>
-                      <p className="text-xs text-muted-foreground">CPM: ${(Number(ad.cpm) || 0).toFixed(2)}</p>
-                    </div>
-                  </div>
-                ))}
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b">
+                      <th className="text-left p-2 font-medium">Ad Name</th>
+                      <th className="text-left p-2 font-medium">Campaign</th>
+                      <th className="text-left p-2 font-medium">Ad Set</th>
+                      <th className="text-left p-2 font-medium">Status</th>
+                      <th className="text-right p-2 font-medium">Spend</th>
+                      <th className="text-right p-2 font-medium">Impressions</th>
+                      <th className="text-right p-2 font-medium">Clicks</th>
+                      <th className="text-right p-2 font-medium">CTR</th>
+                      <th className="text-right p-2 font-medium">CPC</th>
+                      <th className="text-right p-2 font-medium">CPM</th>
+                      <th className="text-left p-2 font-medium">Ad ID</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {adsWithoutEditor.slice(0, 10).map((ad) => (
+                      <tr key={ad.fb_ad_id} className="border-b hover:bg-muted/50">
+                        <td className="p-2">
+                          <p className="font-medium">{ad.ad_name}</p>
+                        </td>
+                        <td className="p-2 text-muted-foreground">{ad.campaign_name}</td>
+                        <td className="p-2 text-muted-foreground">{ad.ad_set_name || 'N/A'}</td>
+                        <td className="p-2">
+                          <span className={`px-2 py-1 rounded text-xs ${
+                            ad.status === 'ACTIVE' ? 'bg-green-100 text-green-800' :
+                            ad.status === 'PAUSED' ? 'bg-yellow-100 text-yellow-800' :
+                            'bg-gray-100 text-gray-800'
+                          }`}>
+                            {ad.status || 'UNKNOWN'}
+                          </span>
+                        </td>
+                        <td className="p-2 text-right font-medium">${(Number(ad.spend) || 0).toFixed(2)}</td>
+                        <td className="p-2 text-right">{(Number(ad.impressions) || 0).toLocaleString()}</td>
+                        <td className="p-2 text-right">{(Number(ad.clicks) || 0).toLocaleString()}</td>
+                        <td className="p-2 text-right">{(Number(ad.ctr) || 0).toFixed(2)}%</td>
+                        <td className="p-2 text-right">${(Number(ad.cpc) || 0).toFixed(2)}</td>
+                        <td className="p-2 text-right">${(Number(ad.cpm) || 0).toFixed(2)}</td>
+                        <td className="p-2 text-xs text-muted-foreground">{ad.fb_ad_id}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {adsWithoutEditor.length > 10 && (
+                  <p className="text-sm text-muted-foreground mt-3 text-center">
+                    Showing 10 of {adsWithoutEditor.length} ads without editor assignment
+                  </p>
+                )}
               </div>
             </CardContent>
           </Card>
