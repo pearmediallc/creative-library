@@ -178,6 +178,8 @@ class MediaFile extends BaseModel {
    * @returns {Promise<Object>} Storage stats
    */
   async getStorageStats() {
+    console.log('\n📊 ========== DASHBOARD STORAGE STATS SYNC ==========');
+
     const sql = `
       SELECT
         COUNT(*) as total_files,
@@ -189,8 +191,15 @@ class MediaFile extends BaseModel {
       WHERE is_deleted = FALSE
     `;
 
+    console.log('📋 Executing query to get storage stats from database...');
+    console.log(`   Table: ${this.tableName}`);
+    console.log(`   Filter: is_deleted = FALSE`);
+
     const result = await this.raw(sql);
+
     if (!result || !result.rows || result.rows.length === 0) {
+      console.log('⚠️  No results returned from database query');
+      console.log('✅ Returning default zero stats\n');
       return {
         total_files: 0,
         total_size_bytes: 0,
@@ -199,7 +208,17 @@ class MediaFile extends BaseModel {
         other_count: 0
       };
     }
-    return result.rows[0];
+
+    const stats = result.rows[0];
+    console.log('\n✅ Database stats retrieved successfully:');
+    console.log(`   📁 Total Files: ${stats.total_files}`);
+    console.log(`   💾 Total Size: ${(stats.total_size_bytes / (1024 * 1024)).toFixed(2)} MB (${stats.total_size_bytes} bytes)`);
+    console.log(`   🖼️  Images: ${stats.image_count}`);
+    console.log(`   🎥 Videos: ${stats.video_count}`);
+    console.log(`   📄 Other: ${stats.other_count}`);
+    console.log('================================================\n');
+
+    return stats;
   }
 }
 

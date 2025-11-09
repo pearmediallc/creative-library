@@ -31,10 +31,16 @@ class AdNameParser {
       const editors = await Editor.getActiveEditors();
       this.editorNamesCache = editors.map(e => ({
         id: e.id,
-        name: e.name.toUpperCase(),
-        display_name: e.display_name
+        name: e.name.toUpperCase(), // Full name (e.g., "SHUBHAMCHANDRABANSI")
+        display_name: e.display_name.toUpperCase(), // Display name (e.g., "SHUBH")
+        display_name_original: e.display_name // Keep original casing for display
       }));
       this.cacheLastUpdated = now;
+
+      console.log(`📋 Editor cache refreshed with ${this.editorNamesCache.length} editors:`);
+      this.editorNamesCache.forEach(e => {
+        console.log(`   - ${e.display_name_original} (full name: ${e.name}, display: ${e.display_name})`);
+      });
 
       logger.info('Editor cache refreshed', { count: this.editorNamesCache.length });
     } catch (error) {
@@ -63,7 +69,10 @@ class AdNameParser {
       return null;
     }
 
-    console.log(`         📋 Available editors in cache: ${this.editorNamesCache.map(e => e.name).join(', ')}`);
+    console.log(`         📋 Available editors in cache (${this.editorNamesCache.length}):`);
+    this.editorNamesCache.forEach(e => {
+      console.log(`            - Display: "${e.display_name}" OR Full: "${e.name}"`);
+    });
 
     // Clean ad name: uppercase and trim
     const cleanAdName = adName.toUpperCase().trim();
@@ -90,26 +99,44 @@ class AdNameParser {
         const extractedName = match[1].trim();
         console.log(`               ✓ Match found: "${extractedName}"`);
 
-        // Find matching editor in cache
-        const editor = this.editorNamesCache.find(e =>
-          e.name === extractedName
-        );
+        // Find matching editor in cache - try BOTH display_name AND full name
+        console.log(`               🔍 Searching for editor with name or display_name: "${extractedName}"`);
+
+        const editor = this.editorNamesCache.find(e => {
+          const matchesDisplayName = e.display_name === extractedName;
+          const matchesFullName = e.name === extractedName;
+
+          if (matchesDisplayName) {
+            console.log(`               ✓ Matched display_name: ${e.display_name_original}`);
+          }
+          if (matchesFullName) {
+            console.log(`               ✓ Matched full name: ${e.name}`);
+          }
+
+          return matchesDisplayName || matchesFullName;
+        });
 
         if (editor) {
-          console.log(`               ✅ Editor verified in database: ${editor.display_name} (ID: ${editor.id})`);
+          console.log(`               ✅ Editor verified in database:`);
+          console.log(`                  - Display Name: ${editor.display_name_original}`);
+          console.log(`                  - Full Name: ${editor.name}`);
+          console.log(`                  - ID: ${editor.id}`);
+
           logger.debug('Editor extracted from ad name', {
             adName,
             extractedName,
-            editorId: editor.id
+            editorId: editor.id,
+            matchedOn: editor.display_name === extractedName ? 'display_name' : 'full_name'
           });
 
           return {
             editor_id: editor.id,
-            editor_name: editor.name,
+            editor_name: editor.display_name, // Return display name for consistency
             pattern: name
           };
         } else {
           console.log(`               ⚠️  Extracted "${extractedName}" but NOT found in editor database`);
+          console.log(`               ℹ️  Available options: ${this.editorNamesCache.map(e => `${e.display_name} or ${e.name}`).join(', ')}`);
         }
       } else {
         console.log(`               ✗ No match`);
