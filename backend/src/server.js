@@ -19,6 +19,7 @@ const editorRoutes = require('./routes/editors');
 const analyticsRoutes = require('./routes/analytics');
 const adminRoutes = require('./routes/admin');
 const facebookRoutes = require('./routes/facebook');
+const activityLogRoutes = require('./routes/activityLogs');
 
 // Import error handler
 const errorHandler = require('./middleware/errorHandler');
@@ -116,9 +117,10 @@ app.use('/api/editors', editorRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/facebook', facebookRoutes);
+app.use('/api/activity-logs', activityLogRoutes);
 
 // Log registered routes
-logger.info('API routes registered: /api/auth, /api/media, /api/editors, /api/analytics, /api/admin, /api/facebook');
+logger.info('API routes registered: /api/auth, /api/media, /api/editors, /api/analytics, /api/admin, /api/facebook, /api/activity-logs');
 
 // 404 handler
 app.use((req, res) => {

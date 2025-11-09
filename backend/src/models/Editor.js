@@ -72,6 +72,8 @@ class Editor extends BaseModel {
    * @returns {Promise<Array>} Editors with performance data
    */
   async getAllWithStats() {
+    console.log('\n📊 ========== FETCHING EDITOR STATS ==========');
+
     const sql = `
       SELECT
         e.id,
@@ -81,7 +83,8 @@ class Editor extends BaseModel {
         e.created_at,
         COUNT(DISTINCT mf.id) as media_file_count,
         COUNT(DISTINCT fa.id) as ad_count,
-        COALESCE(SUM(fa.spend), 0) as total_spend
+        COALESCE(SUM(fa.spend), 0) as total_spend,
+        COALESCE(SUM(fa.impressions), 0) as total_impressions
       FROM editors e
       LEFT JOIN media_files mf ON mf.editor_id = e.id AND mf.is_deleted = FALSE
       LEFT JOIN facebook_ads fa ON fa.editor_id = e.id
@@ -89,13 +92,34 @@ class Editor extends BaseModel {
       ORDER BY e.display_name ASC
     `;
 
-    console.log('📊 Fetching editor stats...');
+    console.log('🔍 SQL Query:', sql);
     const result = await this.raw(sql);
 
     // Handle both array response (Postgres) and object with rows property
     const rows = Array.isArray(result) ? result : (result.rows || []);
 
-    console.log(`✅ Found ${rows.length} editors with stats:`, JSON.stringify(rows, null, 2));
+    console.log(`✅ Found ${rows.length} editors`);
+    rows.forEach(row => {
+      console.log(`  📋 ${row.display_name} (${row.name}):`);
+      console.log(`      - Media files: ${row.media_file_count}`);
+      console.log(`      - Ads: ${row.ad_count}`);
+      console.log(`      - Total spend: $${row.total_spend}`);
+      console.log(`      - Total impressions: ${row.total_impressions}`);
+    });
+
+    // Also check total ads in database for debugging
+    const totalAdsSql = 'SELECT COUNT(*) as total FROM facebook_ads';
+    const totalAdsResult = await this.raw(totalAdsSql);
+    const totalAds = Array.isArray(totalAdsResult) ? totalAdsResult[0].total : (totalAdsResult.rows?.[0]?.total || 0);
+    console.log(`\n📊 Total ads in database: ${totalAds}`);
+
+    // Check how many ads have editor_id assigned
+    const adsWithEditorSql = 'SELECT COUNT(*) as total FROM facebook_ads WHERE editor_id IS NOT NULL';
+    const adsWithEditorResult = await this.raw(adsWithEditorSql);
+    const adsWithEditor = Array.isArray(adsWithEditorResult) ? adsWithEditorResult[0].total : (adsWithEditorResult.rows?.[0]?.total || 0);
+    console.log(`📊 Ads with editor_id assigned: ${adsWithEditor}`);
+
+    console.log('================================================\n');
 
     return rows;
   }
