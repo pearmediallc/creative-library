@@ -194,11 +194,24 @@ class MediaFile extends BaseModel {
     console.log('📋 Executing query to get storage stats from database...');
     console.log(`   Table: ${this.tableName}`);
     console.log(`   Filter: is_deleted = FALSE`);
+    console.log(`   Full SQL: ${sql}`);
 
     const result = await this.raw(sql);
 
+    console.log('📦 Raw database result:', JSON.stringify(result, null, 2));
+
     if (!result || !result.rows || result.rows.length === 0) {
       console.log('⚠️  No results returned from database query');
+      console.log('📋 Checking if table exists and has any rows...');
+
+      const tableCheckSql = `SELECT COUNT(*) as all_files FROM ${this.tableName}`;
+      const tableCheck = await this.raw(tableCheckSql);
+      console.log(`   Total rows in table (including deleted): ${tableCheck.rows[0]?.all_files || 0}`);
+
+      const deletedCheckSql = `SELECT COUNT(*) as deleted_files FROM ${this.tableName} WHERE is_deleted = TRUE`;
+      const deletedCheck = await this.raw(deletedCheckSql);
+      console.log(`   Deleted rows: ${deletedCheck.rows[0]?.deleted_files || 0}`);
+
       console.log('✅ Returning default zero stats\n');
       return {
         total_files: 0,
@@ -210,15 +223,25 @@ class MediaFile extends BaseModel {
     }
 
     const stats = result.rows[0];
+
+    // Convert string counts to integers
+    const finalStats = {
+      total_files: parseInt(stats.total_files) || 0,
+      total_size_bytes: parseInt(stats.total_size_bytes) || 0,
+      image_count: parseInt(stats.image_count) || 0,
+      video_count: parseInt(stats.video_count) || 0,
+      other_count: parseInt(stats.other_count) || 0
+    };
+
     console.log('\n✅ Database stats retrieved successfully:');
-    console.log(`   📁 Total Files: ${stats.total_files}`);
-    console.log(`   💾 Total Size: ${(stats.total_size_bytes / (1024 * 1024)).toFixed(2)} MB (${stats.total_size_bytes} bytes)`);
-    console.log(`   🖼️  Images: ${stats.image_count}`);
-    console.log(`   🎥 Videos: ${stats.video_count}`);
-    console.log(`   📄 Other: ${stats.other_count}`);
+    console.log(`   📁 Total Files: ${finalStats.total_files}`);
+    console.log(`   💾 Total Size: ${(finalStats.total_size_bytes / (1024 * 1024)).toFixed(2)} MB (${finalStats.total_size_bytes} bytes)`);
+    console.log(`   🖼️  Images: ${finalStats.image_count}`);
+    console.log(`   🎥 Videos: ${finalStats.video_count}`);
+    console.log(`   📄 Other: ${finalStats.other_count}`);
     console.log('================================================\n');
 
-    return stats;
+    return finalStats;
   }
 }
 
