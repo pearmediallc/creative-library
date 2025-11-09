@@ -1,7 +1,10 @@
 const { s3Client, getPresignedDownloadUrl, generateS3Key } = require('../config/aws');
 const { PutObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
 const sharp = require('sharp');
+const ffmpeg = require('fluent-ffmpeg');
 const path = require('path');
+const fs = require('fs').promises;
+const os = require('os');
 const logger = require('../utils/logger');
 
 const S3_BUCKET = process.env.AWS_S3_BUCKET;
@@ -115,6 +118,106 @@ class S3Service {
     } catch (error) {
       console.warn('⚠️ Thumbnail generation failed:', error.message);
       logger.warn('Thumbnail generation failed', { error: error.message, editorName });
+      // Non-critical error - return null
+      return null;
+    }
+  }
+
+  /**
+   * Generate thumbnail for video
+   * @param {Buffer} videoBuffer - Original video buffer
+   * @param {string} originalFilename - Original filename
+   * @param {string|null} editorName - Editor name for new structure (optional)
+   * @returns {Promise<Object>} Thumbnail upload result
+   */
+  async generateVideoThumbnail(videoBuffer, originalFilename, editorName = null) {
+    let tempVideoPath = null;
+    let tempThumbnailPath = null;
+
+    try {
+      console.log('🎥 Generating video thumbnail for:', originalFilename);
+      console.log(`  └─ Editor: ${editorName || 'NOT PROVIDED (will use old structure)'}`);
+
+      // Create temporary directory
+      const tempDir = os.tmpdir();
+      const timestamp = Date.now();
+      const videoExt = path.extname(originalFilename);
+      tempVideoPath = path.join(tempDir, `video_${timestamp}${videoExt}`);
+      tempThumbnailPath = path.join(tempDir, `thumb_${timestamp}.jpg`);
+
+      console.log(`📝 Writing video to temp file: ${tempVideoPath}`);
+      // Write video buffer to temporary file
+      await fs.writeFile(tempVideoPath, videoBuffer);
+
+      console.log(`🎬 Extracting frame from video using ffmpeg...`);
+      // Extract frame at 1 second using ffmpeg
+      await new Promise((resolve, reject) => {
+        ffmpeg(tempVideoPath)
+          .screenshots({
+            timestamps: ['00:00:01.000'],
+            filename: path.basename(tempThumbnailPath),
+            folder: tempDir,
+            size: '300x?'  // Width 300, auto height to maintain aspect ratio
+          })
+          .on('end', () => {
+            console.log(`✅ Frame extracted successfully`);
+            resolve();
+          })
+          .on('error', (err) => {
+            console.error(`❌ FFmpeg error: ${err.message}`);
+            reject(err);
+          });
+      });
+
+      // Read the generated thumbnail
+      console.log(`📖 Reading generated thumbnail: ${tempThumbnailPath}`);
+      const thumbnailBuffer = await fs.readFile(tempThumbnailPath);
+
+      console.log(`✅ Thumbnail buffer created (${thumbnailBuffer.length} bytes)`);
+
+      const thumbnailFilename = `thumb_${originalFilename.replace(videoExt, '.jpg')}`;
+
+      // Upload thumbnail using new structure if editor name provided
+      const result = await this.uploadFile(
+        thumbnailBuffer,
+        thumbnailFilename,
+        'image/jpeg',
+        'thumbnails',
+        editorName,      // Pass editor name for hybrid structure
+        'video'          // Mark as video thumbnail
+      );
+
+      console.log(`✅ Video thumbnail uploaded successfully`);
+      console.log(`  └─ Thumbnail Key: ${result.s3Key}`);
+
+      logger.info('Video thumbnail generated', {
+        thumbnailKey: result.s3Key,
+        editorName: editorName || 'none',
+        structureType: editorName ? 'NEW_HYBRID' : 'OLD_FALLBACK'
+      });
+
+      // Clean up temp files
+      try {
+        await fs.unlink(tempVideoPath);
+        await fs.unlink(tempThumbnailPath);
+        console.log(`🧹 Cleaned up temporary files`);
+      } catch (cleanupError) {
+        logger.warn('Failed to clean up temp files', { error: cleanupError.message });
+      }
+
+      return result;
+    } catch (error) {
+      console.warn('⚠️ Video thumbnail generation failed:', error.message);
+      logger.warn('Video thumbnail generation failed', { error: error.message, editorName });
+
+      // Clean up temp files on error
+      try {
+        if (tempVideoPath) await fs.unlink(tempVideoPath).catch(() => {});
+        if (tempThumbnailPath) await fs.unlink(tempThumbnailPath).catch(() => {});
+      } catch (cleanupError) {
+        // Ignore cleanup errors
+      }
+
       // Non-critical error - return null
       return null;
     }

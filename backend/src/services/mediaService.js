@@ -93,7 +93,21 @@ class MediaService {
           console.log(`  └─ Thumbnail URL: ${thumbnailUrl}`);
         }
       } else if (mediaType === 'video') {
-        console.log('\n🎥 Video uploaded (no thumbnail generated)');
+        console.log('\n🎥 Processing video...');
+
+        // Generate video thumbnail with NEW HYBRID STRUCTURE
+        console.log('  └─ Generating video thumbnail...');
+        const thumbnailResult = await s3Service.generateVideoThumbnail(
+          file.buffer,
+          file.originalname,
+          editor.name  // ✨ NEW: Pass editor name for hybrid structure
+        );
+        if (thumbnailResult) {
+          thumbnailUrl = `${process.env.AWS_CLOUDFRONT_URL}/${thumbnailResult.s3Key}`;
+          console.log(`  └─ Video thumbnail URL: ${thumbnailUrl}`);
+        } else {
+          console.log('  └─ Video thumbnail generation skipped or failed');
+        }
       }
 
       // Determine file type (image/video)
