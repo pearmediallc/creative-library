@@ -88,6 +88,7 @@ class Editor extends BaseModel {
       FROM editors e
       LEFT JOIN media_files mf ON mf.editor_id = e.id AND mf.is_deleted = FALSE
       LEFT JOIN facebook_ads fa ON fa.editor_id = e.id
+      WHERE e.is_active = TRUE
       GROUP BY e.id, e.name, e.display_name, e.is_active, e.created_at
       ORDER BY e.display_name ASC
     `;
