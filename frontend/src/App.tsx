@@ -8,6 +8,7 @@ import { MediaLibraryPage } from './pages/MediaLibrary';
 import { AnalyticsPage } from './pages/Analytics';
 import { EditorsPage } from './pages/Editors';
 import { AdminPage } from './pages/Admin';
+import { ActivityLogsPage } from './pages/ActivityLogs';
 
 function PrivateRoute({ children }: { children: React.ReactElement }) {
   const { user, loading } = useAuth();
@@ -35,6 +36,28 @@ function PublicRoute({ children }: { children: React.ReactElement }) {
   }
 
   return !user ? children : <Navigate to="/" />;
+}
+
+function AdminRoute({ children }: { children: React.ReactElement }) {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <p className="text-muted-foreground">Loading...</p>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Navigate to="/login" />;
+  }
+
+  if (user.role !== 'admin') {
+    return <Navigate to="/" />;
+  }
+
+  return children;
 }
 
 function AppRoutes() {
@@ -75,25 +98,33 @@ function AppRoutes() {
       <Route
         path="/analytics"
         element={
-          <PrivateRoute>
+          <AdminRoute>
             <AnalyticsPage />
-          </PrivateRoute>
+          </AdminRoute>
         }
       />
       <Route
         path="/editors"
         element={
-          <PrivateRoute>
+          <AdminRoute>
             <EditorsPage />
-          </PrivateRoute>
+          </AdminRoute>
         }
       />
       <Route
         path="/admin"
         element={
-          <PrivateRoute>
+          <AdminRoute>
             <AdminPage />
-          </PrivateRoute>
+          </AdminRoute>
+        }
+      />
+      <Route
+        path="/activity-logs"
+        element={
+          <AdminRoute>
+            <ActivityLogsPage />
+          </AdminRoute>
         }
       />
       <Route path="*" element={<Navigate to="/" />} />

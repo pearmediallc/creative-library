@@ -10,17 +10,20 @@ const express = require('express');
 const router = express.Router();
 const editorController = require('../controllers/editorController');
 const { validate, schemas } = require('../middleware/validate');
-const { authenticateToken, requireRole } = require('../middleware/auth');
+const { authenticateToken, requireRole, requireAdmin } = require('../middleware/auth');
 
 // Get all editors (optionally with stats)
+// - All authenticated users can get basic editor list (for uploads)
+// - Stats are only returned to admins
 router.get('/',
   authenticateToken,
   editorController.getEditors.bind(editorController)
 );
 
-// Get single editor with stats
+// Get single editor with stats - Admin only
 router.get('/:id',
   authenticateToken,
+  requireAdmin,
   editorController.getEditor.bind(editorController)
 );
 

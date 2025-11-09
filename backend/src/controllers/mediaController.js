@@ -1,5 +1,6 @@
 const mediaService = require('../services/mediaService');
 const logger = require('../utils/logger');
+const { logActivity } = require('../middleware/activityLogger');
 
 class MediaController {
   /**
@@ -32,6 +33,22 @@ class MediaController {
           description
         }
       );
+
+      // Log activity
+      await logActivity({
+        req,
+        actionType: 'media_upload',
+        resourceType: 'media_file',
+        resourceId: mediaFile.id,
+        resourceName: mediaFile.original_filename,
+        details: {
+          file_type: mediaFile.file_type,
+          file_size: mediaFile.file_size,
+          editor_name: mediaFile.editor_name,
+          tags: mediaFile.tags
+        },
+        status: 'success'
+      });
 
       res.status(201).json({
         success: true,
@@ -136,6 +153,17 @@ class MediaController {
         updates
       );
 
+      // Log activity
+      await logActivity({
+        req,
+        actionType: 'media_update',
+        resourceType: 'media_file',
+        resourceId: updatedFile.id,
+        resourceName: updatedFile.original_filename,
+        details: { updates },
+        status: 'success'
+      });
+
       res.json({
         success: true,
         message: 'Media file updated successfully',
@@ -164,7 +192,24 @@ class MediaController {
    */
   async deleteFile(req, res, next) {
     try {
+      // Get file info before deletion for logging
+      const fileInfo = await mediaService.getMediaFile(req.params.id);
+
       await mediaService.deleteMediaFile(req.params.id, req.user.id);
+
+      // Log activity
+      await logActivity({
+        req,
+        actionType: 'media_delete',
+        resourceType: 'media_file',
+        resourceId: req.params.id,
+        resourceName: fileInfo.original_filename,
+        details: {
+          file_type: fileInfo.file_type,
+          editor_name: fileInfo.editor_name
+        },
+        status: 'success'
+      });
 
       res.json({
         success: true,
@@ -318,8 +363,26 @@ class MediaController {
         // Pipe S3 response to client
         proxyRes.pipe(res);
 
-        proxyRes.on('end', () => {
+        proxyRes.on('end', async () => {
           console.log('✅ File download completed:', file.original_filename);
+
+          // Log download activity
+          try {
+            await logActivity({
+              req,
+              actionType: 'media_download',
+              resourceType: 'media_file',
+              resourceId: id,
+              resourceName: file.original_filename,
+              details: {
+                file_type: file.file_type,
+                editor_name: file.editor_name
+              },
+              status: 'success'
+            });
+          } catch (logErr) {
+            logger.error('Failed to log download activity', { error: logErr.message });
+          }
         });
       }).on('error', (err) => {
         console.error('❌ Error fetching from S3:', err);

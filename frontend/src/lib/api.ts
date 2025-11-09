@@ -131,4 +131,20 @@ export const adminApi = {
   getStats: () => api.get('/admin/stats'),
 };
 
+// Activity Logs endpoints (Admin only)
+export const activityLogApi = {
+  getLogs: (params?: {
+    user_id?: string;
+    user_email?: string;
+    action_type?: string;
+    resource_type?: string;
+    status?: string;
+    date_from?: string;
+    date_to?: string;
+    limit?: number;
+    offset?: number;
+  }) => api.get('/activity-logs', { params }),
+  getFilters: () => api.get('/activity-logs/filters'),
+};
+
 export default api;

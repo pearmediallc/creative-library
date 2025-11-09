@@ -1,5 +1,6 @@
 const analyticsService = require('../services/analyticsService');
 const logger = require('../utils/logger');
+const { logActivity } = require('../middleware/activityLogger');
 
 class AnalyticsController {
   /**
@@ -41,6 +42,25 @@ class AnalyticsController {
         date_from,
         date_to
       );
+
+      // Log analytics sync activity
+      await logActivity({
+        req,
+        actionType: 'analytics_sync',
+        resourceType: 'facebook_ads',
+        resourceId: null,
+        resourceName: `Ad Account ${ad_account_id}`,
+        details: {
+          ad_account_id,
+          date_from,
+          date_to,
+          ads_synced: result.total,
+          new_ads: result.new,
+          updated_ads: result.updated,
+          skipped_ads: result.skipped
+        },
+        status: 'success'
+      });
 
       res.json({
         success: true,

@@ -1,23 +1,34 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Image, TrendingUp, Users, Settings, LogOut } from 'lucide-react';
+import { LayoutDashboard, Image, TrendingUp, Users, Settings, LogOut, FileText } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { cn } from '../../lib/utils';
 
-const navigation = [
+// Base navigation available to all users
+const baseNavigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
   { name: 'Media Library', href: '/media', icon: Image },
+];
+
+// Admin-only navigation items
+const adminOnlyNavigation = [
   { name: 'Analytics', href: '/analytics', icon: TrendingUp },
   { name: 'Editors', href: '/editors', icon: Users },
 ];
 
 const adminNavigation = [
   { name: 'Admin Panel', href: '/admin', icon: Settings },
+  { name: 'Activity Logs', href: '/activity-logs', icon: FileText },
 ];
 
 export function Sidebar() {
   const location = useLocation();
   const { user, logout } = useAuth();
+
+  // Build navigation based on user role
+  const navigation = user?.role === 'admin'
+    ? [...baseNavigation, ...adminOnlyNavigation]
+    : baseNavigation;
 
   const isActive = (href: string) => {
     if (href === '/') return location.pathname === '/';

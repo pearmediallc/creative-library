@@ -5,6 +5,7 @@
 
 const authService = require('../services/authService');
 const logger = require('../utils/logger');
+const { logActivity } = require('../middleware/activityLogger');
 
 class AuthController {
   /**
@@ -13,6 +14,20 @@ class AuthController {
   async register(req, res, next) {
     try {
       const result = await authService.register(req.body);
+
+      // Log registration activity (without req.user since not authenticated yet)
+      await logActivity({
+        req,
+        actionType: 'user_register',
+        resourceType: 'user',
+        resourceId: result.user.id,
+        resourceName: result.user.email,
+        details: {
+          name: result.user.name,
+          role: result.user.role
+        },
+        status: 'success'
+      });
 
       res.status(201).json({
         success: true,
@@ -32,6 +47,20 @@ class AuthController {
     try {
       const result = await authService.login(req.body);
 
+      // Log successful login (without req.user since JWT not yet in request)
+      await logActivity({
+        req,
+        actionType: 'user_login',
+        resourceType: 'user',
+        resourceId: result.user.id,
+        resourceName: result.user.email,
+        details: {
+          name: result.user.name,
+          role: result.user.role
+        },
+        status: 'success'
+      });
+
       res.json({
         success: true,
         message: 'Login successful',
@@ -39,6 +68,22 @@ class AuthController {
       });
     } catch (error) {
       logger.error('Login error', { error: error.message, email: req.body.email });
+
+      // Log failed login attempt
+      try {
+        await logActivity({
+          req,
+          actionType: 'user_login',
+          resourceType: 'user',
+          resourceId: null,
+          resourceName: req.body.email,
+          details: { reason: error.message },
+          status: 'failure',
+          errorMessage: error.message
+        });
+      } catch (logErr) {
+        logger.error('Failed to log login failure', { error: logErr.message });
+      }
 
       // Return 401 for invalid credentials
       if (error.message === 'Invalid credentials' || error.message === 'Account is disabled') {

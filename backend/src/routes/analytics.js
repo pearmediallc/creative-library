@@ -6,29 +6,33 @@
 const express = require('express');
 const router = express.Router();
 const analyticsController = require('../controllers/analyticsController');
-const { authenticateToken } = require('../middleware/auth');
+const { authenticateToken, requireAdmin } = require('../middleware/auth');
 
-// Sync Facebook ads
+// Sync Facebook ads (Admin only)
 router.post('/sync',
   authenticateToken,
+  requireAdmin,
   analyticsController.syncAds.bind(analyticsController)
 );
 
-// Get editor performance data
+// Get editor performance data (Admin only)
 router.get('/editor-performance',
   authenticateToken,
+  requireAdmin,
   analyticsController.getEditorPerformance.bind(analyticsController)
 );
 
-// Get ads without editor assignment
+// Get ads without editor assignment (Admin only)
 router.get('/ads-without-editor',
   authenticateToken,
+  requireAdmin,
   analyticsController.getAdsWithoutEditor.bind(analyticsController)
 );
 
-// Get ad name change history
+// Get ad name change history (Admin only)
 router.get('/ad-name-changes',
   authenticateToken,
+  requireAdmin,
   analyticsController.getAdNameChanges.bind(analyticsController)
 );
 

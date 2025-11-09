@@ -1,5 +1,6 @@
 const Editor = require('../models/Editor');
 const logger = require('../utils/logger');
+const { logActivity } = require('../middleware/activityLogger');
 
 class EditorController {
   /**
@@ -9,9 +10,11 @@ class EditorController {
   async getEditors(req, res, next) {
     try {
       const includeStats = req.query.includeStats === 'true';
+      const isAdmin = req.user?.role === 'admin';
 
       let editors;
-      if (includeStats) {
+      // Only admins can get stats, others get basic list
+      if (includeStats && isAdmin) {
         editors = await Editor.getAllWithStats();
       } else {
         editors = await Editor.getActiveEditors();
@@ -78,6 +81,17 @@ class EditorController {
 
       logger.info('Editor created', { editorId: editor.id, name });
 
+      // Log activity
+      await logActivity({
+        req,
+        actionType: 'editor_create',
+        resourceType: 'editor',
+        resourceId: editor.id,
+        resourceName: editor.display_name,
+        details: { name: editor.name },
+        status: 'success'
+      });
+
       res.status(201).json({
         success: true,
         message: 'Editor created successfully',
@@ -113,6 +127,17 @@ class EditorController {
 
       logger.info('Editor updated', { editorId: req.params.id, updates });
 
+      // Log activity
+      await logActivity({
+        req,
+        actionType: 'editor_update',
+        resourceType: 'editor',
+        resourceId: req.params.id,
+        resourceName: updatedEditor.display_name,
+        details: { updates },
+        status: 'success'
+      });
+
       res.json({
         success: true,
         message: 'Editor updated successfully',
@@ -143,6 +168,17 @@ class EditorController {
       const deletedEditor = await Editor.update(req.params.id, { is_active: false });
 
       logger.info('Editor deleted (soft delete)', { editorId: req.params.id });
+
+      // Log activity
+      await logActivity({
+        req,
+        actionType: 'editor_delete',
+        resourceType: 'editor',
+        resourceId: req.params.id,
+        resourceName: deletedEditor.display_name,
+        details: { soft_delete: true },
+        status: 'success'
+      });
 
       res.json({
         success: true,
