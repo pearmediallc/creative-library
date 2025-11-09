@@ -199,18 +199,37 @@ class MediaFile extends BaseModel {
     const result = await this.raw(sql);
 
     console.log('📦 Raw database result:', JSON.stringify(result, null, 2));
+    console.log('📦 Result type:', typeof result);
+    console.log('📦 Result is array:', Array.isArray(result));
 
-    if (!result || !result.rows || result.rows.length === 0) {
+    // Handle both array response (Postgres returns array) and object with rows property
+    let rows;
+    if (Array.isArray(result)) {
+      console.log('📦 Result is array, using directly');
+      rows = result;
+    } else if (result && result.rows) {
+      console.log('📦 Result has rows property, extracting');
+      rows = result.rows;
+    } else {
+      console.log('📦 Result format unknown, treating as empty');
+      rows = [];
+    }
+
+    console.log('📦 Extracted rows:', JSON.stringify(rows, null, 2));
+
+    if (!rows || rows.length === 0) {
       console.log('⚠️  No results returned from database query');
       console.log('📋 Checking if table exists and has any rows...');
 
       const tableCheckSql = `SELECT COUNT(*) as all_files FROM ${this.tableName}`;
       const tableCheck = await this.raw(tableCheckSql);
-      console.log(`   Total rows in table (including deleted): ${tableCheck.rows[0]?.all_files || 0}`);
+      const tableRows = Array.isArray(tableCheck) ? tableCheck : (tableCheck.rows || []);
+      console.log(`   Total rows in table (including deleted): ${tableRows[0]?.all_files || 0}`);
 
       const deletedCheckSql = `SELECT COUNT(*) as deleted_files FROM ${this.tableName} WHERE is_deleted = TRUE`;
       const deletedCheck = await this.raw(deletedCheckSql);
-      console.log(`   Deleted rows: ${deletedCheck.rows[0]?.deleted_files || 0}`);
+      const deletedRows = Array.isArray(deletedCheck) ? deletedCheck : (deletedCheck.rows || []);
+      console.log(`   Deleted rows: ${deletedRows[0]?.deleted_files || 0}`);
 
       console.log('✅ Returning default zero stats\n');
       return {
@@ -222,7 +241,7 @@ class MediaFile extends BaseModel {
       };
     }
 
-    const stats = result.rows[0];
+    const stats = rows[0];
 
     // Convert string counts to integers
     const finalStats = {

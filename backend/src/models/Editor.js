@@ -56,14 +56,15 @@ class Editor extends BaseModel {
         COALESCE(AVG(fa.cpc), 0) as avg_cpc,
         COALESCE(AVG(fa.cost_per_result), 0) as avg_cost_per_result
       FROM editors e
-      LEFT JOIN media_files mf ON mf.editor_id = e.id AND mf.deleted_at IS NULL
+      LEFT JOIN media_files mf ON mf.editor_id = e.id AND mf.is_deleted = FALSE
       LEFT JOIN facebook_ads fa ON fa.editor_id = e.id
       WHERE e.id = $1
       GROUP BY e.id
     `;
 
     const result = await this.raw(sql, [editorId]);
-    return result.rows[0] || null;
+    const rows = Array.isArray(result) ? result : (result.rows || []);
+    return rows[0] || null;
   }
 
   /**
@@ -82,14 +83,21 @@ class Editor extends BaseModel {
         COUNT(DISTINCT fa.id) as ad_count,
         COALESCE(SUM(fa.spend), 0) as total_spend
       FROM editors e
-      LEFT JOIN media_files mf ON mf.editor_id = e.id AND mf.deleted_at IS NULL
+      LEFT JOIN media_files mf ON mf.editor_id = e.id AND mf.is_deleted = FALSE
       LEFT JOIN facebook_ads fa ON fa.editor_id = e.id
       GROUP BY e.id, e.name, e.display_name, e.is_active, e.created_at
       ORDER BY e.display_name ASC
     `;
 
+    console.log('📊 Fetching editor stats...');
     const result = await this.raw(sql);
-    return result.rows;
+
+    // Handle both array response (Postgres) and object with rows property
+    const rows = Array.isArray(result) ? result : (result.rows || []);
+
+    console.log(`✅ Found ${rows.length} editors with stats:`, JSON.stringify(rows, null, 2));
+
+    return rows;
   }
 }
 
