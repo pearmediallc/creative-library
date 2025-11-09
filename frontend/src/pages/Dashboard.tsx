@@ -115,7 +115,7 @@ export function DashboardPage() {
                     <div className="text-right">
                       <p className="font-medium">${formatNumber(editor.total_spend || 0)}</p>
                       <p className="text-sm text-muted-foreground">
-                        CPM: ${editor.avg_cpm?.toFixed(2) || '0.00'}
+                        CPM: ${editor.avg_cpm ? Number(editor.avg_cpm).toFixed(2) : '0.00'}
                       </p>
                     </div>
                   </div>
