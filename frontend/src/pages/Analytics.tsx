@@ -37,6 +37,10 @@ export function AnalyticsPage() {
   const [accountPage, setAccountPage] = useState(1);
   const accountsPerPage = 10;
 
+  // Pagination for ads without editor
+  const [adsPage, setAdsPage] = useState(1);
+  const adsPerPage = 10;
+
   // Date range for syncing ads (default: last 30 days)
   const [syncDateFrom, setSyncDateFrom] = useState(() => {
     const date = new Date();
@@ -706,37 +710,68 @@ export function AnalyticsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {adsWithoutEditor.slice(0, 10).map((ad) => (
-                      <tr key={ad.fb_ad_id} className="border-b hover:bg-muted/50">
-                        <td className="p-2">
-                          <p className="font-medium">{ad.ad_name}</p>
-                        </td>
-                        <td className="p-2 text-muted-foreground">{ad.campaign_name}</td>
-                        <td className="p-2 text-muted-foreground">{ad.ad_set_name || 'N/A'}</td>
-                        <td className="p-2">
-                          <span className={`px-2 py-1 rounded text-xs ${
-                            ad.status === 'ACTIVE' ? 'bg-green-100 text-green-800' :
-                            ad.status === 'PAUSED' ? 'bg-yellow-100 text-yellow-800' :
-                            'bg-gray-100 text-gray-800'
-                          }`}>
-                            {ad.status || 'UNKNOWN'}
-                          </span>
-                        </td>
-                        <td className="p-2 text-right font-medium">${(Number(ad.spend) || 0).toFixed(2)}</td>
-                        <td className="p-2 text-right">{(Number(ad.impressions) || 0).toLocaleString()}</td>
-                        <td className="p-2 text-right">{(Number(ad.clicks) || 0).toLocaleString()}</td>
-                        <td className="p-2 text-right">{(Number(ad.ctr) || 0).toFixed(2)}%</td>
-                        <td className="p-2 text-right">${(Number(ad.cpc) || 0).toFixed(2)}</td>
-                        <td className="p-2 text-right">${(Number(ad.cpm) || 0).toFixed(2)}</td>
-                        <td className="p-2 text-xs text-muted-foreground">{ad.fb_ad_id}</td>
-                      </tr>
-                    ))}
+                    {(() => {
+                      const startIdx = (adsPage - 1) * adsPerPage;
+                      const endIdx = startIdx + adsPerPage;
+                      const paginatedAds = adsWithoutEditor.slice(startIdx, endIdx);
+
+                      return paginatedAds.map((ad) => (
+                        <tr key={ad.fb_ad_id} className="border-b hover:bg-muted/50">
+                          <td className="p-2">
+                            <p className="font-medium">{ad.ad_name}</p>
+                          </td>
+                          <td className="p-2 text-muted-foreground">{ad.campaign_name}</td>
+                          <td className="p-2 text-muted-foreground">{ad.ad_set_name || 'N/A'}</td>
+                          <td className="p-2">
+                            <span className={`px-2 py-1 rounded text-xs ${
+                              ad.status === 'ACTIVE' ? 'bg-green-100 text-green-800' :
+                              ad.status === 'PAUSED' ? 'bg-yellow-100 text-yellow-800' :
+                              'bg-gray-100 text-gray-800'
+                            }`}>
+                              {ad.status || 'UNKNOWN'}
+                            </span>
+                          </td>
+                          <td className="p-2 text-right font-medium">${(Number(ad.spend) || 0).toFixed(2)}</td>
+                          <td className="p-2 text-right">{(Number(ad.impressions) || 0).toLocaleString()}</td>
+                          <td className="p-2 text-right">{(Number(ad.clicks) || 0).toLocaleString()}</td>
+                          <td className="p-2 text-right">{(Number(ad.ctr) || 0).toFixed(2)}%</td>
+                          <td className="p-2 text-right">${(Number(ad.cpc) || 0).toFixed(2)}</td>
+                          <td className="p-2 text-right">${(Number(ad.cpm) || 0).toFixed(2)}</td>
+                          <td className="p-2 text-xs text-muted-foreground">{ad.fb_ad_id}</td>
+                        </tr>
+                      ));
+                    })()}
                   </tbody>
                 </table>
-                {adsWithoutEditor.length > 10 && (
-                  <p className="text-sm text-muted-foreground mt-3 text-center">
-                    Showing 10 of {adsWithoutEditor.length} ads without editor assignment
-                  </p>
+
+                {/* Pagination Controls */}
+                {adsWithoutEditor.length > adsPerPage && (
+                  <div className="flex items-center justify-between mt-4 pt-4 border-t">
+                    <p className="text-sm text-muted-foreground">
+                      Showing {((adsPage - 1) * adsPerPage) + 1} to {Math.min(adsPage * adsPerPage, adsWithoutEditor.length)} of {adsWithoutEditor.length} ads
+                    </p>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setAdsPage(p => Math.max(1, p - 1))}
+                        disabled={adsPage === 1}
+                      >
+                        Previous
+                      </Button>
+                      <span className="px-3 py-1 text-sm">
+                        Page {adsPage} of {Math.ceil(adsWithoutEditor.length / adsPerPage)}
+                      </span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setAdsPage(p => Math.min(Math.ceil(adsWithoutEditor.length / adsPerPage), p + 1))}
+                        disabled={adsPage >= Math.ceil(adsWithoutEditor.length / adsPerPage)}
+                      >
+                        Next
+                      </Button>
+                    </div>
+                  </div>
                 )}
               </div>
             </CardContent>
