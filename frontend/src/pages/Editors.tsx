@@ -23,7 +23,7 @@ export function EditorsPage() {
 
   const fetchEditors = async () => {
     try {
-      const response = await editorApi.getAll();
+      const response = await editorApi.getAll(true); // Pass true to include stats
       setEditors(response.data.data || []);
     } catch (err) {
       console.error('Failed to fetch editors:', err);
