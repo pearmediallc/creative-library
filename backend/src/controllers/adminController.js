@@ -56,6 +56,37 @@ class AdminController {
 
       logger.info('User created by admin', { userId: user.id, email, createdBy: req.user.id });
 
+      // Auto-create Editor entity for creative users
+      if (role === 'creative') {
+        try {
+          const displayName = name;
+          const editorName = name.toUpperCase().replace(/\s+/g, '');
+
+          // Check if editor with this name already exists
+          const existingEditor = await Editor.findByName(editorName);
+
+          if (!existingEditor) {
+            const { query } = require('../config/database');
+            await query(`
+              INSERT INTO editors (name, display_name, user_id, is_active)
+              VALUES ($1, $2, $3, TRUE)
+            `, [editorName, displayName, user.id]);
+
+            logger.info('Editor entity auto-created by admin', {
+              userId: user.id,
+              editorName,
+              displayName,
+              createdBy: req.user.id
+            });
+          }
+        } catch (error) {
+          logger.error('Failed to auto-create editor entity', {
+            userId: user.id,
+            error: error.message
+          });
+        }
+      }
+
       const { password_hash, ...sanitizedUser } = user;
 
       res.status(201).json({

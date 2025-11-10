@@ -5,6 +5,7 @@
 
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const Editor = require('../models/Editor');
 const logger = require('../utils/logger');
 
 class AuthService {
@@ -28,6 +29,44 @@ class AuthService {
     const user = await User.createUser({ name, email, password, role });
 
     logger.info('User registered', { userId: user.id, email: user.email });
+
+    // Auto-create Editor entity for creative users
+    if (role === 'creative') {
+      try {
+        const displayName = name;
+        const editorName = name.toUpperCase().replace(/\s+/g, '');
+
+        // Check if editor with this name already exists
+        const existingEditor = await Editor.findByName(editorName);
+
+        if (existingEditor) {
+          logger.warn('Editor name already exists', {
+            userId: user.id,
+            editorName,
+            existingEditorId: existingEditor.id
+          });
+        } else {
+          // Create editor entity linked to this user
+          const { query } = require('../config/database');
+          await query(`
+            INSERT INTO editors (name, display_name, user_id, is_active)
+            VALUES ($1, $2, $3, TRUE)
+          `, [editorName, displayName, user.id]);
+
+          logger.info('Editor entity auto-created for creative user', {
+            userId: user.id,
+            editorName,
+            displayName
+          });
+        }
+      } catch (error) {
+        // Don't fail registration if editor creation fails
+        logger.error('Failed to auto-create editor entity', {
+          userId: user.id,
+          error: error.message
+        });
+      }
+    }
 
     // Generate token
     const token = this.generateToken(user);
