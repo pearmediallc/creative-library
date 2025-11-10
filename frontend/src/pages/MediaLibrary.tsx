@@ -7,8 +7,10 @@ import { mediaApi, editorApi } from '../lib/api';
 import { MediaFile, Editor } from '../types';
 import { formatBytes, formatDate } from '../lib/utils';
 import { Image as ImageIcon, Video, X, Download, Trash2 } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 
 export function MediaLibraryPage() {
+  const { user } = useAuth();
   const [files, setFiles] = useState<MediaFile[]>([]);
   const [editors, setEditors] = useState<Editor[]>([]);
   const [loading, setLoading] = useState(true);
@@ -18,6 +20,11 @@ export function MediaLibraryPage() {
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const filesPerPage = 12;
+
+  // Role-based permissions
+  const isAdmin = user?.role === 'admin';
+  const canUpload = user?.role === 'admin' || user?.role === 'creative';
+  const canDelete = user?.role === 'admin';
 
   useEffect(() => {
     fetchData();
@@ -86,9 +93,11 @@ export function MediaLibraryPage() {
             <h1 className="text-3xl font-bold">Media Library</h1>
             <p className="text-muted-foreground">Manage your creative assets</p>
           </div>
-          <Button onClick={() => setShowUploadModal(true)}>
-            Upload File
-          </Button>
+          {canUpload && (
+            <Button onClick={() => setShowUploadModal(true)}>
+              Upload File
+            </Button>
+          )}
         </div>
 
         <div className="flex gap-4">
@@ -174,21 +183,23 @@ export function MediaLibraryPage() {
                         <Button
                           variant="outline"
                           size="sm"
-                          className="flex-1"
+                          className={canDelete ? "flex-1" : "w-full"}
                           onClick={() => handleDownload(file)}
                         >
                           <Download className="w-4 h-4 mr-1" />
                           Download
                         </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="flex-1 text-destructive hover:text-destructive"
-                          onClick={() => setDeleteConfirmId(file.id)}
-                        >
-                          <Trash2 className="w-4 h-4 mr-1" />
-                          Delete
-                        </Button>
+                        {canDelete && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="flex-1 text-destructive hover:text-destructive"
+                            onClick={() => setDeleteConfirmId(file.id)}
+                          >
+                            <Trash2 className="w-4 h-4 mr-1" />
+                            Delete
+                          </Button>
+                        )}
                       </div>
                     </div>
                   </Card>

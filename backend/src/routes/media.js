@@ -12,12 +12,14 @@ const express = require('express');
 const router = express.Router();
 const mediaController = require('../controllers/mediaController');
 const { validate, schemas } = require('../middleware/validate');
-const { authenticateToken } = require('../middleware/auth');
+const { authenticateToken, requireRole, requireAdmin } = require('../middleware/auth');
 const { upload } = require('../middleware/upload');
 
 // Upload endpoint with file upload middleware
+// Only admin and creative users can upload
 router.post('/upload',
   authenticateToken,
+  requireRole('admin', 'creative'),
   upload.single('file'),
   validate(schemas.mediaUpload),
   mediaController.upload.bind(mediaController)
@@ -60,9 +62,10 @@ router.patch('/:id',
   mediaController.updateFile.bind(mediaController)
 );
 
-// Delete file
+// Delete file (Admin only)
 router.delete('/:id',
   authenticateToken,
+  requireAdmin,
   mediaController.deleteFile.bind(mediaController)
 );
 
