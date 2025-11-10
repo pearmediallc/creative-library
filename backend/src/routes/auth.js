@@ -10,9 +10,11 @@ const router = express.Router();
 const authController = require('../controllers/authController');
 const { validate, schemas } = require('../middleware/validate');
 const { authenticateToken } = require('../middleware/auth');
+const { validateEmailWhitelist } = require('../middleware/emailValidator');
 
 // Public routes
 router.post('/register',
+  validateEmailWhitelist,  // ✅ Check email whitelist first
   validate(schemas.register),
   authController.register.bind(authController)
 );

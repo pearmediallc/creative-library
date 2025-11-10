@@ -6,7 +6,7 @@ interface AuthContextType {
   user: User | null;
   token: string | null;
   login: (email: string, password: string) => Promise<void>;
-  register: (name: string, email: string, password: string, role?: string) => Promise<void>;
+  register: (name: string, email: string, password: string, role?: string) => Promise<any>;
   logout: () => void;
   loading: boolean;
 }
@@ -43,13 +43,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const register = async (name: string, email: string, password: string, role: string = 'creative') => {
     const response = await authApi.register({ name, email, password, role });
-    const { user, token } = response.data.data;
+
+    // Check if requires approval (new workflow)
+    if (response.data.requiresApproval) {
+      return {
+        requiresApproval: true,
+        message: response.data.message
+      };
+    }
+
+    // Old workflow - direct login (shouldn't happen with new system)
+    const { user, token } = response.data;
 
     localStorage.setItem('token', token);
     localStorage.setItem('user', JSON.stringify(user));
 
     setToken(token);
     setUser(user);
+
+    return { requiresApproval: false };
   };
 
   const logout = () => {

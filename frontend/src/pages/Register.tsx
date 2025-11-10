@@ -11,6 +11,7 @@ export function RegisterPage() {
   const [password, setPassword] = useState('');
   const [role, setRole] = useState<'creative' | 'buyer'>('creative');
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
 
   const { register } = useAuth();
@@ -19,6 +20,7 @@ export function RegisterPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setSuccess('');
     setLoading(true);
 
     if (password.length < 8) {
@@ -28,8 +30,20 @@ export function RegisterPage() {
     }
 
     try {
-      await register(name, email, password, role);
-      navigate('/');
+      const response = await register(name, email, password, role);
+
+      // Check if requires approval
+      if (response?.requiresApproval) {
+        setSuccess(response.message || 'Registration submitted successfully. Your account is pending admin approval.');
+        // Clear form
+        setName('');
+        setEmail('');
+        setPassword('');
+        setRole('creative');
+      } else {
+        // Old flow - direct login (shouldn't happen with new system)
+        navigate('/');
+      }
     } catch (err: any) {
       setError(err.response?.data?.error || 'Registration failed');
     } finally {
@@ -49,6 +63,15 @@ export function RegisterPage() {
             {error && (
               <div className="p-3 rounded-md bg-destructive/10 text-destructive text-sm">
                 {error}
+              </div>
+            )}
+
+            {success && (
+              <div className="p-4 rounded-md bg-green-50 border border-green-200">
+                <p className="text-sm text-green-800 font-medium">{success}</p>
+                <p className="text-xs text-green-600 mt-2">
+                  You will receive notification once your account is approved. Please check back later or contact your administrator.
+                </p>
               </div>
             )}
 
@@ -77,7 +100,11 @@ export function RegisterPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
+                disabled={!!success}
               />
+              <p className="text-xs text-muted-foreground">
+                Use your official company email address
+              </p>
             </div>
 
             <div className="space-y-2">
@@ -117,8 +144,8 @@ export function RegisterPage() {
               </p>
             </div>
 
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? 'Creating account...' : 'Create Account'}
+            <Button type="submit" className="w-full" disabled={loading || !!success}>
+              {loading ? 'Submitting...' : success ? 'Registration Submitted' : 'Create Account'}
             </Button>
 
             <p className="text-center text-sm text-muted-foreground">

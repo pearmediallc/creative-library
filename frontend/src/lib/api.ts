@@ -129,6 +129,25 @@ export const adminApi = {
     is_active: boolean;
   }>) => api.patch(`/admin/users/${id}`, data),
   getStats: () => api.get('/admin/stats'),
+
+  // Approval workflow
+  getPendingUsers: () => api.get('/admin/pending-users'),
+  approveUser: (id: string) => api.post(`/admin/approve-user/${id}`),
+  rejectUser: (id: string, data: { reason?: string }) =>
+    api.post(`/admin/reject-user/${id}`, data),
+
+  // Password management
+  resetUserPassword: (id: string, data: { admin_password: string; new_password: string }) =>
+    api.post(`/admin/users/${id}/reset-password`, data),
+
+  // Email whitelist
+  getAllowedEmails: (params?: { limit?: number; offset?: number }) =>
+    api.get('/admin/allowed-emails', { params }),
+  addAllowedEmail: (data: { email: string; department?: string; job_title?: string; notes?: string }) =>
+    api.post('/admin/allowed-emails', data),
+  bulkImportEmails: (data: { emails: Array<{ email: string; department?: string; job_title?: string; notes?: string }> }) =>
+    api.post('/admin/allowed-emails/bulk-import', data),
+  removeAllowedEmail: (id: string) => api.delete(`/admin/allowed-emails/${id}`),
 };
 
 // Activity Logs endpoints (Admin only)

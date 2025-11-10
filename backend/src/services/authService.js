@@ -13,9 +13,17 @@ class AuthService {
    * Register new user
    */
   async register({ name, email, password, role = 'creative' }) {
+    // Email whitelist already validated by middleware
+
     // Check if user exists
     const existingUser = await User.findByEmail(email);
     if (existingUser) {
+      if (existingUser.approval_status === 'rejected') {
+        throw new Error('Your previous registration was not approved. Please contact your administrator.');
+      }
+      if (existingUser.approval_status === 'pending') {
+        throw new Error('Your registration is pending approval. Please wait for confirmation.');
+      }
       throw new Error('Email already registered');
     }
 
@@ -28,52 +36,23 @@ class AuthService {
     // Create user
     const user = await User.createUser({ name, email, password, role });
 
-    logger.info('User registered', { userId: user.id, email: user.email });
+    // Set to pending approval
+    await User.update(user.id, {
+      is_active: false,
+      approval_status: 'pending',
+      email_verified: true  // Skip email verification for now
+    });
 
-    // Auto-create Editor entity for creative users
-    if (role === 'creative') {
-      try {
-        const displayName = name;
-        const editorName = name.toUpperCase().replace(/\s+/g, '');
-
-        // Check if editor with this name already exists
-        const existingEditor = await Editor.findByName(editorName);
-
-        if (existingEditor) {
-          logger.warn('Editor name already exists', {
-            userId: user.id,
-            editorName,
-            existingEditorId: existingEditor.id
-          });
-        } else {
-          // Create editor entity linked to this user
-          const { query } = require('../config/database');
-          await query(`
-            INSERT INTO editors (name, display_name, user_id, is_active)
-            VALUES ($1, $2, $3, TRUE)
-          `, [editorName, displayName, user.id]);
-
-          logger.info('Editor entity auto-created for creative user', {
-            userId: user.id,
-            editorName,
-            displayName
-          });
-        }
-      } catch (error) {
-        // Don't fail registration if editor creation fails
-        logger.error('Failed to auto-create editor entity', {
-          userId: user.id,
-          error: error.message
-        });
-      }
-    }
-
-    // Generate token
-    const token = this.generateToken(user);
+    logger.info('New user registration - pending approval', {
+      userId: user.id,
+      email: user.email,
+      role,
+      name
+    });
 
     return {
-      user: this.sanitizeUser(user),
-      token
+      message: 'Registration submitted successfully. Your account is pending admin approval.',
+      requiresApproval: true
     };
   }
 
@@ -81,34 +60,44 @@ class AuthService {
    * Login user
    */
   async login({ email, password }) {
-    console.log('========== LOGIN DEBUG START ==========');
-    console.log('JWT_SECRET exists:', !!process.env.JWT_SECRET);
-    console.log('JWT_SECRET length:', process.env.JWT_SECRET ? process.env.JWT_SECRET.length : 0);
-    console.log('JWT_SECRET first 20 chars:', process.env.JWT_SECRET ? process.env.JWT_SECRET.substring(0, 20) : 'UNDEFINED');
-    console.log('========== LOGIN DEBUG END ==========');
-
     // Find user
     const user = await User.findByEmail(email);
     if (!user) {
-      throw new Error('Invalid credentials');
+      throw new Error('Invalid email or password');
+    }
+
+    // Check approval status
+    if (user.approval_status === 'pending') {
+      logger.warn('Login attempt with pending account', {
+        userId: user.id,
+        email: user.email
+      });
+      throw new Error('Your account is pending admin approval. Please wait for confirmation.');
+    }
+
+    if (user.approval_status === 'rejected') {
+      logger.warn('Login attempt with rejected account', {
+        userId: user.id,
+        email: user.email
+      });
+      throw new Error('Your registration was not approved. Please contact your administrator.');
     }
 
     // Check if active
     if (!user.is_active) {
-      throw new Error('Account is disabled');
+      throw new Error('Your account has been deactivated. Please contact your administrator.');
     }
 
     // Verify password
     const isValid = await User.verifyPassword(password, user.password_hash);
     if (!isValid) {
-      throw new Error('Invalid credentials');
+      throw new Error('Invalid email or password');
     }
 
-    logger.info('User logged in', { userId: user.id, email: user.email });
+    logger.info('User logged in', { userId: user.id, email: user.email, role: user.role });
 
     // Generate token
     const token = this.generateToken(user);
-    console.log('🎫 Generated token:', token.substring(0, 50) + '...');
 
     return {
       user: this.sanitizeUser(user),
@@ -126,15 +115,9 @@ class AuthService {
       role: user.role
     };
 
-    console.log('🔐 Generating token with payload:', payload);
-    console.log('🔑 Using JWT_SECRET (first 20 chars):', process.env.JWT_SECRET ? process.env.JWT_SECRET.substring(0, 20) : 'UNDEFINED');
-    console.log('⏰ Token expiry:', process.env.JWT_EXPIRY || '7d');
-
     const token = jwt.sign(payload, process.env.JWT_SECRET, {
       expiresIn: process.env.JWT_EXPIRY || '7d'
     });
-
-    console.log('✅ Token generated successfully, length:', token.length);
 
     return token;
   }

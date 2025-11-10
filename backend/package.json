@@ -11,7 +11,8 @@
     "migrate": "node src/utils/migrate.js",
     "init-analytics": "node src/scripts/initAnalyticsTables.js",
     "reset-analytics": "node src/scripts/resetAnalyticsTables.js",
-    "link-users-editors": "node src/scripts/linkUsersToEditors.js"
+    "link-users-editors": "node src/scripts/linkUsersToEditors.js",
+    "add-approval-workflow": "node src/scripts/addApprovalWorkflow.js"
   },
   "keywords": ["creative", "asset", "library", "facebook", "analytics"],
   "author": "",
