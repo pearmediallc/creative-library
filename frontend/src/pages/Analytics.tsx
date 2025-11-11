@@ -26,6 +26,11 @@ export function AnalyticsPage() {
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState('');
 
+  // Unified analytics state (Facebook + RedTrack)
+  const [viewMode, setViewMode] = useState<'facebook' | 'unified'>('facebook');
+  const [unifiedData, setUnifiedData] = useState<any>(null);
+  const [unifiedLoading, setUnifiedLoading] = useState(false);
+
   // Facebook connection state
   const [fbConnected, setFbConnected] = useState(false);
   const [fbAdAccount, setFbAdAccount] = useState<string | null>(null);
@@ -126,6 +131,34 @@ export function AnalyticsPage() {
       setError(err.response?.data?.error || 'Failed to load analytics');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Fetch unified analytics (Facebook + RedTrack)
+  const fetchUnifiedAnalytics = async () => {
+    if (!fbAdAccount) {
+      setError('Please connect Facebook and select an ad account first');
+      return;
+    }
+
+    setUnifiedLoading(true);
+    setError('');
+
+    try {
+      console.log('📊 Fetching unified analytics (Facebook + RedTrack)...');
+      const response = await analyticsApi.getUnified(
+        fbAdAccount,
+        syncDateFrom || undefined,
+        syncDateTo || undefined
+      );
+
+      setUnifiedData(response.data.data);
+      console.log('✅ Unified analytics fetched successfully');
+    } catch (err: any) {
+      console.error('❌ Failed to fetch unified analytics:', err);
+      setError(err.response?.data?.error || 'Failed to load unified analytics. Make sure RedTrack API key is configured.');
+    } finally {
+      setUnifiedLoading(false);
     }
   };
 
@@ -278,6 +311,12 @@ export function AnalyticsPage() {
       const response = await analyticsApi.sync(fbAdAccount, syncDateFrom, syncDateTo);
       await fetchAnalytics();
 
+      // If in unified mode, also fetch unified data
+      if (viewMode === 'unified') {
+        console.log('🔄 Fetching unified analytics after sync...');
+        await fetchUnifiedAnalytics();
+      }
+
       const { totalAdsProcessed, adsWithEditor, adsWithoutEditor: adsNoEditor } = response.data.data;
       alert(
         `✅ Sync Complete!\n\n` +
@@ -304,10 +343,22 @@ export function AnalyticsPage() {
     );
   }
 
-  const totalSpend = performance.reduce((sum, p) => sum + (p.total_spend || 0), 0);
-  const totalImpressions = performance.reduce((sum, p) => sum + (p.total_impressions || 0), 0);
-  const totalClicks = performance.reduce((sum, p) => sum + (p.total_clicks || 0), 0);
+  // Calculate totals based on view mode
+  const totalSpend = viewMode === 'facebook'
+    ? performance.reduce((sum, p) => sum + (p.total_spend || 0), 0)
+    : unifiedData?.summary?.total_spend || 0;
+  const totalImpressions = viewMode === 'facebook'
+    ? performance.reduce((sum, p) => sum + (p.total_impressions || 0), 0)
+    : unifiedData?.summary?.total_impressions || 0;
+  const totalClicks = viewMode === 'facebook'
+    ? performance.reduce((sum, p) => sum + (p.total_clicks || 0), 0)
+    : unifiedData?.summary?.total_clicks || 0;
   const avgCTR = totalImpressions > 0 ? (totalClicks / totalImpressions) * 100 : 0;
+
+  // Unified-only metrics
+  const totalRevenue = unifiedData?.summary?.total_revenue || 0;
+  const totalProfit = unifiedData?.summary?.total_profit || 0;
+  const overallROAS = unifiedData?.summary?.overall_roas || 0;
 
   return (
     <DashboardLayout>
@@ -588,7 +639,7 @@ export function AnalyticsPage() {
         </Card>
 
         {/* Overview Stats */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <div className={`grid gap-4 md:grid-cols-2 ${viewMode === 'unified' ? 'lg:grid-cols-7' : 'lg:grid-cols-4'}`}>
           <Card>
             <CardHeader className="pb-2">
               <CardDescription>Total Spend</CardDescription>
@@ -628,16 +679,86 @@ export function AnalyticsPage() {
               </CardTitle>
             </CardHeader>
           </Card>
+
+          {/* Unified-only metrics */}
+          {viewMode === 'unified' && unifiedData && (
+            <>
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardDescription>Total Revenue</CardDescription>
+                  <CardTitle className="text-3xl flex items-center gap-2 text-green-600">
+                    <DollarSign size={24} />
+                    ${formatNumber(Math.round(totalRevenue))}
+                  </CardTitle>
+                </CardHeader>
+              </Card>
+
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardDescription>Total Profit</CardDescription>
+                  <CardTitle className="text-3xl flex items-center gap-2 text-blue-600">
+                    <TrendingUp size={24} />
+                    ${formatNumber(Math.round(totalProfit))}
+                  </CardTitle>
+                </CardHeader>
+              </Card>
+
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardDescription>Overall ROAS</CardDescription>
+                  <CardTitle className="text-3xl flex items-center gap-2 text-purple-600">
+                    <TrendingUp size={24} />
+                    {overallROAS.toFixed(2)}x
+                  </CardTitle>
+                </CardHeader>
+              </Card>
+            </>
+          )}
         </div>
 
         {/* Editor Performance */}
         <Card>
           <CardHeader>
-            <CardTitle>Editor Performance</CardTitle>
-            <CardDescription>Ad performance breakdown by creative editor</CardDescription>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle>Editor Performance</CardTitle>
+                <CardDescription>Ad performance breakdown by creative editor</CardDescription>
+              </div>
+
+              {/* View Mode Toggle */}
+              <div className="flex items-center gap-2 bg-muted p-1 rounded-lg">
+                <button
+                  onClick={() => setViewMode('facebook')}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                    viewMode === 'facebook'
+                      ? 'bg-background text-foreground shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  Facebook Only
+                </button>
+                <button
+                  onClick={async () => {
+                    setViewMode('unified');
+                    if (!unifiedData && fbAdAccount) {
+                      await fetchUnifiedAnalytics();
+                    }
+                  }}
+                  disabled={unifiedLoading}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                    viewMode === 'unified'
+                      ? 'bg-background text-foreground shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground'
+                  } disabled:opacity-50`}
+                >
+                  {unifiedLoading ? 'Loading...' : 'Unified (FB + RedTrack)'}
+                </button>
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
-            {performance.length > 0 ? (
+            {/* Facebook Only View */}
+            {viewMode === 'facebook' && performance.length > 0 && (
               <div className="space-y-4">
                 <div className="grid grid-cols-7 gap-4 pb-2 border-b font-medium text-sm">
                   <div>Editor</div>
@@ -660,7 +781,44 @@ export function AnalyticsPage() {
                   </div>
                 ))}
               </div>
-            ) : (
+            )}
+
+            {/* Unified View (Facebook + RedTrack) */}
+            {viewMode === 'unified' && unifiedData && unifiedData.editor_performance.length > 0 && (
+              <div className="space-y-4 overflow-x-auto">
+                <div className="grid grid-cols-11 gap-3 pb-2 border-b font-medium text-xs">
+                  <div>Editor</div>
+                  <div className="text-right">Ads</div>
+                  <div className="text-right">Spend</div>
+                  <div className="text-right">Impressions</div>
+                  <div className="text-right">Clicks</div>
+                  <div className="text-right">CPM</div>
+                  <div className="text-right">CPC</div>
+                  <div className="text-right text-green-600">Revenue</div>
+                  <div className="text-right text-green-600">Conversions</div>
+                  <div className="text-right text-blue-600">Profit</div>
+                  <div className="text-right text-purple-600">ROAS</div>
+                </div>
+                {unifiedData.editor_performance.map((editor: any) => (
+                  <div key={editor.editor_name} className="grid grid-cols-11 gap-3 text-xs">
+                    <div className="font-medium">{editor.editor_name}</div>
+                    <div className="text-right text-muted-foreground">{formatNumber(editor.total_ads)}</div>
+                    <div className="text-right">${formatNumber(Math.round(editor.total_spend || 0))}</div>
+                    <div className="text-right">{formatNumber(editor.total_impressions || 0)}</div>
+                    <div className="text-right">{formatNumber(editor.total_clicks || 0)}</div>
+                    <div className="text-right">${(editor.avg_cpm || 0).toFixed(2)}</div>
+                    <div className="text-right">${(editor.avg_cpc || 0).toFixed(2)}</div>
+                    <div className="text-right text-green-600 font-medium">${formatNumber(Math.round(editor.total_revenue || 0))}</div>
+                    <div className="text-right text-green-600">{formatNumber(editor.total_conversions || 0)}</div>
+                    <div className="text-right text-blue-600 font-medium">${formatNumber(Math.round(editor.total_profit || 0))}</div>
+                    <div className="text-right text-purple-600 font-bold">{(editor.roas || 0).toFixed(2)}x</div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* No Data States */}
+            {viewMode === 'facebook' && performance.length === 0 && (
               <div className="text-center py-8">
                 <p className="text-sm text-muted-foreground mb-4">
                   No performance data available yet.
@@ -674,6 +832,36 @@ export function AnalyticsPage() {
                     Connect your Facebook account to get started.
                   </p>
                 )}
+              </div>
+            )}
+
+            {viewMode === 'unified' && !unifiedData && (
+              <div className="text-center py-8">
+                <p className="text-sm text-muted-foreground mb-4">
+                  No unified analytics data available yet.
+                </p>
+                {fbConnected && fbAdAccount ? (
+                  <Button
+                    onClick={fetchUnifiedAnalytics}
+                    disabled={unifiedLoading}
+                    variant="outline"
+                  >
+                    <RefreshCw size={16} className="mr-2" />
+                    {unifiedLoading ? 'Loading...' : 'Load Unified Analytics'}
+                  </Button>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    Connect your Facebook account to get started.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {viewMode === 'unified' && unifiedData && unifiedData.editor_performance.length === 0 && (
+              <div className="text-center py-8">
+                <p className="text-sm text-muted-foreground">
+                  No editor performance data found for the selected date range.
+                </p>
               </div>
             )}
           </CardContent>

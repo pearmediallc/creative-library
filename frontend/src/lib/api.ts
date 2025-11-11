@@ -110,6 +110,15 @@ export const analyticsApi = {
   getAdsWithoutEditor: () => api.get('/analytics/ads-without-editor'),
   getAdNameChanges: (params?: { editor_changed?: boolean; date_from?: string }) =>
     api.get('/analytics/ad-name-changes', { params }),
+  getUnified: (adAccountId: string, dateFrom?: string, dateTo?: string, bulkFetch?: boolean) =>
+    api.get('/analytics/unified', {
+      params: {
+        ad_account_id: adAccountId,
+        date_from: dateFrom || undefined,
+        date_to: dateTo || undefined,
+        bulk_fetch: bulkFetch !== undefined ? bulkFetch : undefined
+      }
+    }),
 };
 
 // Admin endpoints
