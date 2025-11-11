@@ -165,10 +165,18 @@ class MediaService {
    * Get media files with filters and presigned URLs
    * @param {Object} filters - Filter options
    * @param {string} userId - Requesting user ID (optional, for permission check)
+   * @param {string} userRole - User role (for access control)
    * @returns {Promise<Object>} Media files with pagination info
    */
-  async getMediaFiles(filters = {}, userId = null) {
+  async getMediaFiles(filters = {}, userId = null, userRole = null) {
     try {
+      // IMPORTANT: Creative users can only see their own uploads
+      // Buyers and Admins can see all content
+      if (userRole === 'creative') {
+        filters.uploaded_by = userId;
+        logger.info('Creative user - restricting to own uploads', { userId });
+      }
+
       // Get media files
       logger.info('getMediaFiles called with filters:', filters);
       const mediaFiles = await MediaFile.findWithFilters(filters);

@@ -83,10 +83,11 @@ class MediaController {
         offset: parseInt(req.query.offset) || 0
       };
 
-      // All users can see all files (removed role restriction)
-      // Buyers need to see all creatives to use them in campaigns
+      // Role-based access control:
+      // - Buyers and Admins can see all content
+      // - Creatives can only see their own uploads
 
-      const result = await mediaService.getMediaFiles(filters, req.user.id);
+      const result = await mediaService.getMediaFiles(filters, req.user.id, req.user.role);
 
       // Disable caching for media list
       res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
@@ -280,7 +281,8 @@ class MediaController {
       }
 
       // Get files using existing service method
-      const result = await mediaService.getMediaFiles(filters, req.user.id);
+      // Apply role-based access control (creatives see only their uploads)
+      const result = await mediaService.getMediaFiles(filters, req.user.id, req.user.role);
 
       // Filter by date range if specified
       let files = result.files || [];
