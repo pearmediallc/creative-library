@@ -106,6 +106,16 @@ class AnalyticsService {
                 console.log(`         📅 Created: ${ad.created_time || 'N/A'}`);
                 console.log(`         📅 Updated: ${ad.updated_time || 'N/A'}`);
 
+                // Quick check: Does ad name contain an editor name?
+                const editorMatch = await adNameParser.extractEditorFromAdName(ad.name);
+
+                if (!editorMatch) {
+                  console.log(`         ⚠️  SKIPPING: No editor name found in ad name - ad will not be synced`);
+                  console.log(`         💡 TIP: Ad names must contain editor names like "DEEP", "DEEPA", "SHUBH", etc.`);
+                  console.log(`      ========================================\n`);
+                  continue; // Skip this ad
+                }
+
                 const processed = await this._processAndStoreAd(ad, campaign, adAccountId);
                 totalAdsProcessed++;
                 campaignTotalAds++;

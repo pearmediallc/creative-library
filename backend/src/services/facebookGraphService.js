@@ -3,11 +3,45 @@ const logger = require('../utils/logger');
 
 const FACEBOOK_GRAPH_API_URL = 'https://graph.facebook.com/v18.0';
 
+// Rate limiting: Facebook allows ~200 calls per hour per user
+// To be safe, we'll limit to 20 calls per minute (1200 per hour)
+const RATE_LIMIT_DELAY_MS = 3000; // 3 seconds = 20 requests per minute
+
+/**
+ * Sleep for specified milliseconds
+ * @param {number} ms - Milliseconds to sleep
+ * @returns {Promise}
+ */
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 /**
  * Facebook Graph API Service
  * Direct integration with Facebook Marketing API
  */
 class FacebookGraphService {
+  constructor() {
+    this.lastRequestTime = 0;
+  }
+
+  /**
+   * Rate limit API calls to avoid Facebook rate limiting
+   * @private
+   */
+  async _rateLimitedRequest(requestFn) {
+    const now = Date.now();
+    const timeSinceLastRequest = now - this.lastRequestTime;
+
+    if (timeSinceLastRequest < RATE_LIMIT_DELAY_MS) {
+      const delay = RATE_LIMIT_DELAY_MS - timeSinceLastRequest;
+      console.log(`      ⏳ Rate limiting: waiting ${delay}ms before next request...`);
+      await sleep(delay);
+    }
+
+    this.lastRequestTime = Date.now();
+    return await requestFn();
+  }
   /**
    * Get campaigns from ad account
    * @param {string} adAccountId - Ad account ID (with or without act_ prefix)
@@ -51,9 +85,11 @@ class FacebookGraphService {
         ]);
       }
 
-      const response = await axios.get(
-        `${FACEBOOK_GRAPH_API_URL}/${accountId}/campaigns`,
-        { params }
+      const response = await this._rateLimitedRequest(() =>
+        axios.get(
+          `${FACEBOOK_GRAPH_API_URL}/${accountId}/campaigns`,
+          { params }
+        )
       );
 
       const campaigns = response.data.data || [];
@@ -96,9 +132,11 @@ class FacebookGraphService {
       while (hasMore) {
         console.log(`   📄 Fetching page ${currentPage} of ads...`);
 
-        const response = await axios.get(nextUrl, {
-          params: currentPage === 1 ? params : { access_token: accessToken }
-        });
+        const response = await this._rateLimitedRequest(() =>
+          axios.get(nextUrl, {
+            params: currentPage === 1 ? params : { access_token: accessToken }
+          })
+        );
 
         const ads = response.data.data || [];
         console.log(`   ✅ Page ${currentPage}: Found ${ads.length} ads`);
@@ -164,9 +202,11 @@ class FacebookGraphService {
       while (hasMore) {
         console.log(`      📄 Fetching page ${currentPage} of ad sets...`);
 
-        const response = await axios.get(nextUrl, {
-          params: currentPage === 1 ? params : { access_token: accessToken }
-        });
+        const response = await this._rateLimitedRequest(() =>
+          axios.get(nextUrl, {
+            params: currentPage === 1 ? params : { access_token: accessToken }
+          })
+        );
 
         const adSets = response.data.data || [];
         console.log(`      ✅ Page ${currentPage}: Found ${adSets.length} ad sets`);
@@ -232,9 +272,11 @@ class FacebookGraphService {
       while (hasMore) {
         console.log(`         📄 Fetching page ${currentPage} of ads...`);
 
-        const response = await axios.get(nextUrl, {
-          params: currentPage === 1 ? params : { access_token: accessToken }
-        });
+        const response = await this._rateLimitedRequest(() =>
+          axios.get(nextUrl, {
+            params: currentPage === 1 ? params : { access_token: accessToken }
+          })
+        );
 
         const ads = response.data.data || [];
         console.log(`         ✅ Page ${currentPage}: Found ${ads.length} ads`);
@@ -284,15 +326,17 @@ class FacebookGraphService {
     try {
       console.log('\n🏢 Fetching accessible ad accounts...');
 
-      const response = await axios.get(
-        `${FACEBOOK_GRAPH_API_URL}/me/adaccounts`,
-        {
-          params: {
-            access_token: accessToken,
-            fields: 'id,name,account_id,account_status,currency,timezone_name',
-            limit: 100
+      const response = await this._rateLimitedRequest(() =>
+        axios.get(
+          `${FACEBOOK_GRAPH_API_URL}/me/adaccounts`,
+          {
+            params: {
+              access_token: accessToken,
+              fields: 'id,name,account_id,account_status,currency,timezone_name',
+              limit: 100
+            }
           }
-        }
+        )
       );
 
       const accounts = response.data.data || [];
@@ -318,14 +362,16 @@ class FacebookGraphService {
     try {
       console.log('\n🔐 Validating Facebook access token...');
 
-      const response = await axios.get(
-        `${FACEBOOK_GRAPH_API_URL}/me`,
-        {
-          params: {
-            access_token: accessToken,
-            fields: 'id,name,email'
+      const response = await this._rateLimitedRequest(() =>
+        axios.get(
+          `${FACEBOOK_GRAPH_API_URL}/me`,
+          {
+            params: {
+              access_token: accessToken,
+              fields: 'id,name,email'
+            }
           }
-        }
+        )
       );
 
       console.log(`✅ Token valid for user: ${response.data.name}`);
@@ -354,16 +400,18 @@ class FacebookGraphService {
 
       console.log('\n🔄 Exchanging for long-lived token...');
 
-      const response = await axios.get(
-        `${FACEBOOK_GRAPH_API_URL}/oauth/access_token`,
-        {
-          params: {
-            grant_type: 'fb_exchange_token',
-            client_id: process.env.FACEBOOK_APP_ID,
-            client_secret: process.env.FACEBOOK_APP_SECRET,
-            fb_exchange_token: shortLivedToken
+      const response = await this._rateLimitedRequest(() =>
+        axios.get(
+          `${FACEBOOK_GRAPH_API_URL}/oauth/access_token`,
+          {
+            params: {
+              grant_type: 'fb_exchange_token',
+              client_id: process.env.FACEBOOK_APP_ID,
+              client_secret: process.env.FACEBOOK_APP_SECRET,
+              fb_exchange_token: shortLivedToken
+            }
           }
-        }
+        )
       );
 
       console.log('✅ Long-lived token obtained');
