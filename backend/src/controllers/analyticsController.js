@@ -139,6 +139,97 @@ class AnalyticsController {
       next(error);
     }
   }
+
+  /**
+   * Get unified analytics (Facebook Ads + RedTrack)
+   * GET /api/analytics/unified
+   * Query: ad_account_id (required), date_from, date_to, bulk_fetch
+   */
+  async getUnifiedAnalytics(req, res, next) {
+    try {
+      const { ad_account_id, date_from, date_to, bulk_fetch } = req.query;
+
+      if (!ad_account_id) {
+        return res.status(400).json({
+          success: false,
+          error: 'ad_account_id is required'
+        });
+      }
+
+      // Validate dates if provided
+      if (date_from && date_to) {
+        const fromDate = new Date(date_from);
+        const toDate = new Date(date_to);
+
+        if (fromDate > toDate) {
+          return res.status(400).json({
+            success: false,
+            error: 'date_from must be before or equal to date_to'
+          });
+        }
+      }
+
+      // Parse bulk_fetch parameter
+      const useBulkFetch = bulk_fetch === 'true' ? true : bulk_fetch === 'false' ? false : null;
+
+      console.log(`\n📊 Unified analytics request:`);
+      console.log(`   Ad Account: ${ad_account_id}`);
+      console.log(`   Date Range: ${date_from || 'all time'} to ${date_to || 'now'}`);
+      console.log(`   Bulk Fetch: ${useBulkFetch === null ? 'auto' : useBulkFetch}`);
+
+      const result = await analyticsService.getUnifiedAnalytics(
+        ad_account_id,
+        req.user.id,
+        date_from,
+        date_to,
+        useBulkFetch
+      );
+
+      // Log unified analytics activity
+      await logActivity({
+        req,
+        actionType: 'unified_analytics',
+        resourceType: 'analytics',
+        resourceId: null,
+        resourceName: `Unified Analytics - ${ad_account_id}`,
+        details: {
+          ad_account_id,
+          date_from,
+          date_to,
+          total_ads: result.summary.total_ads,
+          total_spend: result.summary.total_spend,
+          total_revenue: result.summary.total_revenue,
+          total_profit: result.summary.total_profit
+        },
+        status: 'success'
+      });
+
+      res.json({
+        success: true,
+        message: 'Unified analytics generated successfully',
+        data: result
+      });
+    } catch (error) {
+      logger.error('Unified analytics controller error', { error: error.message });
+
+      // Log failed activity
+      await logActivity({
+        req,
+        actionType: 'unified_analytics',
+        resourceType: 'analytics',
+        resourceId: null,
+        resourceName: `Unified Analytics - ${req.query.ad_account_id}`,
+        details: {
+          error: error.message
+        },
+        status: 'failure'
+      }).catch(logError => {
+        logger.error('Failed to log activity', { error: logError.message });
+      });
+
+      next(error);
+    }
+  }
 }
 
 module.exports = new AnalyticsController();

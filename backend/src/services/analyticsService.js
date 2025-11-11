@@ -1,6 +1,7 @@
 const { query, transaction } = require('../config/database');
 const adNameParser = require('./adNameParser');
 const facebookGraphService = require('./facebookGraphService');
+const redtrackService = require('./redtrackService');
 const FacebookAuth = require('../models/FacebookAuth');
 const logger = require('../utils/logger');
 
@@ -427,6 +428,369 @@ class AnalyticsService {
       logger.error('Get ad name changes failed', { error: error.message });
       throw new Error('Failed to retrieve ad name change history');
     }
+  }
+
+  /**
+   * Get unified analytics (Facebook Ads + RedTrack)
+   * Combines Facebook traffic metrics with RedTrack conversion/revenue data
+   * @param {string} adAccountId - Facebook ad account ID
+   * @param {string} userId - User ID (for auth check)
+   * @param {string} dateFrom - Optional start date (YYYY-MM-DD)
+   * @param {string} dateTo - Optional end date (YYYY-MM-DD)
+   * @param {boolean} useBulkFetch - Use bulk fetch for better performance (default: true for >10 ads)
+   * @returns {Promise<Object>} Unified analytics with Facebook + RedTrack data
+   */
+  async getUnifiedAnalytics(adAccountId, userId, dateFrom = null, dateTo = null, useBulkFetch = null) {
+    try {
+      console.log('\n🚀 ========== UNIFIED ANALYTICS START ==========');
+      console.log(`📊 Ad Account: ${adAccountId}`);
+      console.log(`👤 User: ${userId}`);
+      console.log(`📅 Date Range: ${dateFrom || 'all time'} to ${dateTo || 'now'}`);
+
+      // Step 1: Sync Facebook ads first (ensures we have latest data)
+      console.log('\n📥 Step 1: Syncing Facebook ads...');
+      const syncResult = await this.syncFacebookAds(adAccountId, userId, dateFrom, dateTo);
+      console.log(`✅ Synced ${syncResult.totalAdsProcessed} ads from Facebook`);
+
+      // Step 2: Get Facebook ads with metrics
+      console.log('\n📊 Step 2: Fetching Facebook ad data from database...');
+      const fbAdsResult = await query(`
+        SELECT
+          fb_ad_id,
+          ad_name,
+          campaign_id,
+          campaign_name,
+          ad_account_id,
+          editor_id,
+          editor_name,
+          spend,
+          cpm,
+          cpc,
+          cost_per_result,
+          impressions,
+          clicks,
+          last_synced_at
+        FROM facebook_ads
+        WHERE ad_account_id = $1
+          AND (
+            ($2::date IS NULL OR last_synced_at >= $2::date) AND
+            ($3::date IS NULL OR last_synced_at <= $3::date)
+          )
+        ORDER BY spend DESC
+      `, [adAccountId, dateFrom, dateTo]);
+
+      const fbAds = fbAdsResult.rows;
+      console.log(`✅ Found ${fbAds.length} Facebook ads in database`);
+
+      if (fbAds.length === 0) {
+        console.log('⚠️ No ads found for this account and date range');
+        return this._getEmptyUnifiedAnalytics();
+      }
+
+      // Step 3: Fetch RedTrack data
+      console.log('\n📈 Step 3: Fetching RedTrack conversion data...');
+      const adIds = fbAds.map(ad => ad.fb_ad_id);
+
+      // Auto-determine fetch method based on ad count
+      const shouldUseBulk = useBulkFetch !== null ? useBulkFetch : (adIds.length > 10);
+      console.log(`   Fetch method: ${shouldUseBulk ? 'BULK' : 'INDIVIDUAL'} (${adIds.length} ads)`);
+
+      let redtrackData;
+      if (shouldUseBulk) {
+        // Bulk fetch - single API call, faster for many ads
+        redtrackData = await redtrackService.getBulkAdMetrics(adIds, dateFrom, dateTo);
+      } else {
+        // Individual fetch - better for few ads or when you need specific filtering
+        redtrackData = await redtrackService.getBatchAdMetrics(adIds, dateFrom, dateTo);
+      }
+
+      console.log(`✅ Fetched RedTrack data for ${redtrackData.size} ad(s)`);
+
+      // Step 4: Merge Facebook + RedTrack data
+      console.log('\n🔗 Step 4: Merging Facebook + RedTrack data...');
+      const unifiedAds = fbAds.map(fbAd => {
+        const rtData = redtrackData.get(fbAd.fb_ad_id) || {};
+
+        const spend = parseFloat(fbAd.spend) || 0;
+        const revenue = rtData.revenue || 0;
+        const profit = revenue - spend;
+        const roas = spend > 0 ? (revenue / spend) : 0;
+
+        return {
+          // Identifiers
+          fb_ad_id: fbAd.fb_ad_id,
+          ad_name: fbAd.ad_name,
+          campaign_id: fbAd.campaign_id,
+          campaign_name: fbAd.campaign_name,
+          ad_account_id: fbAd.ad_account_id,
+
+          // Editor info
+          editor_id: fbAd.editor_id,
+          editor_name: fbAd.editor_name,
+
+          // Facebook metrics
+          spend: spend,
+          impressions: parseInt(fbAd.impressions) || 0,
+          clicks: parseInt(fbAd.clicks) || 0,
+          cpm: parseFloat(fbAd.cpm) || 0,
+          cpc: parseFloat(fbAd.cpc) || 0,
+          cost_per_result: parseFloat(fbAd.cost_per_result) || 0,
+          fb_ctr: fbAd.impressions > 0 ? (fbAd.clicks / fbAd.impressions) * 100 : 0,
+
+          // RedTrack metrics
+          revenue: revenue,
+          conversions: rtData.conversions || 0,
+          approved_conversions: rtData.approved_conversions || 0,
+          pending_conversions: rtData.pending_conversions || 0,
+          rejected_conversions: rtData.rejected_conversions || 0,
+          rt_clicks: rtData.clicks || 0,
+          lp_views: rtData.lp_views || 0,
+          lp_clicks: rtData.lp_clicks || 0,
+          lp_ctr: rtData.lp_ctr || 0,
+          cr: rtData.cr || 0, // Conversion rate
+          epc: rtData.epc || 0, // Earnings per click
+          rt_roi: rtData.roi || 0,
+
+          // Calculated metrics
+          profit: profit,
+          roas: roas,
+          cost_per_conversion: rtData.conversions > 0 ? (spend / rtData.conversions) : 0,
+
+          // Meta
+          last_synced_at: fbAd.last_synced_at,
+          redtrack_error: rtData.error || null,
+          has_redtrack_data: !rtData.error && (rtData.revenue > 0 || rtData.conversions > 0)
+        };
+      });
+
+      console.log(`✅ Merged ${unifiedAds.length} ad records`);
+
+      // Step 5: Aggregate by editor
+      console.log('\n👥 Step 5: Aggregating by editor...');
+      const editorPerformance = this._aggregateByEditor(unifiedAds);
+      console.log(`✅ Aggregated data for ${editorPerformance.length} editor(s)`);
+
+      // Step 6: Calculate summary statistics
+      console.log('\n📊 Step 6: Calculating summary statistics...');
+      const summary = this._calculateSummary(unifiedAds);
+
+      console.log('\n✅ ========== UNIFIED ANALYTICS COMPLETE ==========');
+      console.log(`📊 Summary:`);
+      console.log(`   - Total Ads: ${summary.total_ads}`);
+      console.log(`   - Total Spend: $${summary.total_spend.toFixed(2)}`);
+      console.log(`   - Total Revenue: $${summary.total_revenue.toFixed(2)}`);
+      console.log(`   - Total Profit: $${summary.total_profit.toFixed(2)}`);
+      console.log(`   - Overall ROAS: ${summary.overall_roas.toFixed(2)}x`);
+      console.log(`   - Ads with RedTrack Data: ${summary.ads_with_redtrack_data}`);
+      console.log(`   - Ads with Editor: ${summary.ads_with_editor}`);
+      console.log(`================================================\n`);
+
+      logger.info('Unified analytics completed', {
+        adAccountId,
+        totalAds: summary.total_ads,
+        totalSpend: summary.total_spend,
+        totalRevenue: summary.total_revenue,
+        editorCount: editorPerformance.length
+      });
+
+      return {
+        ads: unifiedAds,
+        editor_performance: editorPerformance,
+        summary: summary,
+        meta: {
+          date_from: dateFrom,
+          date_to: dateTo,
+          ad_account_id: adAccountId,
+          fetch_method: shouldUseBulk ? 'bulk' : 'individual',
+          generated_at: new Date().toISOString()
+        }
+      };
+
+    } catch (error) {
+      console.error('\n❌ ========== UNIFIED ANALYTICS FAILED ==========');
+      console.error(`Error: ${error.message}`);
+      console.error('===============================================\n');
+
+      logger.error('Unified analytics failed', {
+        error: error.message,
+        adAccountId,
+        userId
+      });
+
+      throw new Error(`Failed to generate unified analytics: ${error.message}`);
+    }
+  }
+
+  /**
+   * Aggregate unified ad data by editor
+   * @private
+   */
+  _aggregateByEditor(unifiedAds) {
+    const editorMap = {};
+
+    unifiedAds.forEach(ad => {
+      const editorKey = ad.editor_name || 'Unknown';
+
+      if (!editorMap[editorKey]) {
+        editorMap[editorKey] = {
+          editor_name: editorKey,
+          editor_id: ad.editor_id,
+          total_ads: 0,
+          ads_with_redtrack_data: 0,
+
+          // Facebook metrics
+          total_spend: 0,
+          total_impressions: 0,
+          total_clicks: 0,
+          avg_cpm: 0,
+          avg_cpc: 0,
+          avg_ctr: 0,
+
+          // RedTrack metrics
+          total_revenue: 0,
+          total_conversions: 0,
+          total_approved_conversions: 0,
+          total_rt_clicks: 0,
+          total_lp_views: 0,
+          avg_cr: 0,
+          avg_epc: 0,
+
+          // Calculated metrics
+          total_profit: 0,
+          roas: 0,
+          avg_cost_per_conversion: 0
+        };
+      }
+
+      const ep = editorMap[editorKey];
+      ep.total_ads++;
+
+      if (ad.has_redtrack_data) {
+        ep.ads_with_redtrack_data++;
+      }
+
+      // Accumulate Facebook metrics
+      ep.total_spend += ad.spend;
+      ep.total_impressions += ad.impressions;
+      ep.total_clicks += ad.clicks;
+
+      // Accumulate RedTrack metrics
+      ep.total_revenue += ad.revenue;
+      ep.total_conversions += ad.conversions;
+      ep.total_approved_conversions += ad.approved_conversions;
+      ep.total_rt_clicks += ad.rt_clicks;
+      ep.total_lp_views += ad.lp_views;
+
+      // Accumulate calculated metrics
+      ep.total_profit += ad.profit;
+    });
+
+    // Calculate averages and ratios
+    Object.values(editorMap).forEach(ep => {
+      ep.avg_cpm = ep.total_impressions > 0 ? (ep.total_spend / ep.total_impressions) * 1000 : 0;
+      ep.avg_cpc = ep.total_clicks > 0 ? ep.total_spend / ep.total_clicks : 0;
+      ep.avg_ctr = ep.total_impressions > 0 ? (ep.total_clicks / ep.total_impressions) * 100 : 0;
+      ep.avg_cr = ep.total_rt_clicks > 0 ? (ep.total_conversions / ep.total_rt_clicks) * 100 : 0;
+      ep.avg_epc = ep.total_rt_clicks > 0 ? ep.total_revenue / ep.total_rt_clicks : 0;
+      ep.roas = ep.total_spend > 0 ? ep.total_revenue / ep.total_spend : 0;
+      ep.avg_cost_per_conversion = ep.total_conversions > 0 ? ep.total_spend / ep.total_conversions : 0;
+    });
+
+    // Sort by total spend descending
+    return Object.values(editorMap).sort((a, b) => b.total_spend - a.total_spend);
+  }
+
+  /**
+   * Calculate summary statistics
+   * @private
+   */
+  _calculateSummary(unifiedAds) {
+    const summary = {
+      total_ads: unifiedAds.length,
+      ads_with_editor: unifiedAds.filter(ad => ad.editor_id).length,
+      ads_without_editor: unifiedAds.filter(ad => !ad.editor_id).length,
+      ads_with_redtrack_data: unifiedAds.filter(ad => ad.has_redtrack_data).length,
+      ads_without_redtrack_data: unifiedAds.filter(ad => !ad.has_redtrack_data).length,
+
+      // Facebook totals
+      total_spend: unifiedAds.reduce((sum, ad) => sum + ad.spend, 0),
+      total_impressions: unifiedAds.reduce((sum, ad) => sum + ad.impressions, 0),
+      total_clicks: unifiedAds.reduce((sum, ad) => sum + ad.clicks, 0),
+
+      // RedTrack totals
+      total_revenue: unifiedAds.reduce((sum, ad) => sum + ad.revenue, 0),
+      total_conversions: unifiedAds.reduce((sum, ad) => sum + ad.conversions, 0),
+      total_approved_conversions: unifiedAds.reduce((sum, ad) => sum + ad.approved_conversions, 0),
+      total_rt_clicks: unifiedAds.reduce((sum, ad) => sum + ad.rt_clicks, 0),
+
+      // Calculated totals
+      total_profit: unifiedAds.reduce((sum, ad) => sum + ad.profit, 0)
+    };
+
+    // Calculate overall averages
+    summary.overall_cpm = summary.total_impressions > 0
+      ? (summary.total_spend / summary.total_impressions) * 1000
+      : 0;
+    summary.overall_cpc = summary.total_clicks > 0
+      ? summary.total_spend / summary.total_clicks
+      : 0;
+    summary.overall_ctr = summary.total_impressions > 0
+      ? (summary.total_clicks / summary.total_impressions) * 100
+      : 0;
+    summary.overall_cr = summary.total_rt_clicks > 0
+      ? (summary.total_conversions / summary.total_rt_clicks) * 100
+      : 0;
+    summary.overall_epc = summary.total_rt_clicks > 0
+      ? summary.total_revenue / summary.total_rt_clicks
+      : 0;
+    summary.overall_roas = summary.total_spend > 0
+      ? summary.total_revenue / summary.total_spend
+      : 0;
+    summary.overall_roi = summary.total_spend > 0
+      ? ((summary.total_profit / summary.total_spend) * 100)
+      : 0;
+    summary.overall_cost_per_conversion = summary.total_conversions > 0
+      ? summary.total_spend / summary.total_conversions
+      : 0;
+
+    return summary;
+  }
+
+  /**
+   * Get empty unified analytics result
+   * @private
+   */
+  _getEmptyUnifiedAnalytics() {
+    return {
+      ads: [],
+      editor_performance: [],
+      summary: {
+        total_ads: 0,
+        ads_with_editor: 0,
+        ads_without_editor: 0,
+        ads_with_redtrack_data: 0,
+        ads_without_redtrack_data: 0,
+        total_spend: 0,
+        total_impressions: 0,
+        total_clicks: 0,
+        total_revenue: 0,
+        total_conversions: 0,
+        total_approved_conversions: 0,
+        total_rt_clicks: 0,
+        total_profit: 0,
+        overall_cpm: 0,
+        overall_cpc: 0,
+        overall_ctr: 0,
+        overall_cr: 0,
+        overall_epc: 0,
+        overall_roas: 0,
+        overall_roi: 0,
+        overall_cost_per_conversion: 0
+      },
+      meta: {
+        generated_at: new Date().toISOString()
+      }
+    };
   }
 }
 

@@ -36,4 +36,11 @@ router.get('/ad-name-changes',
   analyticsController.getAdNameChanges.bind(analyticsController)
 );
 
+// Get unified analytics (Facebook + RedTrack) (Admin only)
+router.get('/unified',
+  authenticateToken,
+  requireAdmin,
+  analyticsController.getUnifiedAnalytics.bind(analyticsController)
+);
+
 module.exports = router;
