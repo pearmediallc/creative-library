@@ -4,8 +4,10 @@ const logger = require('../utils/logger');
 const FACEBOOK_GRAPH_API_URL = 'https://graph.facebook.com/v18.0';
 
 // Rate limiting: Facebook allows ~200 calls per hour per user
-// To be safe, we'll limit to 20 calls per minute (1200 per hour)
-const RATE_LIMIT_DELAY_MS = 3000; // 3 seconds = 20 requests per minute
+// Using 6 seconds (10 RPM) for safety margin to avoid rate limit errors
+const RATE_LIMIT_DELAY_MS = 6000; // 6 seconds = 10 requests per minute (safer)
+const MAX_RETRIES = 3; // Maximum retry attempts on rate limit
+const RETRY_DELAY_MS = 60000; // Wait 60 seconds on rate limit error before retry
 
 /**
  * Sleep for specified milliseconds
@@ -27,9 +29,10 @@ class FacebookGraphService {
 
   /**
    * Rate limit API calls to avoid Facebook rate limiting
+   * Includes retry logic with exponential backoff
    * @private
    */
-  async _rateLimitedRequest(requestFn) {
+  async _rateLimitedRequest(requestFn, retryCount = 0) {
     const now = Date.now();
     const timeSinceLastRequest = now - this.lastRequestTime;
 
@@ -40,7 +43,32 @@ class FacebookGraphService {
     }
 
     this.lastRequestTime = Date.now();
-    return await requestFn();
+
+    try {
+      return await requestFn();
+    } catch (error) {
+      // Check if it's a rate limit error
+      const isRateLimitError =
+        error.response?.data?.error?.code === 17 ||
+        error.response?.data?.error?.error_subcode === 2446079 ||
+        error.response?.data?.error?.message?.includes('User request limit reached');
+
+      if (isRateLimitError && retryCount < MAX_RETRIES) {
+        const retryDelay = RETRY_DELAY_MS * (retryCount + 1); // Exponential backoff
+        console.log(`      ⚠️  Rate limit hit! Retry ${retryCount + 1}/${MAX_RETRIES} in ${retryDelay / 1000}s...`);
+        logger.warn('Facebook API rate limit hit, retrying...', {
+          retryCount: retryCount + 1,
+          maxRetries: MAX_RETRIES,
+          delaySeconds: retryDelay / 1000
+        });
+
+        await sleep(retryDelay);
+        return this._rateLimitedRequest(requestFn, retryCount + 1);
+      }
+
+      // If not a rate limit error or max retries reached, throw the error
+      throw error;
+    }
   }
   /**
    * Get campaigns from ad account
