@@ -654,27 +654,25 @@ export function AnalyticsPage() {
 
               {/* Sync Button */}
               {fbConnected && fbAdAccount && (
-                <div className="flex gap-2">
-                  {syncing ? (
-                    <Button
-                      onClick={handleStopSync}
-                      variant="destructive"
-                      className="flex-1"
-                    >
-                      <span className="mr-2">🛑</span>
-                      Stop Sync
-                    </Button>
-                  ) : (
-                    <Button
-                      onClick={handleSync}
-                      disabled={syncing}
-                      className="flex-1"
-                    >
-                      <RefreshCw size={16} className="mr-2" />
-                      Sync Facebook Ads
-                    </Button>
-                  )}
-                </div>
+                syncing ? (
+                  <Button
+                    onClick={handleStopSync}
+                    variant="destructive"
+                    className="w-full"
+                  >
+                    <span className="mr-2">🛑</span>
+                    Stop Sync
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={handleSync}
+                    disabled={syncing}
+                    className="w-full"
+                  >
+                    <RefreshCw size={16} className="mr-2" />
+                    Sync Facebook Ads
+                  </Button>
+                )
               )}
 
               {error && (
