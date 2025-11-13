@@ -291,6 +291,26 @@ export function AnalyticsPage() {
   };
 
   // Sync ads from Facebook
+  const handleStopSync = async () => {
+    try {
+      console.log('🛑 Requesting sync stop...');
+      const response = await analyticsApi.stopSync();
+      console.log('✅ Stop signal sent:', response.data.message);
+      toast({
+        title: 'Stopping Sync',
+        description: 'Sync will stop after completing the current operation. Please wait...',
+        variant: 'default',
+      });
+    } catch (err: any) {
+      console.error('❌ Failed to stop sync:', err);
+      toast({
+        title: 'Error',
+        description: err.response?.data?.error || 'Failed to stop sync',
+        variant: 'destructive',
+      });
+    }
+  };
+
   const handleSync = async () => {
     if (!fbAdAccount) {
       setError('Please connect Facebook and select an ad account first');
@@ -317,14 +337,27 @@ export function AnalyticsPage() {
         await fetchUnifiedAnalytics();
       }
 
-      const { totalAdsProcessed, adsWithEditor, adsWithoutEditor: adsNoEditor } = response.data.data;
-      alert(
-        `✅ Sync Complete!\n\n` +
-        `Date Range: ${syncDateFrom} to ${syncDateTo}\n` +
-        `Total Ads: ${totalAdsProcessed}\n` +
-        `With Editor: ${adsWithEditor}\n` +
-        `Without Editor: ${adsNoEditor}`
-      );
+      const { totalAdsProcessed, adsWithEditor, adsWithoutEditor: adsNoEditor, stoppedEarly, message } = response.data.data;
+
+      if (stoppedEarly) {
+        alert(
+          `🛑 Sync Stopped!\n\n` +
+          `${message}\n\n` +
+          `Date Range: ${syncDateFrom} to ${syncDateTo}\n` +
+          `Partial Results:\n` +
+          `Total Ads: ${totalAdsProcessed}\n` +
+          `With Editor: ${adsWithEditor}\n` +
+          `Without Editor: ${adsNoEditor}`
+        );
+      } else {
+        alert(
+          `✅ Sync Complete!\n\n` +
+          `Date Range: ${syncDateFrom} to ${syncDateTo}\n` +
+          `Total Ads: ${totalAdsProcessed}\n` +
+          `With Editor: ${adsWithEditor}\n` +
+          `Without Editor: ${adsNoEditor}`
+        );
+      }
     } catch (err: any) {
       console.error('❌ Sync failed:', err);
       setError(err.response?.data?.error || 'Sync failed');
@@ -621,14 +654,27 @@ export function AnalyticsPage() {
 
               {/* Sync Button */}
               {fbConnected && fbAdAccount && (
-                <Button
-                  onClick={handleSync}
-                  disabled={syncing}
-                  className="w-full"
-                >
-                  <RefreshCw size={16} className="mr-2" />
-                  {syncing ? 'Syncing Ads...' : 'Sync Facebook Ads'}
-                </Button>
+                <div className="flex gap-2">
+                  {syncing ? (
+                    <Button
+                      onClick={handleStopSync}
+                      variant="destructive"
+                      className="flex-1"
+                    >
+                      <span className="mr-2">🛑</span>
+                      Stop Sync
+                    </Button>
+                  ) : (
+                    <Button
+                      onClick={handleSync}
+                      disabled={syncing}
+                      className="flex-1"
+                    >
+                      <RefreshCw size={16} className="mr-2" />
+                      Sync Facebook Ads
+                    </Button>
+                  )}
+                </div>
               )}
 
               {error && (

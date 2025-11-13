@@ -15,6 +15,13 @@ router.post('/sync',
   analyticsController.syncAds.bind(analyticsController)
 );
 
+// Stop ongoing sync operation (Admin only)
+router.post('/sync/stop',
+  authenticateToken,
+  requireAdmin,
+  analyticsController.stopSync.bind(analyticsController)
+);
+
 // Get editor performance data (Admin only)
 router.get('/editor-performance',
   authenticateToken,

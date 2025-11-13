@@ -230,6 +230,29 @@ class AnalyticsController {
       next(error);
     }
   }
+
+  /**
+   * Stop ongoing sync operation
+   * POST /api/analytics/sync/stop
+   */
+  async stopSync(req, res, next) {
+    try {
+      const userId = req.user.id;
+
+      // Request stop for this user's sync
+      analyticsService.requestStopSync(userId);
+
+      logger.info('Sync stop requested', { userId });
+
+      res.json({
+        success: true,
+        message: 'Stop signal sent. Sync will stop gracefully after completing the current operation.'
+      });
+    } catch (error) {
+      logger.error('Stop sync controller error', { error: error.message });
+      next(error);
+    }
+  }
 }
 
 module.exports = new AnalyticsController();

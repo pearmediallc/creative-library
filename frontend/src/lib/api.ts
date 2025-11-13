@@ -102,6 +102,7 @@ export const analyticsApi = {
       date_from: dateFrom || undefined,
       date_to: dateTo || undefined
     }),
+  stopSync: () => api.post('/analytics/sync/stop'),
   getEditorPerformance: (params?: {
     editor_id?: string;
     date_from?: string;

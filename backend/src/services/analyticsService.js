@@ -10,6 +10,39 @@ const logger = require('../utils/logger');
  * Fetches Facebook ad data directly from Graph API and processes it
  */
 class AnalyticsService {
+  constructor() {
+    // Map to track stop signals for ongoing sync operations
+    // Key: userId, Value: boolean (true = stop requested)
+    this.syncStopSignals = new Map();
+  }
+
+  /**
+   * Request to stop ongoing sync for a user
+   * @param {string} userId - User ID
+   */
+  requestStopSync(userId) {
+    console.log(`🛑 Stop sync requested for user: ${userId}`);
+    this.syncStopSignals.set(userId, true);
+    logger.info('Sync stop requested', { userId });
+  }
+
+  /**
+   * Check if stop has been requested for a user's sync
+   * @param {string} userId - User ID
+   * @returns {boolean} True if stop requested
+   */
+  shouldStopSync(userId) {
+    return this.syncStopSignals.get(userId) === true;
+  }
+
+  /**
+   * Clear stop signal for a user
+   * @param {string} userId - User ID
+   */
+  clearStopSignal(userId) {
+    this.syncStopSignals.delete(userId);
+  }
+
   /**
    * Sync Facebook ads for an account
    * @param {string} adAccountId - Facebook ad account ID (with or without act_ prefix)
@@ -20,6 +53,10 @@ class AnalyticsService {
    */
   async syncFacebookAds(adAccountId, userId, dateFrom = null, dateTo = null) {
     try {
+      // Clear any previous stop signals for this user
+      this.clearStopSignal(userId);
+      let stoppedEarly = false;
+
       console.log('\n🚀 ========== FACEBOOK AD SYNC START ==========');
       console.log(`📊 Ad Account ID: ${adAccountId}`);
       console.log(`👤 User ID: ${userId}`);
@@ -64,6 +101,14 @@ class AnalyticsService {
       // Process each campaign
       console.log(`\n📋 Processing ${campaigns.length} campaign(s)...`);
       for (let i = 0; i < campaigns.length; i++) {
+        // Check if stop requested
+        if (this.shouldStopSync(userId)) {
+          console.log('\n🛑 ========== STOP SIGNAL RECEIVED ==========');
+          console.log('📊 Stopping sync gracefully after current operation...');
+          stoppedEarly = true;
+          break; // Exit campaign loop
+        }
+
         const campaign = campaigns[i];
         console.log(`\n📂 [${i + 1}/${campaigns.length}] Campaign: ${campaign.name}`);
         console.log(`   - Campaign ID: ${campaign.id}`);
@@ -84,6 +129,13 @@ class AnalyticsService {
           let campaignTotalAds = 0;
 
           for (let j = 0; j < adSets.length; j++) {
+            // Check if stop requested
+            if (this.shouldStopSync(userId)) {
+              console.log('\n🛑 Stop signal received - exiting ad set loop...');
+              stoppedEarly = true;
+              break; // Exit ad set loop
+            }
+
             const adSet = adSets[j];
             console.log(`\n   📦 [Ad Set ${j + 1}/${adSets.length}] ${adSet.name}`);
             console.log(`      Ad Set ID: ${adSet.id}`);
@@ -138,26 +190,53 @@ class AnalyticsService {
           console.log(`      - With Editor: ${campaignAdsWithEditor}`);
           console.log(`      - Without Editor: ${campaignAdsWithoutEditor}`);
         }
+
+        // If stopped during ad set processing, break out of campaign loop
+        if (stoppedEarly) {
+          break;
+        }
       }
 
-      console.log('\n✅ ========== FACEBOOK AD SYNC COMPLETE ==========');
-      console.log(`📊 Total Ads Processed: ${totalAdsProcessed}`);
-      console.log(`✅ Ads with Editor: ${adsWithEditor}`);
-      console.log(`⚠️ Ads without Editor: ${adsWithoutEditor}`);
-      console.log('================================================\n');
+      // Clear stop signal after sync completes or stops
+      this.clearStopSignal(userId);
 
-      logger.info('Facebook ad sync completed', {
-        adAccountId,
-        totalAdsProcessed,
-        adsWithEditor,
-        adsWithoutEditor
-      });
+      if (stoppedEarly) {
+        console.log('\n🛑 ========== FACEBOOK AD SYNC STOPPED ==========');
+        console.log(`📊 Partial Results (stopped by user):`);
+        console.log(`   - Total Ads Processed: ${totalAdsProcessed}`);
+        console.log(`   - Ads with Editor: ${adsWithEditor}`);
+        console.log(`   - Ads without Editor: ${adsWithoutEditor}`);
+        console.log('================================================\n');
+
+        logger.info('Facebook ad sync stopped by user', {
+          adAccountId,
+          totalAdsProcessed,
+          adsWithEditor,
+          adsWithoutEditor,
+          stoppedEarly: true
+        });
+      } else {
+        console.log('\n✅ ========== FACEBOOK AD SYNC COMPLETE ==========');
+        console.log(`📊 Total Ads Processed: ${totalAdsProcessed}`);
+        console.log(`✅ Ads with Editor: ${adsWithEditor}`);
+        console.log(`⚠️ Ads without Editor: ${adsWithoutEditor}`);
+        console.log('================================================\n');
+
+        logger.info('Facebook ad sync completed', {
+          adAccountId,
+          totalAdsProcessed,
+          adsWithEditor,
+          adsWithoutEditor
+        });
+      }
 
       return {
         success: true,
         totalAdsProcessed,
         adsWithEditor,
-        adsWithoutEditor
+        adsWithoutEditor,
+        stoppedEarly,
+        message: stoppedEarly ? 'Sync stopped by user - partial results returned' : 'Sync completed successfully'
       };
     } catch (error) {
       console.error('\n❌ ========== FACEBOOK AD SYNC FAILED ==========');
