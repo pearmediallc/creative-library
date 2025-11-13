@@ -296,7 +296,13 @@ export function AnalyticsPage() {
       console.log('🛑 Requesting sync stop...');
       const response = await analyticsApi.stopSync();
       console.log('✅ Stop signal sent:', response.data.message);
+
+      // Show feedback to user
       alert('Stop signal sent. Sync will stop after completing the current operation. Please wait...');
+
+      // Note: We don't set syncing/unifiedLoading to false here
+      // because the backend will finish gracefully and return results
+      // The states will be set to false in the finally blocks of handleSync/fetchUnifiedAnalytics
     } catch (err: any) {
       console.error('❌ Failed to stop sync:', err);
       setError(err.response?.data?.error || 'Failed to stop sync');
@@ -646,7 +652,7 @@ export function AnalyticsPage() {
 
               {/* Sync Button */}
               {fbConnected && fbAdAccount && (
-                syncing ? (
+                (syncing || unifiedLoading) ? (
                   <Button
                     onClick={handleStopSync}
                     variant="destructive"
@@ -658,7 +664,7 @@ export function AnalyticsPage() {
                 ) : (
                   <Button
                     onClick={handleSync}
-                    disabled={syncing}
+                    disabled={syncing || unifiedLoading}
                     className="w-full"
                   >
                     <RefreshCw size={16} className="mr-2" />
