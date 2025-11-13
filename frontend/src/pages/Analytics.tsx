@@ -296,18 +296,10 @@ export function AnalyticsPage() {
       console.log('🛑 Requesting sync stop...');
       const response = await analyticsApi.stopSync();
       console.log('✅ Stop signal sent:', response.data.message);
-      toast({
-        title: 'Stopping Sync',
-        description: 'Sync will stop after completing the current operation. Please wait...',
-        variant: 'default',
-      });
+      alert('Stop signal sent. Sync will stop after completing the current operation. Please wait...');
     } catch (err: any) {
       console.error('❌ Failed to stop sync:', err);
-      toast({
-        title: 'Error',
-        description: err.response?.data?.error || 'Failed to stop sync',
-        variant: 'destructive',
-      });
+      setError(err.response?.data?.error || 'Failed to stop sync');
     }
   };
 
