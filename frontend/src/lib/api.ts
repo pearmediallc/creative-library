@@ -95,6 +95,17 @@ export const mediaApi = {
     api.patch(`/media/${id}`, data),
   delete: (id: string) => api.delete(`/media/${id}`),
   getStats: () => api.get('/media/stats'),
+
+  // ✨ NEW: Bulk metadata operations
+  bulkMetadata: (data: {
+    file_ids: string[];
+    operation: 'add' | 'remove' | 'remove_and_add';
+    metadata?: any;
+  }) => api.post('/media/bulk/metadata', data),
+
+  getBulkStatus: (jobId: string) => api.get(`/media/bulk/status/${jobId}`),
+
+  cancelBulkOperation: (jobId: string) => api.post(`/media/bulk/cancel/${jobId}`),
 };
 
 // Facebook endpoints

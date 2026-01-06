@@ -180,6 +180,16 @@ class MediaFile extends BaseModel {
   }
 
   /**
+   * ✨ NEW: Update media file record
+   * @param {string} id - Media file ID
+   * @param {Object} updates - Fields to update
+   * @returns {Promise<Object>} Updated media file record
+   */
+  async updateMediaFile(id, updates) {
+    return this.update(id, updates);
+  }
+
+  /**
    * Get storage statistics
    * @returns {Promise<Object>} Storage stats
    */

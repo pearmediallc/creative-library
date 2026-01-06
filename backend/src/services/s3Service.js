@@ -1,5 +1,5 @@
 const { s3Client, getPresignedDownloadUrl, generateS3Key } = require('../config/aws');
-const { PutObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
+const { PutObjectCommand, DeleteObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
 const sharp = require('sharp');
 const ffmpeg = require('fluent-ffmpeg');
 const path = require('path');
@@ -334,6 +334,77 @@ class S3Service {
     }
 
     return { valid: true };
+  }
+
+  /**
+   * ✨ NEW: Download file buffer from S3
+   * Used by bulk metadata operations to download, process, and re-upload files
+   * @param {string} s3Key - S3 object key
+   * @returns {Promise<Buffer>} File buffer
+   */
+  async downloadFileBuffer(s3Key) {
+    try {
+      logger.info(`Downloading file from S3: ${s3Key}`);
+
+      const command = new GetObjectCommand({
+        Bucket: S3_BUCKET,
+        Key: s3Key
+      });
+
+      const response = await s3Client.send(command);
+
+      // Convert stream to buffer
+      const chunks = [];
+      for await (const chunk of response.Body) {
+        chunks.push(chunk);
+      }
+
+      const buffer = Buffer.concat(chunks);
+      logger.info(`Downloaded ${buffer.length} bytes from S3`);
+
+      return buffer;
+
+    } catch (error) {
+      logger.error(`Failed to download file from S3: ${s3Key}`, error);
+      throw new Error(`S3 download failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * ✨ NEW: Upload buffer directly to S3
+   * Used by bulk metadata operations to upload processed files
+   * @param {Buffer} buffer - File buffer to upload
+   * @param {string} s3Key - S3 object key
+   * @param {string} mimeType - File MIME type
+   * @returns {Promise<Object>} Upload result
+   */
+  async uploadFileBuffer(buffer, s3Key, mimeType) {
+    try {
+      logger.info(`Uploading buffer to S3: ${s3Key} (${buffer.length} bytes)`);
+
+      const command = new PutObjectCommand({
+        Bucket: S3_BUCKET,
+        Key: s3Key,
+        Body: buffer,
+        ContentType: mimeType,
+        ServerSideEncryption: 'AES256'
+      });
+
+      await s3Client.send(command);
+
+      const url = `${process.env.AWS_CLOUDFRONT_URL}/${s3Key}`;
+
+      logger.info(`Uploaded successfully to S3: ${url}`);
+
+      return {
+        s3Key,
+        url
+      };
+
+    } catch (error) {
+      logger.error(`Failed to upload buffer to S3: ${s3Key}`, error);
+      throw new Error(`S3 upload failed: ${error.message}`);
+    }
   }
 
   /**

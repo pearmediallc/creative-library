@@ -78,4 +78,14 @@ router.post('/bulk/metadata',
   mediaController.bulkMetadataOperation.bind(mediaController)
 );
 
+router.get('/bulk/status/:jobId',
+  authenticateToken,
+  mediaController.getBulkOperationStatus.bind(mediaController)
+);
+
+router.post('/bulk/cancel/:jobId',
+  authenticateToken,
+  mediaController.cancelBulkOperation.bind(mediaController)
+);
+
 module.exports = router;

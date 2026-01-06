@@ -8,6 +8,7 @@ import { MediaFile, Editor } from '../types';
 import { formatBytes, formatDate } from '../lib/utils';
 import { Image as ImageIcon, Video, X, Download, Trash2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { BulkMetadataEditor } from '../components/BulkMetadataEditor';
 
 export function MediaLibraryPage() {
   const { user } = useAuth();
@@ -20,6 +21,11 @@ export function MediaLibraryPage() {
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const filesPerPage = 12;
+
+  // ✨ NEW: Bulk editor state
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedFiles, setSelectedFiles] = useState<string[]>([]);
+  const [showBulkEditor, setShowBulkEditor] = useState(false);
 
   // Role-based permissions
   const isAdmin = user?.role === 'admin';
@@ -85,6 +91,26 @@ export function MediaLibraryPage() {
     }
   };
 
+  // ✨ NEW: Toggle file selection
+  const toggleFileSelection = (fileId: string) => {
+    setSelectedFiles(prev =>
+      prev.includes(fileId)
+        ? prev.filter(id => id !== fileId)
+        : [...prev, fileId]
+    );
+  };
+
+  // ✨ NEW: Toggle select all
+  const toggleSelectAll = () => {
+    if (selectedFiles.length === files.length) {
+      setSelectedFiles([]);
+    } else {
+      setSelectedFiles(files.map(f => f.id));
+    }
+  };
+
+  const selectedFileObjects = files.filter(f => selectedFiles.includes(f.id));
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -94,11 +120,43 @@ export function MediaLibraryPage() {
             <p className="text-muted-foreground">Manage your creative assets</p>
           </div>
           {canUpload && (
-            <Button onClick={() => setShowUploadModal(true)}>
-              Upload File
-            </Button>
+            <div className="flex gap-2">
+              <Button onClick={() => setShowUploadModal(true)}>
+                Upload File
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setSelectionMode(!selectionMode);
+                  setSelectedFiles([]);
+                }}
+              >
+                {selectionMode ? 'Cancel Selection' : 'Bulk Edit'}
+              </Button>
+              {selectionMode && selectedFiles.length > 0 && (
+                <Button onClick={() => setShowBulkEditor(true)}>
+                  Edit {selectedFiles.length} Selected →
+                </Button>
+              )}
+            </div>
           )}
         </div>
+
+        {selectionMode && (
+          <div className="flex items-center gap-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-md">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={selectedFiles.length === files.length && files.length > 0}
+                onChange={toggleSelectAll}
+                className="w-4 h-4"
+              />
+              <span className="text-sm font-medium">
+                Select All ({selectedFiles.length} / {files.length})
+              </span>
+            </label>
+          </div>
+        )}
 
         <div className="flex gap-4">
           <Input
@@ -150,6 +208,16 @@ export function MediaLibraryPage() {
                           ) : (
                             <Video className="w-16 h-16 text-muted-foreground" />
                           )}
+                        </div>
+                      )}
+                      {selectionMode && (
+                        <div className="absolute top-2 left-2">
+                          <input
+                            type="checkbox"
+                            checked={selectedFiles.includes(file.id)}
+                            onChange={() => toggleFileSelection(file.id)}
+                            className="w-5 h-5 cursor-pointer"
+                          />
                         </div>
                       )}
                       <div className="absolute top-2 right-2">
@@ -260,6 +328,18 @@ export function MediaLibraryPage() {
           fileName={files.find(f => f.id === deleteConfirmId)?.original_filename || 'this file'}
           onConfirm={() => handleDelete(deleteConfirmId)}
           onCancel={() => setDeleteConfirmId(null)}
+        />
+      )}
+
+      {showBulkEditor && (
+        <BulkEditorModal
+          selectedFiles={files.filter(f => selectedFiles.includes(f.id))}
+          onClose={() => setShowBulkEditor(false)}
+          onComplete={() => {
+            setSelectionMode(false);
+            setSelectedFiles([]);
+            fetchData();
+          }}
         />
       )}
     </DashboardLayout>
@@ -487,5 +567,26 @@ function DeleteConfirmModal({
         </div>
       </Card>
     </div>
+  );
+}
+
+function BulkEditorModal({
+  selectedFiles,
+  onClose,
+  onComplete,
+}: {
+  selectedFiles: MediaFile[];
+  onClose: () => void;
+  onComplete: () => void;
+}) {
+  return (
+    <BulkMetadataEditor
+      selectedFiles={selectedFiles}
+      onClose={onClose}
+      onComplete={() => {
+        onComplete();
+        onClose();
+      }}
+    />
   );
 }

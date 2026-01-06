@@ -1,6 +1,8 @@
 const mediaService = require('../services/mediaService');
 const logger = require('../utils/logger');
 const { logActivity } = require('../middleware/activityLogger');
+const { v4: uuidv4 } = require('uuid');
+const bulkMetadataService = require('../services/bulkMetadataService');
 
 class MediaController {
   /**
@@ -406,13 +408,13 @@ class MediaController {
   }
 
   /**
-   * ✨ NEW: Bulk metadata operations
+   * ✨ NEW: Start bulk metadata operation (async)
    * POST /api/media/bulk/metadata
-   * Body: { file_ids: [], action: 'remove' | 'add', metadata: {} }
+   * Body: { file_ids: [], operation: 'add' | 'remove' | 'remove_and_add', metadata: {} }
    */
   async bulkMetadataOperation(req, res, next) {
     try {
-      const { file_ids, action, metadata } = req.body;
+      const { file_ids, operation, metadata } = req.body;
       const userId = req.user.id;
 
       // Validate input
@@ -423,49 +425,101 @@ class MediaController {
         });
       }
 
-      if (!action || !['remove', 'add'].includes(action)) {
+      if (!operation || !['add', 'remove', 'remove_and_add'].includes(operation)) {
         return res.status(400).json({
           success: false,
-          error: 'action must be either "remove" or "add"'
+          error: 'operation must be: add, remove, or remove_and_add'
         });
       }
 
-      logger.info(`Bulk metadata operation: ${action} on ${file_ids.length} files by user ${userId}`);
+      // Create unique job ID
+      const jobId = uuidv4();
 
-      const results = [];
+      logger.info(`Starting bulk metadata operation ${jobId}: ${operation} on ${file_ids.length} files by user ${userId}`);
 
-      // Process each file
-      for (const fileId of file_ids) {
-        try {
-          // This would require implementing the bulk operation in mediaService
-          // For now, return a placeholder response
-          results.push({
-            file_id: fileId,
-            success: true,
-            message: `Metadata ${action} operation queued`
-          });
-        } catch (error) {
-          results.push({
-            file_id: fileId,
-            success: false,
-            error: error.message
-          });
-        }
-      }
+      // Start async processing (doesn't block response)
+      bulkMetadataService.processBulkOperation(
+        jobId,
+        file_ids,
+        operation,
+        metadata || {},
+        userId
+      ).catch(error => {
+        logger.error('Bulk operation background error:', error);
+      });
 
+      // Return job ID immediately
       res.json({
         success: true,
-        message: `Bulk ${action} operation completed`,
+        message: 'Bulk metadata operation started',
         data: {
-          total: file_ids.length,
-          successful: results.filter(r => r.success).length,
-          failed: results.filter(r => !r.success).length,
-          results
+          job_id: jobId,
+          status_url: `/api/media/bulk/status/${jobId}`,
+          total_files: file_ids.length,
+          operation: operation
         }
       });
 
     } catch (error) {
       logger.error('Bulk metadata operation error', { error: error.message });
+      next(error);
+    }
+  }
+
+  /**
+   * ✨ NEW: Get bulk operation status
+   * GET /api/media/bulk/status/:jobId
+   */
+  async getBulkOperationStatus(req, res, next) {
+    try {
+      const { jobId } = req.params;
+
+      const job = bulkMetadataService.getJobStatus(jobId);
+
+      if (!job) {
+        return res.status(404).json({
+          success: false,
+          error: 'Job not found. It may have expired (jobs are kept for 1 hour)'
+        });
+      }
+
+      res.json({
+        success: true,
+        data: job
+      });
+
+    } catch (error) {
+      logger.error('Get bulk status error', { error: error.message });
+      next(error);
+    }
+  }
+
+  /**
+   * ✨ NEW: Cancel bulk operation
+   * POST /api/media/bulk/cancel/:jobId
+   */
+  async cancelBulkOperation(req, res, next) {
+    try {
+      const { jobId } = req.params;
+
+      const cancelled = bulkMetadataService.cancelJob(jobId);
+
+      if (!cancelled) {
+        return res.status(400).json({
+          success: false,
+          error: 'Job cannot be cancelled (not found or already completed)'
+        });
+      }
+
+      logger.info(`Bulk operation ${jobId} cancelled by user`);
+
+      res.json({
+        success: true,
+        message: 'Bulk operation cancelled successfully'
+      });
+
+    } catch (error) {
+      logger.error('Cancel bulk operation error', { error: error.message });
       next(error);
     }
   }
