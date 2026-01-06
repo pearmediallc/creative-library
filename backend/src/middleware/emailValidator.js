@@ -2,10 +2,14 @@
  * Email Whitelist Validation Middleware
  *
  * Validates user email against allowed_emails whitelist table
+ * Can be disabled via EMAIL_WHITELIST_ENABLED environment variable
  */
 
 const { query } = require('../config/database');
 const logger = require('../utils/logger');
+
+// Check if whitelist is enabled (default: true for security)
+const WHITELIST_ENABLED = process.env.EMAIL_WHITELIST_ENABLED !== 'false';
 
 /**
  * Check if email exists in whitelist
@@ -31,6 +35,10 @@ async function checkEmailWhitelist(email) {
 /**
  * Validate email against whitelist
  * Middleware for registration
+ *
+ * Can be bypassed by:
+ * 1. Setting EMAIL_WHITELIST_ENABLED=false in environment
+ * 2. Request coming from admin (req.user.role === 'admin')
  */
 async function validateEmailWhitelist(req, res, next) {
   const { email } = req.body;
@@ -40,6 +48,23 @@ async function validateEmailWhitelist(req, res, next) {
       success: false,
       error: 'Email is required'
     });
+  }
+
+  // Bypass whitelist if disabled via environment variable
+  if (!WHITELIST_ENABLED) {
+    logger.debug('Email whitelist validation bypassed (disabled via environment)', {
+      email: email.split('@')[0] + '@***'
+    });
+    return next();
+  }
+
+  // Bypass whitelist if request is from authenticated admin
+  if (req.user && req.user.role === 'admin') {
+    logger.debug('Email whitelist validation bypassed (admin user)', {
+      email: email.split('@')[0] + '@***',
+      adminId: req.user.id
+    });
+    return next();
   }
 
   try {

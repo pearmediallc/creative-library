@@ -5,7 +5,7 @@ import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { adminApi } from '../lib/api';
 import { User } from '../types';
-import { Shield, Plus, Edit2, Check, X } from 'lucide-react';
+import { Shield, Plus, Edit2, Check, X, Key, Copy } from 'lucide-react';
 
 export function AdminPage() {
   const [users, setUsers] = useState<User[]>([]);
@@ -21,6 +21,12 @@ export function AdminPage() {
     upload_limit_monthly: 100,
   });
   const [error, setError] = useState('');
+
+  // Password reset state
+  const [resetPasswordUserId, setResetPasswordUserId] = useState<string | null>(null);
+  const [adminPassword, setAdminPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [generatedPassword, setGeneratedPassword] = useState<string | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -82,6 +88,48 @@ export function AdminPage() {
       role: user.role,
       upload_limit_monthly: user.upload_limit_monthly,
     });
+  };
+
+  const handleResetPassword = async (userId: string) => {
+    if (!adminPassword || !newPassword) {
+      setError('Please enter both your admin password and new user password');
+      return;
+    }
+
+    if (newPassword.length < 8) {
+      setError('New password must be at least 8 characters');
+      return;
+    }
+
+    try {
+      const response = await adminApi.resetUserPassword(userId, {
+        admin_password: adminPassword,
+        new_password: newPassword
+      });
+
+      setGeneratedPassword(response.data.data.new_password);
+      setAdminPassword('');
+      setNewPassword('');
+      setError('');
+
+      // Log activity
+      console.log('Password reset successful for user:', userId);
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to reset password');
+    }
+  };
+
+  const closeResetModal = () => {
+    setResetPasswordUserId(null);
+    setAdminPassword('');
+    setNewPassword('');
+    setGeneratedPassword(null);
+    setError('');
+  };
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    alert('Password copied to clipboard!');
   };
 
   if (loading) {
@@ -286,12 +334,22 @@ export function AdminPage() {
                         </button>
                       </>
                     ) : (
-                      <button
-                        onClick={() => startEdit(user)}
-                        className="p-2 hover:bg-accent rounded"
-                      >
-                        <Edit2 size={18} className="text-muted-foreground" />
-                      </button>
+                      <>
+                        <button
+                          onClick={() => startEdit(user)}
+                          className="p-2 hover:bg-accent rounded"
+                          title="Edit user"
+                        >
+                          <Edit2 size={18} className="text-muted-foreground" />
+                        </button>
+                        <button
+                          onClick={() => setResetPasswordUserId(user.id)}
+                          className="p-2 hover:bg-accent rounded"
+                          title="Reset password"
+                        >
+                          <Key size={18} className="text-muted-foreground" />
+                        </button>
+                      </>
                     )}
                   </div>
                 </div>
@@ -299,6 +357,99 @@ export function AdminPage() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Password Reset Modal */}
+        {resetPasswordUserId && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+            <Card className="w-full max-w-md bg-white dark:bg-gray-900">
+              <CardHeader>
+                <CardTitle>Reset User Password</CardTitle>
+                <CardDescription>
+                  {generatedPassword
+                    ? 'Password has been reset successfully'
+                    : 'Enter your admin password to confirm password reset'}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {!generatedPassword ? (
+                  <div className="space-y-4">
+                    {error && (
+                      <div className="p-3 bg-destructive/10 text-destructive text-sm rounded-md">
+                        {error}
+                      </div>
+                    )}
+
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Your Admin Password</label>
+                      <Input
+                        type="password"
+                        placeholder="Enter your password to confirm"
+                        value={adminPassword}
+                        onChange={(e) => setAdminPassword(e.target.value)}
+                        autoFocus
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">New Password for User</label>
+                      <Input
+                        type="text"
+                        placeholder="Enter new password (min 8 characters)"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Min 8 characters. You can copy this password to give to the user.
+                      </p>
+                    </div>
+
+                    <div className="flex gap-2 pt-4">
+                      <Button
+                        variant="outline"
+                        onClick={closeResetModal}
+                        className="flex-1"
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        onClick={() => handleResetPassword(resetPasswordUserId)}
+                        className="flex-1"
+                        disabled={!adminPassword || !newPassword}
+                      >
+                        Reset Password
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="p-4 bg-primary/10 rounded-lg space-y-2">
+                      <p className="text-sm font-medium">New Password:</p>
+                      <div className="flex items-center gap-2">
+                        <code className="flex-1 p-2 bg-background rounded text-sm font-mono">
+                          {generatedPassword}
+                        </code>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => copyToClipboard(generatedPassword)}
+                        >
+                          <Copy size={16} />
+                        </Button>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Copy this password and provide it to the user.
+                      </p>
+                    </div>
+
+                    <Button onClick={closeResetModal} className="w-full">
+                      Done
+                    </Button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        )}
       </div>
     </DashboardLayout>
   );

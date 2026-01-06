@@ -18,6 +18,7 @@ router.get('/users',
   adminController.getUsers.bind(adminController)
 );
 
+// Admin user creation - email whitelist will be bypassed automatically via middleware check
 router.post('/users',
   validate(schemas.createUser),
   adminController.createUser.bind(adminController)
