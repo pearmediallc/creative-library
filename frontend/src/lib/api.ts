@@ -57,12 +57,26 @@ export const editorApi = {
 
 // Media endpoints
 export const mediaApi = {
-  upload: (file: File, editorId: string, tags?: string[], description?: string) => {
+  upload: (
+    file: File,
+    editorId: string,
+    tags?: string[],
+    description?: string,
+    metadataOptions?: { removeMetadata?: boolean; addMetadata?: boolean }
+  ) => {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('editor_id', editorId);
     if (tags) formData.append('tags', JSON.stringify(tags));
     if (description) formData.append('description', description);
+
+    // ✨ NEW: Add metadata options
+    if (metadataOptions?.removeMetadata) {
+      formData.append('remove_metadata', 'true');
+    }
+    if (metadataOptions?.addMetadata) {
+      formData.append('add_metadata', 'true');
+    }
 
     return api.post('/media/upload', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },

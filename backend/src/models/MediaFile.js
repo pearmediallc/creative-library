@@ -28,6 +28,9 @@ class MediaFile extends BaseModel {
    * @param {string} data.thumbnail_url - Thumbnail URL
    * @param {Array<string>} data.tags - Tags array
    * @param {string} data.description - Description
+   * @param {boolean} data.metadata_stripped - Whether metadata was removed
+   * @param {Object} data.metadata_embedded - Embedded metadata details
+   * @param {Array<string>} data.metadata_operations - Metadata operations performed
    * @returns {Promise<Object>} Created media file record
    */
   async createMediaFile(data) {
@@ -47,7 +50,10 @@ class MediaFile extends BaseModel {
       duration: data.duration || null,
       thumbnail_url: data.thumbnail_url || null,
       tags: data.tags || [],
-      description: data.description || null
+      description: data.description || null,
+      metadata_stripped: data.metadata_stripped || false,
+      metadata_embedded: data.metadata_embedded || null,
+      metadata_operations: data.metadata_operations || []
     });
   }
 

@@ -281,6 +281,9 @@ function UploadModal({
   const [description, setDescription] = useState('');
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
+  // ✨ NEW: Metadata options state
+  const [removeMetadata, setRemoveMetadata] = useState(false);
+  const [addMetadata, setAddMetadata] = useState(true); // Default: add creator metadata
 
   console.log('UploadModal - Editors received:', editors.length, editors);
 
@@ -296,7 +299,11 @@ function UploadModal({
 
     try {
       const tagArray = tags.split(',').map((t) => t.trim()).filter(Boolean);
-      await mediaApi.upload(file, editorId, tagArray, description);
+      // ✨ NEW: Pass metadata options to upload
+      await mediaApi.upload(file, editorId, tagArray, description, {
+        removeMetadata,
+        addMetadata,
+      });
       onSuccess();
     } catch (err: any) {
       setError(err.response?.data?.error || 'Upload failed');
@@ -378,6 +385,44 @@ function UploadModal({
               value={description}
               onChange={(e) => setDescription(e.target.value)}
             />
+          </div>
+
+          {/* ✨ NEW: Metadata Options */}
+          <div className="space-y-3 p-4 rounded-md bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
+            <label className="text-sm font-medium block">Metadata Options</label>
+
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={removeMetadata}
+                  onChange={(e) => setRemoveMetadata(e.target.checked)}
+                  className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary"
+                />
+                <span className="text-sm">Remove existing metadata before upload</span>
+              </label>
+
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={addMetadata}
+                  onChange={(e) => setAddMetadata(e.target.checked)}
+                  className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary"
+                />
+                <span className="text-sm">Embed creator metadata (editor name, date, tags)</span>
+              </label>
+            </div>
+
+            {removeMetadata && addMetadata && (
+              <p className="text-xs text-muted-foreground mt-2">
+                ℹ️ File will be cleaned first, then creator metadata will be embedded
+              </p>
+            )}
+            {!removeMetadata && !addMetadata && (
+              <p className="text-xs text-muted-foreground mt-2">
+                ℹ️ File will be uploaded as-is without metadata modifications
+              </p>
+            )}
           </div>
 
           <div className="flex gap-2">

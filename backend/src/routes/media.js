@@ -14,6 +14,7 @@ const mediaController = require('../controllers/mediaController');
 const { validate, schemas } = require('../middleware/validate');
 const { authenticateToken, requireRole, requireAdmin } = require('../middleware/auth');
 const { upload } = require('../middleware/upload');
+const { processMetadata } = require('../middleware/metadataMiddleware');
 
 // Upload endpoint with file upload middleware
 // Only admin and creative users can upload
@@ -22,6 +23,7 @@ router.post('/upload',
   requireRole('admin', 'creative'),
   upload.single('file'),
   validate(schemas.mediaUpload),
+  processMetadata,  // ✨ NEW: Process metadata before S3 upload
   mediaController.upload.bind(mediaController)
 );
 
@@ -67,6 +69,13 @@ router.delete('/:id',
   authenticateToken,
   requireAdmin,
   mediaController.deleteFile.bind(mediaController)
+);
+
+// ✨ NEW: Bulk metadata operations
+router.post('/bulk/metadata',
+  authenticateToken,
+  requireRole('admin', 'creative'),
+  mediaController.bulkMetadataOperation.bind(mediaController)
 );
 
 module.exports = router;

@@ -115,6 +115,9 @@ class MediaService {
 
       console.log('\n💾 Creating database record...');
 
+      // Get metadata operations from request (if any)
+      const metadataOps = metadata.metadataOperations || {};
+
       // Create database record matching schema
       const mediaFile = await MediaFile.createMediaFile({
         uploaded_by: userId,
@@ -132,7 +135,16 @@ class MediaService {
         duration: null,
         thumbnail_url: thumbnailUrl,
         tags: metadata.tags || [],
-        description: metadata.description || null
+        description: metadata.description || null,
+        // ✨ NEW: Metadata tracking fields
+        metadata_stripped: metadataOps.removed || false,
+        metadata_embedded: metadataOps.added ? {
+          creator_id: editor.name,
+          timestamp: new Date().toISOString(),
+          tags: metadata.tags || [],
+          description: metadata.description || null
+        } : null,
+        metadata_operations: metadataOps.operations || []
       });
 
       console.log('✅ Database record created successfully');
