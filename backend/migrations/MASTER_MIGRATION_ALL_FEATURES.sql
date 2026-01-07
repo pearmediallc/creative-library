@@ -142,7 +142,7 @@ CREATE INDEX IF NOT EXISTS idx_fb_campaigns_fb_id ON facebook_campaigns(fb_campa
 CREATE TABLE IF NOT EXISTS facebook_ads (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   fb_ad_id VARCHAR(255) UNIQUE NOT NULL,
-  fb_campaign_id VARCHAR(255) REFERENCES facebook_campaigns(fb_campaign_id),
+  fb_campaign_id VARCHAR(255),
   fb_ad_account_id VARCHAR(255) NOT NULL,
   ad_name TEXT NOT NULL,
   ad_name_hash VARCHAR(64),
