@@ -11,6 +11,7 @@
 const express = require('express');
 const router = express.Router();
 const mediaController = require('../controllers/mediaController');
+const versionController = require('../controllers/versionController');
 const { validate, schemas } = require('../middleware/validate');
 const { authenticateToken, requireRole, requireAdmin } = require('../middleware/auth');
 const { upload } = require('../middleware/upload');
@@ -98,6 +99,31 @@ router.post('/bulk/cancel/:jobId',
 router.post('/bulk/download-zip',
   authenticateToken,
   mediaController.bulkDownloadZip.bind(mediaController)
+);
+
+// ✨ NEW: File versioning endpoints
+router.get('/:id/versions',
+  authenticateToken,
+  versionController.getVersionHistory.bind(versionController)
+);
+
+router.post('/:id/versions',
+  authenticateToken,
+  requireRole('admin', 'creative'),
+  upload.single('file'),
+  versionController.createVersion.bind(versionController)
+);
+
+router.post('/:id/versions/:versionId/restore',
+  authenticateToken,
+  requireRole('admin', 'creative'),
+  versionController.restoreVersion.bind(versionController)
+);
+
+router.delete('/:id/versions/:versionId',
+  authenticateToken,
+  requireRole('admin', 'creative'),
+  versionController.deleteVersion.bind(versionController)
 );
 
 module.exports = router;

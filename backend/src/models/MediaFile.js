@@ -51,6 +51,10 @@ class MediaFile extends BaseModel {
       thumbnail_url: data.thumbnail_url || null,
       tags: data.tags || [],
       description: data.description || null,
+      folder_id: data.folder_id || null,
+      assigned_buyer_id: data.assigned_buyer_id || null,
+      parent_file_id: data.parent_file_id || null,
+      version_number: data.version_number || 1,
       metadata_stripped: data.metadata_stripped || false,
       metadata_embedded: data.metadata_embedded || null,
       metadata_operations: data.metadata_operations || []
