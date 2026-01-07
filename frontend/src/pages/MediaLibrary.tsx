@@ -17,6 +17,7 @@ import { CreateFolderModal } from '../components/CreateFolderModal';
 import { FolderContextMenu } from '../components/FolderContextMenu';
 import { AdvancedFilterPanel } from '../components/AdvancedFilterPanel';
 import { useMediaFilters } from '../hooks/useMediaFilters';
+import { BatchUploadModal } from '../components/BatchUploadModal';
 
 interface FolderNode {
   id: string;
@@ -341,7 +342,7 @@ export function MediaLibraryPage() {
               {canUpload && (
                 <div className="flex gap-2">
                   <Button onClick={() => setShowUploadModal(true)}>
-                    Upload File
+                    Upload Files
                   </Button>
                   <Button
                     variant="outline"
@@ -608,14 +609,14 @@ export function MediaLibraryPage() {
 
       {/* Modals */}
       {showUploadModal && (
-        <UploadModal
-          editors={editors}
-          currentFolderId={currentFolderId}
+        <BatchUploadModal
+          isOpen={showUploadModal}
           onClose={() => setShowUploadModal(false)}
-          onSuccess={() => {
-            setShowUploadModal(false);
-            fetchData();
-          }}
+          onSuccess={fetchData}
+          editorId={editors.length > 0 ? editors[0].id : ''}
+          currentFolderId={currentFolderId}
+          editors={editors}
+          buyers={buyers}
         />
       )}
 
