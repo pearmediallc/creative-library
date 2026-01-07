@@ -144,6 +144,12 @@ export const mediaApi = {
     api.post(`/media/${id}/versions/${versionId}/restore`),
   deleteVersion: (id: string, versionId: string) =>
     api.delete(`/media/${id}/versions/${versionId}`),
+
+  // ✨ NEW: Bulk operations
+  bulkDelete: (fileIds: string[]) =>
+    api.delete('/media/bulk', { data: { file_ids: fileIds } }),
+  bulkMove: (fileIds: string[], targetFolderId: string | null) =>
+    api.post('/media/bulk/move', { file_ids: fileIds, target_folder_id: targetFolderId }),
 };
 
 // Facebook endpoints

@@ -6,7 +6,7 @@ import { Card } from '../components/ui/Card';
 import { mediaApi, editorApi, folderApi, adminApi } from '../lib/api';
 import { MediaFile, Editor } from '../types';
 import { formatBytes, formatDate } from '../lib/utils';
-import { Image as ImageIcon, Video, X, Download, Trash2, Info, PackageOpen, Calendar, Filter, Clock } from 'lucide-react';
+import { Image as ImageIcon, Video, X, Download, Trash2, Info, PackageOpen, Calendar, Filter, Clock, FolderInput } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { BulkMetadataEditor } from '../components/BulkMetadataEditor';
 import { MetadataViewer } from '../components/MetadataViewer';
@@ -290,6 +290,48 @@ export function MediaLibraryPage() {
     }
   };
 
+  const handleBulkDelete = async () => {
+    if (selectedFiles.length === 0) return;
+
+    if (!window.confirm(`Delete ${selectedFiles.length} selected files? This cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      const response = await mediaApi.bulkDelete(selectedFiles);
+      alert(response.data.message);
+      setSelectedFiles([]);
+      setSelectionMode(false);
+      fetchData();
+    } catch (error: any) {
+      console.error('Failed to bulk delete:', error);
+      alert(error.response?.data?.error || 'Failed to delete files');
+    }
+  };
+
+  const handleBulkMoveToFolder = async () => {
+    if (selectedFiles.length === 0) return;
+
+    const targetFolderName = window.prompt(
+      `Move ${selectedFiles.length} files to which folder?\n\nEnter folder ID or leave empty for root folder:`
+    );
+
+    if (targetFolderName === null) return; // User cancelled
+
+    const targetFolderId = targetFolderName.trim() || null;
+
+    try {
+      const response = await mediaApi.bulkMove(selectedFiles, targetFolderId);
+      alert(response.data.message);
+      setSelectedFiles([]);
+      setSelectionMode(false);
+      fetchData();
+    } catch (error: any) {
+      console.error('Failed to bulk move:', error);
+      alert(error.response?.data?.error || 'Failed to move files');
+    }
+  };
+
   // Drag and drop handlers
   const handleFileDragStart = (e: React.DragEvent, fileId: string) => {
     if (selectedFiles.includes(fileId)) {
@@ -373,6 +415,23 @@ export function MediaLibraryPage() {
                         <PackageOpen className="w-4 h-4 mr-2" />
                         {downloadingZip ? 'Creating ZIP...' : `Download ${selectedFiles.length} as ZIP`}
                       </Button>
+                      <Button
+                        variant="outline"
+                        onClick={handleBulkMoveToFolder}
+                      >
+                        <FolderInput className="w-4 h-4 mr-2" />
+                        Move to Folder
+                      </Button>
+                      {canDelete && (
+                        <Button
+                          variant="outline"
+                          className="text-destructive hover:text-destructive"
+                          onClick={handleBulkDelete}
+                        >
+                          <Trash2 className="w-4 h-4 mr-2" />
+                          Delete {selectedFiles.length}
+                        </Button>
+                      )}
                     </>
                   )}
                 </div>
