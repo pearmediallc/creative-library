@@ -1,10 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const teamController = require('../controllers/teamController');
-const { authenticate } = require('../middleware/auth');
+const { authenticateToken } = require('../middleware/auth');
 
 // All routes require authentication
-router.use(authenticate);
+router.use(authenticateToken);
 
 // Team CRUD
 router.post('/', teamController.createTeam);
