@@ -32,17 +32,29 @@ pg_dump -U your_username -d creative_library > backup_$(date +%Y%m%d_%H%M%S).sql
 
 **Save this backup file in a safe location!**
 
-## Step 2: Run the Consolidated Migration
+## Step 2: Choose Your Migration Path
 
-The migration file is idempotent and can be run multiple times safely.
+You have two migration options depending on your database state:
+
+### Option A: Fresh Database (Recommended)
+If you're setting up a new database or want to rebuild from scratch:
 
 ```bash
-# Navigate to backend directory
 cd /Users/mac/Desktop/creative-library/backend
+psql -U your_username -d creative_library -f migrations/MASTER_MIGRATION_ALL_FEATURES.sql
+```
 
-# Run the migration (replace with your database credentials)
+This creates ALL tables from scratch in one go (24 tables total).
+
+### Option B: Existing Database (Incremental)
+If you already have the base schema and folders system, run only the new features:
+
+```bash
+cd /Users/mac/Desktop/creative-library/backend
 psql -U your_username -d creative_library -f migrations/CONSOLIDATED_20240113_all_new_features.sql
 ```
+
+This adds only the 10 new features (Comments, File Requests, Smart Collections, Public Links).
 
 **Expected Output:**
 ```
@@ -56,6 +68,7 @@ CREATE TABLE
 CREATE INDEX
 CREATE INDEX
 ...
+✅ MIGRATION COMPLETED SUCCESSFULLY!
 ```
 
 ## Step 3: Verify Migration Success
