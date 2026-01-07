@@ -6,7 +6,7 @@ import { Card } from '../components/ui/Card';
 import { mediaApi, editorApi, folderApi, adminApi } from '../lib/api';
 import { MediaFile, Editor } from '../types';
 import { formatBytes, formatDate } from '../lib/utils';
-import { Image as ImageIcon, Video, X, Download, Trash2, Info, PackageOpen, Calendar, Filter } from 'lucide-react';
+import { Image as ImageIcon, Video, X, Download, Trash2, Info, PackageOpen, Calendar, Filter, Clock } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { BulkMetadataEditor } from '../components/BulkMetadataEditor';
 import { MetadataViewer } from '../components/MetadataViewer';
@@ -18,6 +18,7 @@ import { FolderContextMenu } from '../components/FolderContextMenu';
 import { AdvancedFilterPanel } from '../components/AdvancedFilterPanel';
 import { useMediaFilters } from '../hooks/useMediaFilters';
 import { BatchUploadModal } from '../components/BatchUploadModal';
+import { VersionHistoryModal } from '../components/VersionHistoryModal';
 
 interface FolderNode {
   id: string;
@@ -69,6 +70,12 @@ export function MediaLibraryPage() {
     metadata: Record<string, any>;
   } | null>(null);
   const [downloadingZip, setDownloadingZip] = useState(false);
+
+  // Version history state
+  const [versionHistoryFile, setVersionHistoryFile] = useState<{
+    id: string;
+    filename: string;
+  } | null>(null);
 
   // Drag and drop state
   const [draggedFileIds, setDraggedFileIds] = useState<string[]>([]);
@@ -548,17 +555,31 @@ export function MediaLibraryPage() {
                                     Metadata
                                   </Button>
                                 </div>
-                                {canDelete && (
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="w-full text-destructive hover:text-destructive"
-                                    onClick={() => setDeleteConfirmId(file.id)}
-                                  >
-                                    <Trash2 className="w-4 h-4 mr-1" />
-                                    Delete
-                                  </Button>
-                                )}
+                                <div className="flex gap-2">
+                                  {canUpload && (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="flex-1"
+                                      onClick={() => setVersionHistoryFile({ id: file.id, filename: file.original_filename })}
+                                      title="View version history"
+                                    >
+                                      <Clock className="w-4 h-4 mr-1" />
+                                      Versions
+                                    </Button>
+                                  )}
+                                  {canDelete && (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="flex-1 text-destructive hover:text-destructive"
+                                      onClick={() => setDeleteConfirmId(file.id)}
+                                    >
+                                      <Trash2 className="w-4 h-4 mr-1" />
+                                      Delete
+                                    </Button>
+                                  )}
+                                </div>
                               </div>
                             </div>
                           </Card>
@@ -681,6 +702,16 @@ export function MediaLibraryPage() {
         folders={folders}
         availableTags={availableTags}
       />
+
+      {versionHistoryFile && (
+        <VersionHistoryModal
+          isOpen={true}
+          onClose={() => setVersionHistoryFile(null)}
+          fileId={versionHistoryFile.id}
+          fileName={versionHistoryFile.filename}
+          onVersionRestored={fetchData}
+        />
+      )}
     </DashboardLayout>
   );
 }

@@ -127,6 +127,23 @@ export const mediaApi = {
     api.post('/media/bulk/download-zip', { file_ids: fileIds }, {
       responseType: 'blob',
     }),
+
+  // ✨ NEW: File versioning
+  getVersionHistory: (id: string) => api.get(`/media/${id}/versions`),
+  createVersion: (id: string, file: File, description?: string) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (description) {
+      formData.append('description', description);
+    }
+    return api.post(`/media/${id}/versions`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  restoreVersion: (id: string, versionId: string) =>
+    api.post(`/media/${id}/versions/${versionId}/restore`),
+  deleteVersion: (id: string, versionId: string) =>
+    api.delete(`/media/${id}/versions/${versionId}`),
 };
 
 // Facebook endpoints
