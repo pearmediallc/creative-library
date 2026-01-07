@@ -9,6 +9,7 @@ import { AnalyticsPage } from './pages/Analytics';
 import { EditorsPage } from './pages/Editors';
 import { AdminPage } from './pages/Admin';
 import { ActivityLogsPage } from './pages/ActivityLogs';
+import { MetadataManagement } from './pages/MetadataManagement';
 
 function PrivateRoute({ children }: { children: React.ReactElement }) {
   const { user, loading } = useAuth();
@@ -124,6 +125,14 @@ function AppRoutes() {
         element={
           <AdminRoute>
             <ActivityLogsPage />
+          </AdminRoute>
+        }
+      />
+      <Route
+        path="/metadata"
+        element={
+          <AdminRoute>
+            <MetadataManagement />
           </AdminRoute>
         }
       />

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Image, TrendingUp, Users, Settings, LogOut, FileText } from 'lucide-react';
+import { LayoutDashboard, Image, TrendingUp, Users, Settings, LogOut, FileText, Tags } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { cn } from '../../lib/utils';
 
@@ -14,6 +14,7 @@ const baseNavigation = [
 const adminOnlyNavigation = [
   { name: 'Analytics', href: '/analytics', icon: TrendingUp },
   { name: 'Editors', href: '/editors', icon: Users },
+  { name: 'Metadata Management', href: '/metadata', icon: Tags },
 ];
 
 const adminNavigation = [
