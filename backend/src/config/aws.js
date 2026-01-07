@@ -93,28 +93,59 @@ function sanitizeEditorName(editorName) {
 }
 
 /**
- * Generate S3 key for file with hybrid structure support
- * NEW: Supports editor-based organization (editor-name/media-type/file)
- * OLD: Falls back to date-based organization (folder/year/month/file)
+ * Generate S3 key for file with folder structure support
+ * PRIORITY:
+ * 1. Folder path (if provided) - editor-name/folder-path/media-type/file
+ * 2. Editor-based (if no folder) - editor-name/media-type/file
+ * 3. Old structure fallback - folder/year/month/file
  *
  * @param {string} filename - Original filename
  * @param {string} folder - Folder type ('originals', 'thumbnails')
- * @param {string|null} editorName - Editor name (optional, for new structure)
+ * @param {string|null} editorName - Editor name (optional)
  * @param {string|null} mediaType - Media type ('image', 'video', optional)
+ * @param {string|null} folderPath - Database folder path (e.g., "jan2024/15-jan/")
  * @returns {string} S3 key path
  */
-function generateS3Key(filename, folder = 'originals', editorName = null, mediaType = null) {
+function generateS3Key(filename, folder = 'originals', editorName = null, mediaType = null, folderPath = null) {
   const uniqueId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   const uniqueFilename = `${uniqueId}-${filename}`;
 
-  // NEW HYBRID STRUCTURE: editor-name/media-type/uniqueid-filename
+  // STRUCTURE 1: WITH FOLDER PATH (highest priority)
+  // Example: editor-name/jan2024/15-jan/images/file.jpg
+  if (editorName && mediaType && folderPath) {
+    const sanitizedEditor = sanitizeEditorName(editorName);
+
+    if (sanitizedEditor) {
+      let subFolder;
+
+      if (folder === 'thumbnails') {
+        subFolder = 'thumbnails';
+      } else {
+        subFolder = mediaType === 'image' ? 'images' : 'videos';
+      }
+
+      // Clean folder path (remove leading/trailing slashes)
+      const cleanFolderPath = folderPath.replace(/^\/+|\/+$/g, '');
+
+      const newPath = `${sanitizedEditor}/${cleanFolderPath}/${subFolder}/${uniqueFilename}`;
+      console.log(`🆕 NEW S3 STRUCTURE (with folders): ${newPath}`);
+      console.log(`  └─ Editor: ${editorName} (sanitized: ${sanitizedEditor})`);
+      console.log(`  └─ Folder Path: ${cleanFolderPath}`);
+      console.log(`  └─ Media Type: ${mediaType}`);
+      console.log(`  └─ Subfolder: ${subFolder}`);
+
+      return newPath;
+    }
+  }
+
+  // STRUCTURE 2: WITHOUT FOLDER PATH (editor-based)
+  // Example: editor-name/images/file.jpg
   if (editorName && mediaType) {
     const sanitizedEditor = sanitizeEditorName(editorName);
 
     if (sanitizedEditor) {
       let subFolder;
 
-      // Determine subfolder based on folder type and media type
       if (folder === 'thumbnails') {
         subFolder = 'thumbnails';
       } else {
@@ -122,16 +153,17 @@ function generateS3Key(filename, folder = 'originals', editorName = null, mediaT
       }
 
       const newPath = `${sanitizedEditor}/${subFolder}/${uniqueFilename}`;
-      console.log(`🆕 NEW S3 STRUCTURE: ${newPath}`);
+      console.log(`🆕 NEW S3 STRUCTURE (no folders): ${newPath}`);
       console.log(`  └─ Editor: ${editorName} (sanitized: ${sanitizedEditor})`);
       console.log(`  └─ Media Type: ${mediaType}`);
-      console.log(`  └─ Folder: ${subFolder}`);
+      console.log(`  └─ Subfolder: ${subFolder}`);
 
       return newPath;
     }
   }
 
-  // OLD STRUCTURE FALLBACK: folder/year/month/uniqueid-filename
+  // STRUCTURE 3: OLD FALLBACK
+  // Example: originals/2024/01/file.jpg
   const date = new Date();
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');

@@ -62,7 +62,8 @@ export const mediaApi = {
     editorId: string,
     tags?: string[],
     description?: string,
-    metadataOptions?: { removeMetadata?: boolean; addMetadata?: boolean }
+    metadataOptions?: { removeMetadata?: boolean; addMetadata?: boolean },
+    folderOptions?: { folderId?: string; organizeByDate?: boolean; assignedBuyerId?: string }
   ) => {
     const formData = new FormData();
     formData.append('file', file);
@@ -70,12 +71,23 @@ export const mediaApi = {
     if (tags) formData.append('tags', JSON.stringify(tags));
     if (description) formData.append('description', description);
 
-    // ✨ NEW: Add metadata options
+    // ✨ Metadata options
     if (metadataOptions?.removeMetadata) {
       formData.append('remove_metadata', 'true');
     }
     if (metadataOptions?.addMetadata) {
       formData.append('add_metadata', 'true');
+    }
+
+    // ✨ NEW: Folder options
+    if (folderOptions?.folderId) {
+      formData.append('folder_id', folderOptions.folderId);
+    }
+    if (folderOptions?.organizeByDate) {
+      formData.append('organize_by_date', 'true');
+    }
+    if (folderOptions?.assignedBuyerId) {
+      formData.append('assigned_buyer_id', folderOptions.assignedBuyerId);
     }
 
     return api.post('/media/upload', formData, {
@@ -208,6 +220,57 @@ export const activityLogApi = {
     offset?: number;
   }) => api.get('/activity-logs', { params }),
   getFilters: () => api.get('/activity-logs/filters'),
+};
+
+// ✨ NEW: Folder endpoints
+export const folderApi = {
+  // Create new folder
+  create: (data: {
+    name: string;
+    parent_folder_id?: string;
+    description?: string;
+    color?: string;
+  }) => api.post('/folders', data),
+
+  // Get folder tree (hierarchical structure)
+  getTree: (params?: { parent_id?: string; include_deleted?: boolean }) =>
+    api.get('/folders/tree', { params }),
+
+  // Get single folder details
+  getOne: (id: string) => api.get(`/folders/${id}`),
+
+  // Get folder contents (subfolders + files)
+  getContents: (id: string, params?: {
+    page?: number;
+    limit?: number;
+    file_type?: string;
+  }) => api.get(`/folders/${id}/contents`, { params }),
+
+  // Get folder breadcrumb (navigation path)
+  getBreadcrumb: (id: string) => api.get(`/folders/${id}/breadcrumb`),
+
+  // Update folder (rename, change description, color)
+  update: (id: string, data: Partial<{
+    name: string;
+    description: string;
+    color: string;
+  }>) => api.patch(`/folders/${id}`, data),
+
+  // Delete folder
+  delete: (id: string, deleteContents = false) =>
+    api.delete(`/folders/${id}?delete_contents=${deleteContents}`),
+
+  // Move files to target folder
+  moveFiles: (data: { file_ids: string[]; target_folder_id: string | null }) =>
+    api.post('/folders/move-files', data),
+
+  // Copy files to target folder
+  copyFiles: (data: { file_ids: string[]; target_folder_id: string }) =>
+    api.post('/folders/copy-files', data),
+
+  // Create or get date-based folder structure (jan2024/15-jan/)
+  createDateFolder: (data?: { date?: string; parent_folder_id?: string }) =>
+    api.post('/folders/date-folder', data),
 };
 
 export default api;

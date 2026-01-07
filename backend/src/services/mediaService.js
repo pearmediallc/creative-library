@@ -14,7 +14,7 @@ class MediaService {
    * @param {Object} file - File object from multer
    * @param {string} userId - User ID
    * @param {string} editorId - Selected editor ID
-   * @param {Object} metadata - Additional metadata (tags, description)
+   * @param {Object} metadata - Additional metadata (tags, description, folder_id, organize_by_date, assigned_buyer_id)
    * @returns {Promise<Object>} Created media file record
    */
   async uploadMedia(file, userId, editorId, metadata = {}) {
@@ -26,6 +26,9 @@ class MediaService {
       console.log(`  └─ Filename: ${file.originalname}`);
       console.log(`  └─ MIME Type: ${file.mimetype}`);
       console.log(`  └─ File Size: ${file.size} bytes`);
+      console.log(`  └─ Folder ID: ${metadata.folder_id || 'None (root level)'}`);
+      console.log(`  └─ Organize by Date: ${metadata.organize_by_date ? 'Yes' : 'No'}`);
+      console.log(`  └─ Assigned Buyer: ${metadata.assigned_buyer_id || 'None'}`);
 
       // Check user upload limit
       const hasReachedLimit = await User.hasReachedUploadLimit(userId);
@@ -54,16 +57,66 @@ class MediaService {
       }
 
       console.log(`✅ Editor Found: ${editor.name} (ID: ${editorId})`);
+
+      // ✨ NEW: Handle folder path for organized storage
+      let folderPath = null;
+      let targetFolderId = metadata.folder_id;
+
+      // If organize_by_date is true, create date-based folder structure
+      if (metadata.organize_by_date) {
+        console.log('\n📅 Creating date-based folder structure...');
+        const Folder = require('../models/Folder');
+        const folderController = require('../controllers/folderController');
+
+        // Create or get date folder (jan2024/15-jan/)
+        const date = new Date();
+        const monthName = date.toLocaleString('en-US', { month: 'short' }).toLowerCase();
+        const year = date.getFullYear();
+        const monthFolderName = `${monthName}${year}`;
+        const day = String(date.getDate()).padStart(2, '0');
+        const dayFolderName = `${day}-${monthName}`;
+
+        // Find or create month folder
+        let monthFolder = await folderController.findOrCreateFolder(
+          monthFolderName,
+          metadata.folder_id || null,  // Parent folder (or null for root)
+          userId,
+          'date'
+        );
+
+        // Find or create day folder
+        let dayFolder = await folderController.findOrCreateFolder(
+          dayFolderName,
+          monthFolder.id,
+          userId,
+          'date'
+        );
+
+        targetFolderId = dayFolder.id;
+        folderPath = dayFolder.s3_path;
+        console.log(`  └─ Created/Found folder: ${folderPath}`);
+      } else if (targetFolderId) {
+        // Get folder path from database
+        console.log('\n📁 Fetching folder path from database...');
+        const Folder = require('../models/Folder');
+        const folder = await Folder.findById(targetFolderId);
+        if (folder) {
+          folderPath = folder.s3_path;
+          console.log(`  └─ Folder path: ${folderPath}`);
+        }
+      }
+
       console.log('\n📤 Uploading to S3 with HYBRID STRUCTURE...');
 
-      // Upload original file to S3 with NEW HYBRID STRUCTURE
+      // Upload original file to S3 with NEW HYBRID STRUCTURE + FOLDER SUPPORT
       const uploadResult = await s3Service.uploadFile(
         file.buffer,
         file.originalname,
         file.mimetype,
         'originals',
         editor.name,  // ✨ NEW: Pass editor name for hybrid structure
-        mediaType     // ✨ NEW: Pass media type for hybrid structure
+        mediaType,    // ✨ NEW: Pass media type for hybrid structure
+        folderPath    // ✨ NEW: Pass folder path for organized storage
       );
 
       // Generate S3 URL
@@ -86,11 +139,12 @@ class MediaService {
 
         console.log(`  └─ Dimensions: ${width}x${height}`);
 
-        // Generate thumbnail with NEW HYBRID STRUCTURE
+        // Generate thumbnail with NEW HYBRID STRUCTURE + FOLDER SUPPORT
         const thumbnailResult = await s3Service.generateThumbnail(
           file.buffer,
           file.originalname,
-          editor.name  // ✨ NEW: Pass editor name for hybrid structure
+          editor.name,  // ✨ NEW: Pass editor name for hybrid structure
+          folderPath    // ✨ NEW: Pass folder path for organized storage
         );
         if (thumbnailResult) {
           thumbnailUrl = `${process.env.AWS_CLOUDFRONT_URL}/${thumbnailResult.s3Key}`;
@@ -99,12 +153,13 @@ class MediaService {
       } else if (mediaType === 'video') {
         console.log('\n🎥 Processing video...');
 
-        // Generate video thumbnail with NEW HYBRID STRUCTURE
+        // Generate video thumbnail with NEW HYBRID STRUCTURE + FOLDER SUPPORT
         console.log('  └─ Generating video thumbnail...');
         const thumbnailResult = await s3Service.generateVideoThumbnail(
           file.buffer,
           file.originalname,
-          editor.name  // ✨ NEW: Pass editor name for hybrid structure
+          editor.name,  // ✨ NEW: Pass editor name for hybrid structure
+          folderPath    // ✨ NEW: Pass folder path for organized storage
         );
         if (thumbnailResult) {
           thumbnailUrl = `${process.env.AWS_CLOUDFRONT_URL}/${thumbnailResult.s3Key}`;
@@ -140,6 +195,9 @@ class MediaService {
         thumbnail_url: thumbnailUrl,
         tags: metadata.tags || [],
         description: metadata.description || null,
+        // ✨ NEW: Folder and buyer assignment
+        folder_id: targetFolderId || null,
+        assigned_buyer_id: metadata.assigned_buyer_id || null,
         // ✨ NEW: Metadata tracking fields
         metadata_stripped: metadataOps.removed || false,
         metadata_embedded: metadataOps.added ? {

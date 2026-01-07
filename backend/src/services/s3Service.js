@@ -18,9 +18,10 @@ class S3Service {
    * @param {string} folder - S3 folder (default: 'originals')
    * @param {string|null} editorName - Editor name for new structure (optional)
    * @param {string|null} mediaType - Media type for new structure (optional)
+   * @param {string|null} folderPath - Folder path from database (optional, e.g., "jan2024/15-jan")
    * @returns {Promise<Object>} Upload result with s3Key
    */
-  async uploadFile(fileBuffer, filename, mimeType, folder = 'originals', editorName = null, mediaType = null) {
+  async uploadFile(fileBuffer, filename, mimeType, folder = 'originals', editorName = null, mediaType = null, folderPath = null) {
     try {
       console.log('📤 S3Service.uploadFile called with:');
       console.log(`  └─ Filename: ${filename}`);
@@ -28,9 +29,10 @@ class S3Service {
       console.log(`  └─ Folder: ${folder}`);
       console.log(`  └─ Editor Name: ${editorName || 'NOT PROVIDED (will use old structure)'}`);
       console.log(`  └─ Media Type: ${mediaType || 'NOT PROVIDED (will use old structure)'}`);
+      console.log(`  └─ Folder Path: ${folderPath || 'NOT PROVIDED'}`);
 
-      // Generate S3 key using hybrid structure
-      const s3Key = generateS3Key(filename, folder, editorName, mediaType);
+      // Generate S3 key using hybrid structure with folder path support
+      const s3Key = generateS3Key(filename, folder, editorName, mediaType, folderPath);
 
       console.log(`🔑 Generated S3 Key: ${s3Key}`);
 
@@ -75,9 +77,10 @@ class S3Service {
    * @param {Buffer} imageBuffer - Original image buffer
    * @param {string} originalFilename - Original filename
    * @param {string|null} editorName - Editor name for new structure (optional)
+   * @param {string|null} folderPath - Folder path from database (optional)
    * @returns {Promise<Object>} Thumbnail upload result
    */
-  async generateThumbnail(imageBuffer, originalFilename, editorName = null) {
+  async generateThumbnail(imageBuffer, originalFilename, editorName = null, folderPath = null) {
     try {
       console.log('🖼️ Generating thumbnail for:', originalFilename);
       console.log(`  └─ Editor: ${editorName || 'NOT PROVIDED (will use old structure)'}`);
@@ -102,7 +105,8 @@ class S3Service {
         'image/jpeg',
         'thumbnails',
         editorName,      // Pass editor name for hybrid structure
-        'image'          // Thumbnails are always images
+        'image',         // Thumbnails are always images
+        folderPath       // Pass folder path for organized storage
       );
 
       console.log(`✅ Thumbnail uploaded successfully`);
@@ -128,9 +132,10 @@ class S3Service {
    * @param {Buffer} videoBuffer - Original video buffer
    * @param {string} originalFilename - Original filename
    * @param {string|null} editorName - Editor name for new structure (optional)
+   * @param {string|null} folderPath - Folder path from database (optional)
    * @returns {Promise<Object>} Thumbnail upload result
    */
-  async generateVideoThumbnail(videoBuffer, originalFilename, editorName = null) {
+  async generateVideoThumbnail(videoBuffer, originalFilename, editorName = null, folderPath = null) {
     let tempVideoPath = null;
     let tempThumbnailPath = null;
 
@@ -184,7 +189,8 @@ class S3Service {
         'image/jpeg',
         'thumbnails',
         editorName,      // Pass editor name for hybrid structure
-        'video'          // Mark as video thumbnail
+        'video',         // Mark as video thumbnail
+        folderPath       // Pass folder path for organized storage
       );
 
       console.log(`✅ Video thumbnail uploaded successfully`);

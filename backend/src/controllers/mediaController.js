@@ -8,7 +8,7 @@ class MediaController {
   /**
    * Upload media file
    * POST /api/media/upload
-   * Body: { editor_id, tags, description }
+   * Body: { editor_id, tags, description, folder_id, organize_by_date, assigned_buyer_id }
    * File: multipart/form-data
    */
   async upload(req, res, next) {
@@ -20,7 +20,7 @@ class MediaController {
         });
       }
 
-      const { editor_id, tags, description } = req.body;
+      const { editor_id, tags, description, folder_id, organize_by_date, assigned_buyer_id } = req.body;
       const userId = req.user.id;
 
       // Parse tags if it's a string (from multipart form)
@@ -36,7 +36,10 @@ class MediaController {
         {
           tags: parsedTags,
           description,
-          metadataOperations  // ✨ NEW: Include metadata operations
+          metadataOperations,  // ✨ Include metadata operations
+          folder_id,           // ✨ NEW: Target folder ID
+          organize_by_date: organize_by_date === 'true' || organize_by_date === true,  // ✨ NEW: Auto date-based folders
+          assigned_buyer_id    // ✨ NEW: Buyer assignment
         }
       );
 

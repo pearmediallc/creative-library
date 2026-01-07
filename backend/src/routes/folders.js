@@ -1,0 +1,30 @@
+/**
+ * Folder Routes
+ * API endpoints for folder management
+ */
+
+const express = require('express');
+const router = express.Router();
+const folderController = require('../controllers/folderController');
+const { authenticateToken } = require('../middleware/auth');
+
+// All folder routes require authentication
+router.use(authenticateToken);
+
+// Folder CRUD
+router.post('/', folderController.createFolder.bind(folderController));
+router.get('/tree', folderController.getFolderTree.bind(folderController));
+router.get('/:id', folderController.getFolder.bind(folderController));
+router.get('/:id/contents', folderController.getFolderContents.bind(folderController));
+router.get('/:id/breadcrumb', folderController.getBreadcrumb.bind(folderController));
+router.patch('/:id', folderController.updateFolder.bind(folderController));
+router.delete('/:id', folderController.deleteFolder.bind(folderController));
+
+// File operations
+router.post('/move-files', folderController.moveFiles.bind(folderController));
+router.post('/copy-files', folderController.copyFiles.bind(folderController));
+
+// Date-based folder creation
+router.post('/date-folder', folderController.createDateFolder.bind(folderController));
+
+module.exports = router;
