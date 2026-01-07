@@ -278,6 +278,28 @@ class MediaFile extends BaseModel {
 
     return finalStats;
   }
+
+  /**
+   * ✨ NEW: Find multiple files by IDs
+   * @param {Array<string>} ids - Array of file IDs
+   * @returns {Promise<Array>} Array of media files
+   */
+  async findByIds(ids) {
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return [];
+    }
+
+    const placeholders = ids.map((_, index) => `$${index + 1}`).join(', ');
+    const result = await this.query(
+      `SELECT * FROM ${this.tableName}
+       WHERE id = ANY($1)
+       AND deleted_at IS NULL
+       ORDER BY created_at DESC`,
+      [ids]
+    );
+
+    return result.rows;
+  }
 }
 
 module.exports = new MediaFile();

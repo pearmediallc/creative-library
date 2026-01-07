@@ -6,9 +6,10 @@ import { Card } from '../components/ui/Card';
 import { mediaApi, editorApi } from '../lib/api';
 import { MediaFile, Editor } from '../types';
 import { formatBytes, formatDate } from '../lib/utils';
-import { Image as ImageIcon, Video, X, Download, Trash2 } from 'lucide-react';
+import { Image as ImageIcon, Video, X, Download, Trash2, Info, PackageOpen } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { BulkMetadataEditor } from '../components/BulkMetadataEditor';
+import { MetadataViewer } from '../components/MetadataViewer';
 
 export function MediaLibraryPage() {
   const { user } = useAuth();
@@ -26,6 +27,14 @@ export function MediaLibraryPage() {
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<string[]>([]);
   const [showBulkEditor, setShowBulkEditor] = useState(false);
+
+  // ✨ NEW: Metadata viewer state
+  const [metadataViewerFile, setMetadataViewerFile] = useState<{
+    id: string;
+    filename: string;
+    metadata: Record<string, any>;
+  } | null>(null);
+  const [downloadingZip, setDownloadingZip] = useState(false);
 
   // Role-based permissions
   const isAdmin = user?.role === 'admin';
@@ -109,6 +118,46 @@ export function MediaLibraryPage() {
     }
   };
 
+  // ✨ NEW: View file metadata
+  const handleViewMetadata = async (file: MediaFile) => {
+    try {
+      const response = await mediaApi.extractMetadata(file.id);
+      setMetadataViewerFile({
+        id: file.id,
+        filename: file.original_filename,
+        metadata: response.data.data.metadata || {},
+      });
+    } catch (error: any) {
+      console.error('Failed to extract metadata:', error);
+      alert(error.response?.data?.error || 'Failed to extract metadata');
+    }
+  };
+
+  // ✨ NEW: Download selected files as ZIP
+  const handleBulkDownloadZip = async () => {
+    if (selectedFiles.length === 0) return;
+
+    setDownloadingZip(true);
+    try {
+      const response = await mediaApi.bulkDownloadZip(selectedFiles);
+
+      // Create download link
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `creative-library-files-${new Date().toISOString().split('T')[0]}.zip`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error: any) {
+      console.error('Failed to download ZIP:', error);
+      alert(error.response?.data?.error || 'Failed to download files');
+    } finally {
+      setDownloadingZip(false);
+    }
+  };
+
   const selectedFileObjects = files.filter(f => selectedFiles.includes(f.id));
 
   return (
@@ -134,9 +183,19 @@ export function MediaLibraryPage() {
                 {selectionMode ? 'Cancel Selection' : 'Bulk Edit'}
               </Button>
               {selectionMode && selectedFiles.length > 0 && (
-                <Button onClick={() => setShowBulkEditor(true)}>
-                  Edit {selectedFiles.length} Selected →
-                </Button>
+                <>
+                  <Button onClick={() => setShowBulkEditor(true)}>
+                    Edit {selectedFiles.length} Selected
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={handleBulkDownloadZip}
+                    disabled={downloadingZip}
+                  >
+                    <PackageOpen className="w-4 h-4 mr-2" />
+                    {downloadingZip ? 'Creating ZIP...' : `Download ${selectedFiles.length} as ZIP`}
+                  </Button>
+                </>
               )}
             </div>
           )}
@@ -247,21 +306,33 @@ export function MediaLibraryPage() {
                           ))}
                         </div>
                       )}
-                      <div className="flex gap-2 mt-3 pt-3 border-t border-border">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className={canDelete ? "flex-1" : "w-full"}
-                          onClick={() => handleDownload(file)}
-                        >
-                          <Download className="w-4 h-4 mr-1" />
-                          Download
-                        </Button>
+                      <div className="space-y-2">
+                        <div className="flex gap-2 pt-3 border-t border-border">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="flex-1"
+                            onClick={() => handleDownload(file)}
+                          >
+                            <Download className="w-4 h-4 mr-1" />
+                            Download
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="flex-1"
+                            onClick={() => handleViewMetadata(file)}
+                            title="View embedded metadata"
+                          >
+                            <Info className="w-4 h-4 mr-1" />
+                            Metadata
+                          </Button>
+                        </div>
                         {canDelete && (
                           <Button
                             variant="outline"
                             size="sm"
-                            className="flex-1 text-destructive hover:text-destructive"
+                            className="w-full text-destructive hover:text-destructive"
                             onClick={() => setDeleteConfirmId(file.id)}
                           >
                             <Trash2 className="w-4 h-4 mr-1" />
@@ -340,6 +411,14 @@ export function MediaLibraryPage() {
             setSelectedFiles([]);
             fetchData();
           }}
+        />
+      )}
+
+      {metadataViewerFile && (
+        <MetadataViewer
+          metadata={metadataViewerFile.metadata}
+          filename={metadataViewerFile.filename}
+          onClose={() => setMetadataViewerFile(null)}
         />
       )}
     </DashboardLayout>

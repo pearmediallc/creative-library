@@ -2,7 +2,11 @@ const MediaFile = require('../models/MediaFile');
 const User = require('../models/User');
 const Editor = require('../models/Editor');
 const s3Service = require('./s3Service');
+const metadataService = require('./metadataService');
 const logger = require('../utils/logger');
+const archiver = require('archiver');
+const https = require('https');
+const http = require('http');
 
 class MediaService {
   /**
@@ -355,6 +359,129 @@ class MediaService {
     } catch (error) {
       logger.error('Get storage stats failed', { error: error.message });
       throw new Error('Failed to retrieve storage statistics');
+    }
+  }
+
+  /**
+   * ✨ NEW: Extract metadata from file
+   * @param {string} fileId - Media file ID
+   * @returns {Promise<Object>} Extracted metadata
+   */
+  async extractMetadata(fileId) {
+    try {
+      const file = await MediaFile.findById(fileId);
+      if (!file) {
+        throw new Error('Media file not found');
+      }
+
+      logger.info(`Extracting metadata for file: ${file.original_filename}`);
+
+      // Download file from S3 to buffer
+      const fileBuffer = await s3Service.downloadToBuffer(file.s3_key);
+
+      let metadata = {};
+
+      if (file.file_type === 'image') {
+        metadata = await metadataService.extractImageMetadata(fileBuffer);
+      } else if (file.file_type === 'video') {
+        // For videos, we need to save to temp file for ffprobe
+        metadata = await metadataService.extractVideoMetadata(fileBuffer);
+      }
+
+      logger.info(`Extracted ${Object.keys(metadata).length} metadata fields`);
+
+      return metadata;
+
+    } catch (error) {
+      logger.error('Extract metadata failed', { error: error.message, fileId });
+      throw error;
+    }
+  }
+
+  /**
+   * ✨ NEW: Create ZIP archive of multiple files
+   * @param {Array<string>} fileIds - Array of media file IDs
+   * @param {string} userId - User ID (for permission check)
+   * @returns {Promise<Stream>} ZIP archive stream
+   */
+  async createBulkZip(fileIds, userId) {
+    try {
+      logger.info(`Creating ZIP for ${fileIds.length} files`);
+
+      // Get all files
+      const files = await MediaFile.findByIds(fileIds);
+
+      if (files.length === 0) {
+        throw new Error('No files found');
+      }
+
+      if (files.length !== fileIds.length) {
+        logger.warn(`Only ${files.length} of ${fileIds.length} files found`);
+      }
+
+      // Create archive
+      const archive = archiver('zip', {
+        zlib: { level: 6 } // Compression level
+      });
+
+      // Handle errors
+      archive.on('error', (err) => {
+        logger.error('Archive error', { error: err.message });
+        throw err;
+      });
+
+      // Process files sequentially to avoid memory issues
+      let addedCount = 0;
+
+      for (const file of files) {
+        try {
+          logger.info(`Adding to ZIP: ${file.original_filename}`);
+
+          // Get signed URL or use CloudFront URL
+          const fileUrl = file.s3_url || await s3Service.getSignedUrl(file.s3_key);
+
+          // Download file as stream
+          const protocol = fileUrl.startsWith('https') ? https : http;
+
+          await new Promise((resolve, reject) => {
+            protocol.get(fileUrl, (response) => {
+              if (response.statusCode !== 200) {
+                logger.warn(`Failed to download ${file.original_filename}: ${response.statusCode}`);
+                resolve(); // Skip this file
+                return;
+              }
+
+              // Add file to archive with original filename
+              archive.append(response, { name: file.original_filename });
+              addedCount++;
+
+              response.on('end', resolve);
+              response.on('error', (err) => {
+                logger.error(`Error downloading ${file.original_filename}`, { error: err.message });
+                resolve(); // Skip this file
+              });
+            }).on('error', (err) => {
+              logger.error(`HTTP error for ${file.original_filename}`, { error: err.message });
+              resolve(); // Skip this file
+            });
+          });
+
+        } catch (fileError) {
+          logger.error(`Error adding file to ZIP: ${file.original_filename}`, { error: fileError.message });
+          // Continue with other files
+        }
+      }
+
+      logger.info(`Added ${addedCount} files to ZIP`);
+
+      // Finalize the archive
+      archive.finalize();
+
+      return archive;
+
+    } catch (error) {
+      logger.error('Create ZIP failed', { error: error.message });
+      throw new Error('Failed to create ZIP archive');
     }
   }
 }

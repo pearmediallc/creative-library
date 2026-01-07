@@ -106,6 +106,15 @@ export const mediaApi = {
   getBulkStatus: (jobId: string) => api.get(`/media/bulk/status/${jobId}`),
 
   cancelBulkOperation: (jobId: string) => api.post(`/media/bulk/cancel/${jobId}`),
+
+  // Metadata extraction and viewing
+  extractMetadata: (id: string) => api.get(`/media/${id}/metadata`),
+
+  // Bulk ZIP download
+  bulkDownloadZip: (fileIds: string[]) =>
+    api.post('/media/bulk/download-zip', { file_ids: fileIds }, {
+      responseType: 'blob',
+    }),
 };
 
 // Facebook endpoints

@@ -57,6 +57,12 @@ router.get('/:id',
   mediaController.getFile.bind(mediaController)
 );
 
+// ✨ NEW: Get file metadata (EXIF, IPTC, XMP)
+router.get('/:id/metadata',
+  authenticateToken,
+  mediaController.getFileMetadata.bind(mediaController)
+);
+
 // Update file metadata
 router.patch('/:id',
   authenticateToken,
@@ -86,6 +92,12 @@ router.get('/bulk/status/:jobId',
 router.post('/bulk/cancel/:jobId',
   authenticateToken,
   mediaController.cancelBulkOperation.bind(mediaController)
+);
+
+// ✨ NEW: Bulk ZIP download
+router.post('/bulk/download-zip',
+  authenticateToken,
+  mediaController.bulkDownloadZip.bind(mediaController)
 );
 
 module.exports = router;

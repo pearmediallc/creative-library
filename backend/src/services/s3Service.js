@@ -408,6 +408,40 @@ class S3Service {
   }
 
   /**
+   * ✨ NEW: Download file from S3 to buffer
+   * @param {string} s3Key - S3 object key
+   * @returns {Promise<Buffer>} File buffer
+   */
+  async downloadToBuffer(s3Key) {
+    try {
+      logger.info(`Downloading from S3 to buffer: ${s3Key}`);
+
+      const command = new GetObjectCommand({
+        Bucket: S3_BUCKET,
+        Key: s3Key
+      });
+
+      const response = await s3Client.send(command);
+
+      // Convert stream to buffer
+      const chunks = [];
+      for await (const chunk of response.Body) {
+        chunks.push(chunk);
+      }
+
+      const buffer = Buffer.concat(chunks);
+
+      logger.info(`Downloaded ${buffer.length} bytes from S3`);
+
+      return buffer;
+
+    } catch (error) {
+      logger.error(`Failed to download from S3: ${s3Key}`, error);
+      throw new Error(`S3 download failed: ${error.message}`);
+    }
+  }
+
+  /**
    * Format bytes to human-readable string
    * @private
    */

@@ -523,6 +523,96 @@ class MediaController {
       next(error);
     }
   }
+
+  /**
+   * ✨ NEW: Get file metadata (EXIF, IPTC, XMP)
+   * GET /api/media/:id/metadata
+   */
+  async getFileMetadata(req, res, next) {
+    try {
+      const { id } = req.params;
+
+      const metadata = await mediaService.extractMetadata(id);
+
+      res.json({
+        success: true,
+        message: 'Metadata extracted successfully',
+        data: {
+          file_id: id,
+          metadata: metadata || {}
+        }
+      });
+
+    } catch (error) {
+      logger.error('Extract metadata error', { error: error.message, fileId: req.params.id });
+      if (error.message === 'Media file not found') {
+        return res.status(404).json({
+          success: false,
+          error: error.message
+        });
+      }
+      next(error);
+    }
+  }
+
+  /**
+   * ✨ NEW: Bulk download files as ZIP
+   * POST /api/media/bulk/download-zip
+   * Body: { file_ids: [] }
+   */
+  async bulkDownloadZip(req, res, next) {
+    try {
+      const { file_ids } = req.body;
+      const userId = req.user.id;
+
+      if (!file_ids || !Array.isArray(file_ids) || file_ids.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'file_ids array is required and cannot be empty'
+        });
+      }
+
+      if (file_ids.length > 100) {
+        return res.status(400).json({
+          success: false,
+          error: 'Maximum 100 files can be downloaded at once'
+        });
+      }
+
+      logger.info(`Creating ZIP for ${file_ids.length} files requested by user ${userId}`);
+
+      const zipStream = await mediaService.createBulkZip(file_ids, userId);
+
+      // Set response headers for ZIP download
+      const timestamp = new Date().toISOString().split('T')[0];
+      res.setHeader('Content-Type', 'application/zip');
+      res.setHeader('Content-Disposition', `attachment; filename="creative-library-files-${timestamp}.zip"`);
+      res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
+
+      // Pipe the ZIP stream to response
+      zipStream.pipe(res);
+
+      zipStream.on('end', () => {
+        logger.info(`ZIP download completed for ${file_ids.length} files`);
+      });
+
+      zipStream.on('error', (error) => {
+        logger.error('ZIP stream error', { error: error.message });
+        if (!res.headersSent) {
+          res.status(500).json({
+            success: false,
+            error: 'Failed to create ZIP file'
+          });
+        }
+      });
+
+    } catch (error) {
+      logger.error('Bulk download ZIP error', { error: error.message });
+      if (!res.headersSent) {
+        next(error);
+      }
+    }
+  }
 }
 
 module.exports = new MediaController();
