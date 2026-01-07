@@ -633,6 +633,123 @@ class MediaController {
       }
     }
   }
+
+  /**
+   * ✨ NEW: Bulk delete files
+   * DELETE /api/media/bulk
+   * Body: { file_ids: string[] }
+   */
+  async bulkDelete(req, res, next) {
+    try {
+      const { file_ids } = req.body;
+      const userId = req.user.id;
+      const userRole = req.user.role;
+
+      if (!file_ids || !Array.isArray(file_ids) || file_ids.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'file_ids array is required'
+        });
+      }
+
+      // Only admins can bulk delete
+      if (userRole !== 'admin') {
+        return res.status(403).json({
+          success: false,
+          error: 'Only administrators can perform bulk delete'
+        });
+      }
+
+      logger.info(`Bulk delete initiated: ${file_ids.length} files by user ${userId}`);
+
+      const MediaFile = require('../models/MediaFile');
+      const results = {
+        success: [],
+        failed: []
+      };
+
+      for (const fileId of file_ids) {
+        try {
+          // Soft delete the file
+          await MediaFile.softDelete(fileId, userId);
+          results.success.push(fileId);
+        } catch (error) {
+          logger.error(`Failed to delete file ${fileId}`, { error: error.message });
+          results.failed.push({ fileId, error: error.message });
+        }
+      }
+
+      logger.info(`Bulk delete completed: ${results.success.length} succeeded, ${results.failed.length} failed`);
+
+      res.json({
+        success: true,
+        data: {
+          deleted: results.success.length,
+          failed: results.failed.length,
+          results
+        },
+        message: `Successfully deleted ${results.success.length} of ${file_ids.length} files`
+      });
+    } catch (error) {
+      logger.error('Bulk delete error', { error: error.message });
+      next(error);
+    }
+  }
+
+  /**
+   * ✨ NEW: Bulk move files to folder
+   * POST /api/media/bulk/move
+   * Body: { file_ids: string[], target_folder_id: string | null }
+   */
+  async bulkMove(req, res, next) {
+    try {
+      const { file_ids, target_folder_id } = req.body;
+      const userId = req.user.id;
+
+      if (!file_ids || !Array.isArray(file_ids) || file_ids.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'file_ids array is required'
+        });
+      }
+
+      logger.info(`Bulk move initiated: ${file_ids.length} files to folder ${target_folder_id || 'root'} by user ${userId}`);
+
+      const MediaFile = require('../models/MediaFile');
+      const results = {
+        success: [],
+        failed: []
+      };
+
+      for (const fileId of file_ids) {
+        try {
+          // Update file's folder_id
+          await MediaFile.update(fileId, {
+            folder_id: target_folder_id || null
+          });
+          results.success.push(fileId);
+        } catch (error) {
+          logger.error(`Failed to move file ${fileId}`, { error: error.message });
+          results.failed.push({ fileId, error: error.message });
+        }
+      }
+
+      logger.info(`Bulk move completed: ${results.success.length} succeeded, ${results.failed.length} failed`);
+
+      res.json({
+        success: true,
+        data: {
+          moved: results.success.length,
+          failed: results.failed.length,
+          results
+        },
+        message: `Successfully moved ${results.success.length} of ${file_ids.length} files`
+      });
+    } catch (error) {
+      logger.error('Bulk move error', { error: error.message });
+      next(error);
+    }
+  }
 }
 
 module.exports = new MediaController();

@@ -101,6 +101,19 @@ router.post('/bulk/download-zip',
   mediaController.bulkDownloadZip.bind(mediaController)
 );
 
+// ✨ NEW: Bulk delete files
+router.delete('/bulk',
+  authenticateToken,
+  requireAdmin,
+  mediaController.bulkDelete.bind(mediaController)
+);
+
+// ✨ NEW: Bulk move files to folder
+router.post('/bulk/move',
+  authenticateToken,
+  mediaController.bulkMove.bind(mediaController)
+);
+
 // ✨ NEW: File versioning endpoints
 router.get('/:id/versions',
   authenticateToken,
