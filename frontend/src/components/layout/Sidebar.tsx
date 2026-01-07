@@ -8,6 +8,7 @@ import { cn } from '../../lib/utils';
 const baseNavigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
   { name: 'Media Library', href: '/media', icon: Image },
+  { name: 'Teams', href: '/teams', icon: Users },
 ];
 
 // Admin-only navigation items

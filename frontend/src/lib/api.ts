@@ -222,6 +222,40 @@ export const activityLogApi = {
   getFilters: () => api.get('/activity-logs/filters'),
 };
 
+// Team endpoints
+export const teamApi = {
+  getAll: () => api.get('/teams'),
+  getById: (id: string) => api.get(`/teams/${id}`),
+  create: (data: { name: string; description?: string }) => api.post('/teams', data),
+  update: (id: string, data: { name?: string; description?: string }) =>
+    api.patch(`/teams/${id}`, data),
+  delete: (id: string) => api.delete(`/teams/${id}`),
+  addMember: (id: string, data: { user_id: string; role?: string }) =>
+    api.post(`/teams/${id}/members`, data),
+  removeMember: (id: string, userId: string) =>
+    api.delete(`/teams/${id}/members/${userId}`),
+};
+
+// Permission endpoints
+export const permissionApi = {
+  grant: (data: {
+    resource_type: 'file' | 'folder';
+    resource_id: string;
+    grantee_type: 'user' | 'team';
+    grantee_id: string;
+    permission_type: 'view' | 'download' | 'edit' | 'delete';
+    expires_at?: string;
+  }) => api.post('/permissions', data),
+  getResourcePermissions: (resourceType: string, resourceId: string) =>
+    api.get('/permissions', { params: { resource_type: resourceType, resource_id: resourceId } }),
+  revoke: (id: string) => api.delete(`/permissions/${id}`),
+  shareFolder: (data: {
+    folder_id: string;
+    team_id: string;
+    permissions: string[];
+  }) => api.post('/permissions/share-folder', data),
+};
+
 // ✨ NEW: Folder endpoints
 export const folderApi = {
   // Create new folder

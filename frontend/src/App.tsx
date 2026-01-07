@@ -10,6 +10,7 @@ import { EditorsPage } from './pages/Editors';
 import { AdminPage } from './pages/Admin';
 import { ActivityLogsPage } from './pages/ActivityLogs';
 import { MetadataManagement } from './pages/MetadataManagement';
+import { TeamsPage } from './pages/TeamsPage';
 
 function PrivateRoute({ children }: { children: React.ReactElement }) {
   const { user, loading } = useAuth();
@@ -134,6 +135,14 @@ function AppRoutes() {
           <AdminRoute>
             <MetadataManagement />
           </AdminRoute>
+        }
+      />
+      <Route
+        path="/teams"
+        element={
+          <PrivateRoute>
+            <TeamsPage />
+          </PrivateRoute>
         }
       />
       <Route path="*" element={<Navigate to="/" />} />
