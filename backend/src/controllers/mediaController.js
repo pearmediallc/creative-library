@@ -77,9 +77,11 @@ class MediaController {
   }
 
   /**
-   * Get media files with filters
+   * Get media files with advanced filters
    * GET /api/media
-   * Query params: editor_id, media_type, tags, search, limit, offset
+   * Query params: editor_id, media_type, tags, search, date_from, date_to,
+   *               buyer_id, folder_id, size_min, size_max, width_min, width_max,
+   *               height_min, height_max, limit, offset
    */
   async getFiles(req, res, next) {
     try {
@@ -88,6 +90,21 @@ class MediaController {
         media_type: req.query.media_type,
         tags: req.query.tags ? req.query.tags.split(',') : undefined,
         search: req.query.search,
+        // ✨ NEW: Date range filters
+        date_from: req.query.date_from,
+        date_to: req.query.date_to,
+        // ✨ NEW: Buyer assignment filter
+        buyer_id: req.query.buyer_id,
+        // ✨ NEW: Folder filter
+        folder_id: req.query.folder_id,
+        // ✨ NEW: File size filters
+        size_min: req.query.size_min ? parseInt(req.query.size_min) : undefined,
+        size_max: req.query.size_max ? parseInt(req.query.size_max) : undefined,
+        // ✨ NEW: Resolution filters
+        width_min: req.query.width_min ? parseInt(req.query.width_min) : undefined,
+        width_max: req.query.width_max ? parseInt(req.query.width_max) : undefined,
+        height_min: req.query.height_min ? parseInt(req.query.height_min) : undefined,
+        height_max: req.query.height_max ? parseInt(req.query.height_max) : undefined,
         limit: parseInt(req.query.limit) || 50,
         offset: parseInt(req.query.offset) || 0
       };

@@ -65,6 +65,16 @@ class MediaFile extends BaseModel {
    * @param {string} filters.media_type - Filter by type (image, video, other)
    * @param {Array<string>} filters.tags - Filter by tags (contains any)
    * @param {string} filters.search - Search in filename/description
+   * @param {string} filters.date_from - Filter by creation date (from)
+   * @param {string} filters.date_to - Filter by creation date (to)
+   * @param {string} filters.buyer_id - Filter by assigned buyer
+   * @param {string} filters.folder_id - Filter by folder
+   * @param {number} filters.size_min - Filter by minimum file size (bytes)
+   * @param {number} filters.size_max - Filter by maximum file size (bytes)
+   * @param {number} filters.width_min - Filter by minimum width (pixels)
+   * @param {number} filters.width_max - Filter by maximum width (pixels)
+   * @param {number} filters.height_min - Filter by minimum height (pixels)
+   * @param {number} filters.height_max - Filter by maximum height (pixels)
    * @param {number} filters.limit - Limit results
    * @param {number} filters.offset - Offset for pagination
    * @returns {Promise<Array>} Media files
@@ -104,6 +114,62 @@ class MediaFile extends BaseModel {
       )`);
       params.push(`%${filters.search}%`);
       paramIndex++;
+    }
+
+    // ✨ NEW: Date range filters
+    if (filters.date_from) {
+      conditions.push(`created_at >= $${paramIndex++}`);
+      params.push(filters.date_from);
+    }
+
+    if (filters.date_to) {
+      conditions.push(`created_at <= $${paramIndex++}`);
+      params.push(filters.date_to);
+    }
+
+    // ✨ NEW: Buyer filter
+    if (filters.buyer_id) {
+      conditions.push(`assigned_buyer_id = $${paramIndex++}`);
+      params.push(filters.buyer_id);
+    }
+
+    // ✨ NEW: Folder filter
+    if (filters.folder_id) {
+      conditions.push(`folder_id = $${paramIndex++}`);
+      params.push(filters.folder_id);
+    }
+
+    // ✨ NEW: File size filters
+    if (filters.size_min !== undefined && filters.size_min !== null) {
+      conditions.push(`file_size >= $${paramIndex++}`);
+      params.push(filters.size_min);
+    }
+
+    if (filters.size_max !== undefined && filters.size_max !== null) {
+      conditions.push(`file_size <= $${paramIndex++}`);
+      params.push(filters.size_max);
+    }
+
+    // ✨ NEW: Resolution filters (width)
+    if (filters.width_min !== undefined && filters.width_min !== null) {
+      conditions.push(`width >= $${paramIndex++}`);
+      params.push(filters.width_min);
+    }
+
+    if (filters.width_max !== undefined && filters.width_max !== null) {
+      conditions.push(`width <= $${paramIndex++}`);
+      params.push(filters.width_max);
+    }
+
+    // ✨ NEW: Resolution filters (height)
+    if (filters.height_min !== undefined && filters.height_min !== null) {
+      conditions.push(`height >= $${paramIndex++}`);
+      params.push(filters.height_min);
+    }
+
+    if (filters.height_max !== undefined && filters.height_max !== null) {
+      conditions.push(`height <= $${paramIndex++}`);
+      params.push(filters.height_max);
     }
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';

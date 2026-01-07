@@ -3,10 +3,10 @@ import { DashboardLayout } from '../components/layout/DashboardLayout';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Card } from '../components/ui/Card';
-import { mediaApi, editorApi, folderApi } from '../lib/api';
+import { mediaApi, editorApi, folderApi, adminApi } from '../lib/api';
 import { MediaFile, Editor } from '../types';
 import { formatBytes, formatDate } from '../lib/utils';
-import { Image as ImageIcon, Video, X, Download, Trash2, Info, PackageOpen, Calendar } from 'lucide-react';
+import { Image as ImageIcon, Video, X, Download, Trash2, Info, PackageOpen, Calendar, Filter } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { BulkMetadataEditor } from '../components/BulkMetadataEditor';
 import { MetadataViewer } from '../components/MetadataViewer';
@@ -15,6 +15,8 @@ import { Breadcrumb } from '../components/Breadcrumb';
 import { FolderCard } from '../components/FolderCard';
 import { CreateFolderModal } from '../components/CreateFolderModal';
 import { FolderContextMenu } from '../components/FolderContextMenu';
+import { AdvancedFilterPanel } from '../components/AdvancedFilterPanel';
+import { useMediaFilters } from '../hooks/useMediaFilters';
 
 interface FolderNode {
   id: string;
@@ -34,6 +36,8 @@ export function MediaLibraryPage() {
   const [files, setFiles] = useState<MediaFile[]>([]);
   const [folders, setFolders] = useState<FolderNode[]>([]);
   const [editors, setEditors] = useState<Editor[]>([]);
+  const [buyers, setBuyers] = useState<Array<{ id: string; name: string }>>([]);
+  const [availableTags, setAvailableTags] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedEditor, setSelectedEditor] = useState('');
@@ -68,15 +72,49 @@ export function MediaLibraryPage() {
   // Drag and drop state
   const [draggedFileIds, setDraggedFileIds] = useState<string[]>([]);
 
+  // Advanced filters
+  const filters = useMediaFilters();
+  const [showFilters, setShowFilters] = useState(false);
+
   // Role-based permissions
   const isAdmin = user?.role === 'admin';
   const canUpload = user?.role === 'admin' || user?.role === 'creative';
   const canDelete = user?.role === 'admin';
 
+  // Initial load: fetch buyers and tags
+  useEffect(() => {
+    const fetchInitialData = async () => {
+      try {
+        if (isAdmin) {
+          const usersRes = await adminApi.getUsers();
+          const allUsers = usersRes.data.data || [];
+          const buyerUsers = allUsers.filter((u: any) => u.role === 'buyer');
+          setBuyers(buyerUsers.map((u: any) => ({ id: u.id, name: u.name })));
+        }
+
+        // Extract unique tags from existing files (simplified approach)
+        // In a production app, you might have a dedicated tags endpoint
+        const filesRes = await mediaApi.getAll({});
+        const allFiles = filesRes.data.data.files || [];
+        const tags = new Set<string>();
+        allFiles.forEach((file: any) => {
+          if (file.tags && Array.isArray(file.tags)) {
+            file.tags.forEach((tag: string) => tags.add(tag));
+          }
+        });
+        setAvailableTags(Array.from(tags).sort());
+      } catch (error) {
+        console.error('Failed to fetch initial data:', error);
+      }
+    };
+
+    fetchInitialData();
+  }, []);
+
   useEffect(() => {
     fetchData();
     setCurrentPage(1);
-  }, [selectedEditor, searchTerm, currentFolderId]);
+  }, [filters.filters, currentFolderId]);
 
   const fetchData = async () => {
     try {
@@ -96,13 +134,11 @@ export function MediaLibraryPage() {
         setBreadcrumb(breadcrumbRes.data.data || []);
         setEditors(editorsRes.data.data || []);
       } else {
-        // Fetch root level (all files without folder)
-        const params: any = {};
-        if (selectedEditor) params.editor_id = selectedEditor;
-        if (searchTerm) params.search = searchTerm;
+        // Fetch root level with advanced filters
+        const queryParams = filters.toQueryParams();
 
         const [filesRes, editorsRes] = await Promise.all([
-          mediaApi.getAll(params),
+          mediaApi.getAll(queryParams),
           editorApi.getAll(),
         ]);
 
@@ -358,25 +394,29 @@ export function MediaLibraryPage() {
             )}
 
             {/* Filters */}
-            <div className="flex gap-4">
-              <Input
-                placeholder="Search files..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="max-w-sm"
-              />
-              <select
-                value={selectedEditor}
-                onChange={(e) => setSelectedEditor(e.target.value)}
-                className="h-10 px-3 rounded-md border border-input bg-background text-sm"
+            <div className="flex gap-4 items-center">
+              <Button
+                variant={filters.hasActiveFilters() ? "default" : "outline"}
+                onClick={() => setShowFilters(!showFilters)}
+                className="flex items-center gap-2"
               >
-                <option value="">All Editors</option>
-                {editors.map((editor) => (
-                  <option key={editor.id} value={editor.id}>
-                    {editor.display_name}
-                  </option>
-                ))}
-              </select>
+                <Filter size={16} />
+                Filters
+                {filters.hasActiveFilters() && (
+                  <span className="ml-1 px-2 py-0.5 text-xs bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded-full">
+                    {filters.getActiveFilterCount()}
+                  </span>
+                )}
+              </Button>
+              {filters.hasActiveFilters() && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={filters.clearFilters}
+                >
+                  Clear All Filters
+                </Button>
+              )}
             </div>
 
             {/* Content */}
@@ -629,6 +669,16 @@ export function MediaLibraryPage() {
         onDelete={handleDeleteFolder}
         onCreateSubfolder={handleCreateSubfolder}
         onProperties={handleFolderProperties}
+      />
+
+      <AdvancedFilterPanel
+        isOpen={showFilters}
+        onClose={() => setShowFilters(false)}
+        filters={filters}
+        editors={editors}
+        buyers={buyers}
+        folders={folders}
+        availableTags={availableTags}
       />
     </DashboardLayout>
   );
