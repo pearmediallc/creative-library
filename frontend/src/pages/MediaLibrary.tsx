@@ -463,19 +463,19 @@ export function MediaLibraryPage() {
             {/* Filters */}
             <div className="flex gap-4 items-center">
               <Button
-                variant={filters.hasActiveFilters() ? "default" : "outline"}
+                variant={filters.hasActiveFilters ? "default" : "outline"}
                 onClick={() => setShowFilters(!showFilters)}
                 className="flex items-center gap-2"
               >
                 <Filter size={16} />
                 Filters
-                {filters.hasActiveFilters() && (
+                {filters.hasActiveFilters && (
                   <span className="ml-1 px-2 py-0.5 text-xs bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded-full">
-                    {filters.getActiveFilterCount()}
+                    {filters.activeFilterCount}
                   </span>
                 )}
               </Button>
-              {filters.hasActiveFilters() && (
+              {filters.hasActiveFilters && (
                 <Button
                   variant="ghost"
                   size="sm"
@@ -752,15 +752,23 @@ export function MediaLibraryPage() {
         onProperties={handleFolderProperties}
       />
 
-      <AdvancedFilterPanel
-        isOpen={showFilters}
-        onClose={() => setShowFilters(false)}
-        filters={filters}
-        editors={editors}
-        buyers={buyers}
-        folders={folders}
-        availableTags={availableTags}
-      />
+      {showFilters && (
+        <AdvancedFilterPanel
+          onClose={() => setShowFilters(false)}
+          filters={filters.filters}
+          onFilterChange={filters.updateFilter}
+          onToggleMediaType={filters.toggleMediaType}
+          onToggleEditor={filters.toggleEditor}
+          onToggleBuyer={filters.toggleBuyer}
+          onToggleFolder={filters.toggleFolder}
+          onToggleTag={filters.toggleTag}
+          onClear={filters.clearFilters}
+          editors={editors}
+          buyers={buyers}
+          folders={folders}
+          availableTags={availableTags}
+        />
+      )}
 
       {versionHistoryFile && (
         <VersionHistoryModal

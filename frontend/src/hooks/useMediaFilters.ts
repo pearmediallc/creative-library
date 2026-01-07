@@ -95,7 +95,7 @@ export function useMediaFilters() {
       filters.dateTo !== null ||
       filters.mediaTypes.length > 0 ||
       filters.editorIds.length > 0 ||
-      buyerIds.length > 0 ||
+      filters.buyerIds.length > 0 ||
       filters.folderIds.length > 0 ||
       filters.tags.length > 0 ||
       filters.sizeMin !== undefined ||
