@@ -64,11 +64,23 @@ router.get('/:id/metadata',
   mediaController.getFileMetadata.bind(mediaController)
 );
 
+// ✨ NEW: Get file activity logs
+router.get('/:id/activity',
+  authenticateToken,
+  mediaController.getFileActivity.bind(mediaController)
+);
+
 // Update file metadata
 router.patch('/:id',
   authenticateToken,
   validate(schemas.mediaUpdate),
   mediaController.updateFile.bind(mediaController)
+);
+
+// Rename file
+router.patch('/:id/rename',
+  authenticateToken,
+  mediaController.renameFile.bind(mediaController)
 );
 
 // Delete file (Admin only)
@@ -112,6 +124,29 @@ router.delete('/bulk',
 router.post('/bulk/move',
   authenticateToken,
   mediaController.bulkMove.bind(mediaController)
+);
+
+// ✨ NEW: Trash / Deleted files endpoints
+router.get('/deleted',
+  authenticateToken,
+  mediaController.getDeletedFiles.bind(mediaController)
+);
+
+router.post('/:id/restore',
+  authenticateToken,
+  mediaController.restoreFile.bind(mediaController)
+);
+
+router.delete('/:id/permanent',
+  authenticateToken,
+  requireAdmin,
+  mediaController.permanentDeleteFile.bind(mediaController)
+);
+
+router.delete('/deleted/empty',
+  authenticateToken,
+  requireAdmin,
+  mediaController.emptyTrash.bind(mediaController)
 );
 
 // ✨ NEW: File versioning endpoints

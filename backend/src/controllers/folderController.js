@@ -492,6 +492,277 @@ class FolderController {
   }
 
   /**
+   * Rename folder
+   * PATCH /api/folders/:id/rename
+   */
+  async renameFolder(req, res, next) {
+    try {
+      const { id } = req.params;
+      const { new_name } = req.body;
+
+      // Validate name
+      if (!new_name || new_name.trim().length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'new_name is required'
+        });
+      }
+
+      // Get folder
+      const folder = await Folder.findById(id);
+      if (!folder) {
+        return res.status(404).json({
+          success: false,
+          error: 'Folder not found'
+        });
+      }
+
+      // Check permissions
+      const hasAccess = await Folder.canAccess(req.user.id, id, 'edit');
+      if (!hasAccess && folder.owner_id !== req.user.id) {
+        return res.status(403).json({
+          success: false,
+          error: 'No permission to rename this folder'
+        });
+      }
+
+      const oldName = folder.name;
+      const newName = new_name.trim();
+
+      // If name hasn't changed, no need to do anything
+      if (oldName === newName) {
+        return res.json({
+          success: true,
+          message: 'Folder name unchanged',
+          data: folder
+        });
+      }
+
+      // Update folder name
+      const updatedFolder = await Folder.update(id, { name: newName });
+
+      logger.info('Folder renamed', {
+        folder_id: id,
+        old_name: oldName,
+        new_name: newName,
+        user_id: req.user.id
+      });
+
+      res.json({
+        success: true,
+        message: 'Folder renamed successfully',
+        data: updatedFolder
+      });
+    } catch (error) {
+      logger.error('Rename folder failed', {
+        error: error.message,
+        folder_id: req.params.id
+      });
+      next(error);
+    }
+  }
+
+  /**
+   * Download folder as ZIP
+   * GET /api/folders/:id/download
+   */
+  async downloadFolder(req, res, next) {
+    try {
+      const { id } = req.params;
+      const archiver = require('archiver');
+      const axios = require('axios');
+      const { query } = require('../config/database');
+
+      // Check folder access
+      const folder = await Folder.findById(id);
+      if (!folder) {
+        return res.status(404).json({
+          success: false,
+          error: 'Folder not found'
+        });
+      }
+
+      const hasAccess = await Folder.canAccess(req.user.id, id, 'view');
+      if (!hasAccess && folder.owner_id !== req.user.id) {
+        return res.status(403).json({
+          success: false,
+          error: 'Access denied'
+        });
+      }
+
+      // Get all files in folder and subfolders recursively
+      const sql = `
+        WITH RECURSIVE folder_tree AS (
+          -- Base case: starting folder
+          SELECT id, name, parent_folder_id, s3_path,
+                 CAST(name AS TEXT) as full_path
+          FROM folders
+          WHERE id = $1
+
+          UNION ALL
+
+          -- Recursive case: child folders
+          SELECT f.id, f.name, f.parent_folder_id, f.s3_path,
+                 CAST(ft.full_path || '/' || f.name AS TEXT) as full_path
+          FROM folders f
+          INNER JOIN folder_tree ft ON f.parent_folder_id = ft.id
+          WHERE f.is_deleted = FALSE
+        )
+        SELECT
+          mf.id,
+          mf.original_filename,
+          mf.s3_url,
+          mf.download_url,
+          mf.file_size,
+          COALESCE(ft.full_path, '') as folder_path
+        FROM media_files mf
+        LEFT JOIN folder_tree ft ON mf.folder_id = ft.id
+        WHERE mf.folder_id IN (SELECT id FROM folder_tree)
+          AND mf.is_deleted = FALSE
+        ORDER BY folder_path, mf.original_filename;
+      `;
+
+      const result = await query(sql, [id]);
+      const files = result.rows || result;
+
+      if (files.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'Folder contains no files'
+        });
+      }
+
+      // Generate ZIP filename with date
+      const date = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+      const zipFilename = `${folder.name}-${date}.zip`;
+
+      // Set response headers
+      res.setHeader('Content-Type', 'application/zip');
+      res.setHeader('Content-Disposition', `attachment; filename="${zipFilename}"`);
+
+      // Create ZIP archive
+      const archive = archiver('zip', {
+        zlib: { level: 9 } // Maximum compression
+      });
+
+      // Handle archive errors
+      archive.on('error', (err) => {
+        logger.error('Archive error', { error: err.message, folder_id: id });
+        if (!res.headersSent) {
+          res.status(500).json({
+            success: false,
+            error: 'Failed to create ZIP archive'
+          });
+        }
+      });
+
+      // Pipe archive to response
+      archive.pipe(res);
+
+      // Add files to archive
+      for (const file of files) {
+        try {
+          const fileUrl = file.s3_url || file.download_url;
+          if (!fileUrl) continue;
+
+          // Download file from S3
+          const response = await axios({
+            method: 'get',
+            url: fileUrl,
+            responseType: 'stream'
+          });
+
+          // Determine file path in ZIP
+          let zipPath = file.original_filename;
+          if (file.folder_path && file.folder_path !== folder.name) {
+            // Remove the root folder name from path to avoid duplication
+            const relativePath = file.folder_path.replace(folder.name, '').replace(/^\//, '');
+            if (relativePath) {
+              zipPath = `${relativePath}/${file.original_filename}`;
+            }
+          }
+
+          // Add file to archive
+          archive.append(response.data, { name: zipPath });
+
+        } catch (error) {
+          logger.error('Failed to add file to archive', {
+            error: error.message,
+            file_id: file.id,
+            filename: file.original_filename
+          });
+          // Continue with other files
+        }
+      }
+
+      // Finalize archive
+      await archive.finalize();
+
+      logger.info('Folder downloaded as ZIP', {
+        folder_id: id,
+        folder_name: folder.name,
+        file_count: files.length,
+        user_id: req.user.id
+      });
+
+    } catch (error) {
+      logger.error('Download folder failed', {
+        error: error.message,
+        folder_id: req.params.id
+      });
+
+      if (!res.headersSent) {
+        next(error);
+      }
+    }
+  }
+
+  /**
+   * Get sibling folders (folders at same level as current folder)
+   * GET /api/folders/:id/siblings
+   */
+  async getSiblings(req, res, next) {
+    try {
+      const { id } = req.params;
+
+      // Get current folder
+      const folder = await Folder.findById(id);
+      if (!folder) {
+        return res.status(404).json({
+          success: false,
+          error: 'Folder not found'
+        });
+      }
+
+      // Check access to current folder
+      const hasAccess = await Folder.canAccess(req.user.id, id, 'view');
+      if (!hasAccess && folder.owner_id !== req.user.id) {
+        return res.status(403).json({
+          success: false,
+          error: 'Access denied'
+        });
+      }
+
+      // Get siblings (folders with same parent)
+      const siblings = await Folder.getSiblings(id, req.user.id, folder.parent_folder_id);
+
+      res.json({
+        success: true,
+        data: {
+          siblings,
+          current_folder_id: id
+        }
+      });
+    } catch (error) {
+      logger.error('Get siblings failed', {
+        error: error.message,
+        folder_id: req.params.id
+      });
+      next(error);
+    }
+  }
+
+  /**
    * Helper: Log file operation
    */
   async logOperation(data) {

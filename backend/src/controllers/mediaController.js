@@ -8,7 +8,7 @@ class MediaController {
   /**
    * Upload media file
    * POST /api/media/upload
-   * Body: { editor_id, tags, description, folder_id, organize_by_date, assigned_buyer_id }
+   * Body: { editor_id, tags, description, folder_id, organize_by_date, assigned_buyer_id, folder_path }
    * File: multipart/form-data
    */
   async upload(req, res, next) {
@@ -20,7 +20,7 @@ class MediaController {
         });
       }
 
-      const { editor_id, tags, description, folder_id, organize_by_date, assigned_buyer_id } = req.body;
+      const { editor_id, tags, description, folder_id, organize_by_date, assigned_buyer_id, folder_path } = req.body;
       const userId = req.user.id;
 
       // Parse tags if it's a string (from multipart form)
@@ -28,6 +28,12 @@ class MediaController {
 
       // ✨ NEW: Pass metadata operations from middleware
       const metadataOperations = req.metadataOperations || {};
+
+      // ✨ NEW: Handle folder_path for folder uploads - create hierarchy if needed
+      let targetFolderId = folder_id;
+      if (folder_path && folder_path.trim()) {
+        targetFolderId = await this.createFolderHierarchy(folder_id, folder_path, userId);
+      }
 
       const mediaFile = await mediaService.uploadMedia(
         req.file,
@@ -37,7 +43,7 @@ class MediaController {
           tags: parsedTags,
           description,
           metadataOperations,  // ✨ Include metadata operations
-          folder_id,           // ✨ NEW: Target folder ID
+          folder_id: targetFolderId,  // ✨ NEW: Target folder ID (potentially from hierarchy)
           organize_by_date: organize_by_date === 'true' || organize_by_date === true,  // ✨ NEW: Auto date-based folders
           assigned_buyer_id    // ✨ NEW: Buyer assignment
         }
@@ -604,9 +610,9 @@ class MediaController {
       const zipStream = await mediaService.createBulkZip(file_ids, userId);
 
       // Set response headers for ZIP download
-      const timestamp = new Date().toISOString().split('T')[0];
+      const timestamp = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
       res.setHeader('Content-Type', 'application/zip');
-      res.setHeader('Content-Disposition', `attachment; filename="creative-library-files-${timestamp}.zip"`);
+      res.setHeader('Content-Disposition', `attachment; filename="files-${timestamp}.zip"`);
       res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
 
       // Pipe the ZIP stream to response
@@ -747,6 +753,486 @@ class MediaController {
       });
     } catch (error) {
       logger.error('Bulk move error', { error: error.message });
+      next(error);
+    }
+  }
+
+  /**
+   * ✨ NEW: Get deleted files (trash)
+   * GET /api/media/deleted
+   */
+  async getDeletedFiles(req, res, next) {
+    try {
+      const MediaFile = require('../models/MediaFile');
+
+      // Query for deleted files only
+      const sql = `
+        SELECT
+          mf.*,
+          u.name as uploader_name,
+          u.email as uploader_email,
+          e.display_name as editor_name
+        FROM media_files mf
+        LEFT JOIN users u ON u.id = mf.uploaded_by
+        LEFT JOIN editors e ON e.id = mf.editor_id
+        WHERE mf.is_deleted = TRUE
+        ORDER BY mf.deleted_at DESC
+      `;
+
+      const result = await MediaFile.raw(sql);
+
+      logger.info(`Retrieved ${result.length} deleted files for user ${req.user.id}`);
+
+      res.json({
+        success: true,
+        data: result
+      });
+    } catch (error) {
+      logger.error('Get deleted files error', { error: error.message });
+      next(error);
+    }
+  }
+
+  /**
+   * ✨ NEW: Restore deleted file
+   * POST /api/media/:id/restore
+   */
+  async restoreFile(req, res, next) {
+    try {
+      const MediaFile = require('../models/MediaFile');
+      const fileId = req.params.id;
+      const userId = req.user.id;
+
+      // Get file info
+      const file = await MediaFile.findById(fileId);
+
+      if (!file) {
+        return res.status(404).json({
+          success: false,
+          error: 'File not found'
+        });
+      }
+
+      if (!file.is_deleted) {
+        return res.status(400).json({
+          success: false,
+          error: 'File is not in trash'
+        });
+      }
+
+      // Check permissions (only uploader or admin can restore)
+      const User = require('../models/User');
+      const user = await User.findById(userId);
+
+      if (file.uploaded_by !== userId && user.role !== 'admin') {
+        return res.status(403).json({
+          success: false,
+          error: 'Permission denied'
+        });
+      }
+
+      // Restore the file
+      await MediaFile.update(fileId, {
+        is_deleted: false,
+        deleted_at: null,
+        deleted_by: null
+      });
+
+      // Log activity
+      await logActivity({
+        req,
+        actionType: 'media_restore',
+        resourceType: 'media_file',
+        resourceId: fileId,
+        resourceName: file.original_filename,
+        details: {
+          file_type: file.file_type,
+          editor_name: file.editor_name
+        },
+        status: 'success'
+      });
+
+      logger.info(`File restored: ${fileId} by user ${userId}`);
+
+      res.json({
+        success: true,
+        message: 'File restored successfully'
+      });
+    } catch (error) {
+      logger.error('Restore file error', { error: error.message });
+      next(error);
+    }
+  }
+
+  /**
+   * ✨ NEW: Permanently delete a file (admin only)
+   * DELETE /api/media/:id/permanent
+   */
+  async permanentDeleteFile(req, res, next) {
+    try {
+      const MediaFile = require('../models/MediaFile');
+      const s3Service = require('../services/s3Service');
+      const fileId = req.params.id;
+      const userId = req.user.id;
+
+      // Get file info
+      const file = await MediaFile.findById(fileId);
+
+      if (!file) {
+        return res.status(404).json({
+          success: false,
+          error: 'File not found'
+        });
+      }
+
+      if (!file.is_deleted) {
+        return res.status(400).json({
+          success: false,
+          error: 'File must be in trash before permanent deletion. Use DELETE /api/media/:id to move to trash first.'
+        });
+      }
+
+      // Delete from S3
+      try {
+        if (file.s3_key) {
+          await s3Service.deleteFile(file.s3_key);
+          logger.info(`Deleted S3 file: ${file.s3_key}`);
+        }
+        if (file.thumbnail_s3_key) {
+          await s3Service.deleteFile(file.thumbnail_s3_key);
+          logger.info(`Deleted S3 thumbnail: ${file.thumbnail_s3_key}`);
+        }
+      } catch (s3Error) {
+        logger.error('S3 deletion failed', { error: s3Error.message, fileId });
+        // Continue with database deletion even if S3 fails
+      }
+
+      // Hard delete from database
+      await MediaFile.delete(fileId);
+
+      // Log activity
+      await logActivity({
+        req,
+        actionType: 'media_permanent_delete',
+        resourceType: 'media_file',
+        resourceId: fileId,
+        resourceName: file.original_filename,
+        details: {
+          file_type: file.file_type,
+          editor_name: file.editor_name,
+          s3_key: file.s3_key
+        },
+        status: 'success'
+      });
+
+      logger.info(`File permanently deleted: ${fileId} by user ${userId}`);
+
+      res.json({
+        success: true,
+        message: 'File permanently deleted'
+      });
+    } catch (error) {
+      logger.error('Permanent delete error', { error: error.message });
+      next(error);
+    }
+  }
+
+  /**
+   * ✨ NEW: Empty trash (permanently delete all deleted files) - admin only
+   * DELETE /api/media/deleted/empty
+   */
+  async emptyTrash(req, res, next) {
+    try {
+      const MediaFile = require('../models/MediaFile');
+      const s3Service = require('../services/s3Service');
+      const userId = req.user.id;
+
+      // Get all deleted files
+      const deletedFiles = await MediaFile.raw(`
+        SELECT * FROM media_files WHERE is_deleted = TRUE
+      `);
+
+      logger.info(`Emptying trash: ${deletedFiles.length} files to be permanently deleted by user ${userId}`);
+
+      const results = {
+        deleted: 0,
+        failed: 0,
+        errors: []
+      };
+
+      // Delete each file
+      for (const file of deletedFiles) {
+        try {
+          // Delete from S3
+          if (file.s3_key) {
+            await s3Service.deleteFile(file.s3_key);
+          }
+          if (file.thumbnail_s3_key) {
+            await s3Service.deleteFile(file.thumbnail_s3_key);
+          }
+
+          // Hard delete from database
+          await MediaFile.delete(file.id);
+
+          results.deleted++;
+        } catch (error) {
+          logger.error(`Failed to delete file ${file.id}`, { error: error.message });
+          results.failed++;
+          results.errors.push({
+            fileId: file.id,
+            filename: file.original_filename,
+            error: error.message
+          });
+        }
+      }
+
+      // Log activity
+      await logActivity({
+        req,
+        actionType: 'media_empty_trash',
+        resourceType: 'media_file',
+        resourceId: null,
+        resourceName: 'Trash',
+        details: {
+          total_files: deletedFiles.length,
+          deleted: results.deleted,
+          failed: results.failed
+        },
+        status: results.failed === 0 ? 'success' : 'partial_success'
+      });
+
+      logger.info(`Trash emptied: ${results.deleted} files deleted, ${results.failed} failed`);
+
+      res.json({
+        success: true,
+        message: `Trash emptied successfully. ${results.deleted} files permanently deleted.`,
+        data: results
+      });
+    } catch (error) {
+      logger.error('Empty trash error', { error: error.message });
+      next(error);
+    }
+  }
+
+  /**
+   * Rename media file
+   * PATCH /api/media/:id/rename
+   * Body: { new_filename: string }
+   */
+  async renameFile(req, res, next) {
+    try {
+      const { id } = req.params;
+      const { new_filename } = req.body;
+      const userId = req.user.id;
+
+      // Validate input
+      if (!new_filename || !new_filename.trim()) {
+        return res.status(400).json({
+          success: false,
+          error: 'new_filename is required'
+        });
+      }
+
+      const mediaService = require('../services/mediaService');
+      const s3Service = require('../services/s3Service');
+      const MediaFile = require('../models/MediaFile');
+
+      // Get the file
+      const file = await MediaFile.findById(id);
+
+      if (!file) {
+        return res.status(404).json({
+          success: false,
+          error: 'Media file not found'
+        });
+      }
+
+      if (file.is_deleted) {
+        return res.status(400).json({
+          success: false,
+          error: 'Cannot rename deleted file'
+        });
+      }
+
+      // Check permissions (owner or admin can rename)
+      const User = require('../models/User');
+      const user = await User.findById(userId);
+
+      if (file.uploaded_by !== userId && user.role !== 'admin') {
+        return res.status(403).json({
+          success: false,
+          error: 'Permission denied'
+        });
+      }
+
+      const oldFilename = file.original_filename;
+      const newFilename = new_filename.trim();
+
+      // If filename hasn't changed, no need to do anything
+      if (oldFilename === newFilename) {
+        return res.json({
+          success: true,
+          message: 'Filename unchanged',
+          data: file
+        });
+      }
+
+      // Extract file extension from old filename
+      const oldExtension = oldFilename.substring(oldFilename.lastIndexOf('.'));
+      const newExtension = newFilename.includes('.')
+        ? newFilename.substring(newFilename.lastIndexOf('.'))
+        : oldExtension;
+
+      // Ensure new filename has an extension
+      const finalFilename = newFilename.includes('.')
+        ? newFilename
+        : newFilename + oldExtension;
+
+      // Generate new S3 key (keep same structure, just change filename)
+      const oldS3Key = file.s3_key;
+      const s3KeyParts = oldS3Key.split('/');
+      s3KeyParts[s3KeyParts.length - 1] = finalFilename;
+      const newS3Key = s3KeyParts.join('/');
+
+      // Copy file to new key in S3
+      await s3Service.copyFile(oldS3Key, newS3Key);
+
+      // Get the new S3 URL
+      const newS3Url = await s3Service.getSignedUrl(newS3Key);
+
+      // Update database
+      await MediaFile.update(id, {
+        original_filename: finalFilename,
+        filename: finalFilename,
+        s3_key: newS3Key,
+        s3_url: newS3Url
+      });
+
+      // Delete old S3 file
+      await s3Service.deleteFile(oldS3Key);
+
+      // Get updated file
+      const updatedFile = await MediaFile.findById(id);
+
+      // Log activity
+      await logActivity({
+        req,
+        actionType: 'media_rename',
+        resourceType: 'media_file',
+        resourceId: id,
+        resourceName: finalFilename,
+        details: {
+          old_filename: oldFilename,
+          new_filename: finalFilename,
+          old_s3_key: oldS3Key,
+          new_s3_key: newS3Key
+        },
+        status: 'success'
+      });
+
+      logger.info(`File renamed: ${oldFilename} -> ${finalFilename} by user ${userId}`);
+
+      res.json({
+        success: true,
+        message: 'File renamed successfully',
+        data: updatedFile
+      });
+    } catch (error) {
+      logger.error('Rename file error', { error: error.message, fileId: req.params.id });
+      next(error);
+    }
+  }
+
+  /**
+   * Create folder hierarchy from relative path
+   * Helper method for folder uploads
+   * @param {string} baseFolderId - Base folder ID (or null for root)
+   * @param {string} relativePath - Relative path like "Photos/2024/January" or "folder1/subfolder2"
+   * @param {string} userId - User ID
+   * @returns {Promise<string>} Final folder ID
+   */
+  async createFolderHierarchy(baseFolderId, relativePath, userId) {
+    try {
+      const Folder = require('../models/Folder');
+      const folderController = require('./folderController');
+
+      // Split path by '/' and filter out empty segments
+      const pathSegments = relativePath.split('/').filter(segment => segment.trim().length > 0);
+
+      if (pathSegments.length === 0) {
+        return baseFolderId;
+      }
+
+      let currentParentId = baseFolderId;
+
+      // Create each folder level if it doesn't exist
+      for (const folderName of pathSegments) {
+        const folder = await folderController.findOrCreateFolder(
+          folderName,
+          currentParentId,
+          userId,
+          'user' // User-created folder type
+        );
+        currentParentId = folder.id;
+      }
+
+      logger.info(`Created folder hierarchy: ${relativePath}`, {
+        baseFolderId,
+        finalFolderId: currentParentId,
+        userId
+      });
+
+      return currentParentId;
+    } catch (error) {
+      logger.error('Create folder hierarchy failed', {
+        error: error.message,
+        baseFolderId,
+        relativePath,
+        userId
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Get activity logs for a specific file
+   * GET /api/media/:id/activity
+   */
+  async getFileActivity(req, res, next) {
+    try {
+      const fileId = req.params.id;
+      const ActivityLog = require('../models/ActivityLog');
+
+      // Get activity logs for this specific file
+      const filters = {
+        resourceType: 'media_file',
+        resourceId: fileId,
+        actionType: req.query.action_type,
+        dateFrom: req.query.date_from,
+        dateTo: req.query.date_to,
+        limit: parseInt(req.query.limit) || 100,
+        offset: parseInt(req.query.offset) || 0
+      };
+
+      const [logs, total] = await Promise.all([
+        ActivityLog.getLogs(filters),
+        ActivityLog.getCount(filters)
+      ]);
+
+      res.json({
+        success: true,
+        data: {
+          logs,
+          pagination: {
+            total,
+            limit: filters.limit,
+            offset: filters.offset,
+            hasMore: filters.offset + logs.length < total
+          }
+        }
+      });
+    } catch (error) {
+      logger.error('Get file activity error', { error: error.message, fileId: req.params.id });
       next(error);
     }
   }

@@ -105,6 +105,8 @@ export const mediaApi = {
   getOne: (id: string) => api.get(`/media/${id}`),
   update: (id: string, data: { editor_id?: string; tags?: string[]; description?: string }) =>
     api.patch(`/media/${id}`, data),
+  rename: (id: string, newFilename: string) =>
+    api.patch(`/media/${id}/rename`, { new_filename: newFilename }),
   delete: (id: string) => api.delete(`/media/${id}`),
   getStats: () => api.get('/media/stats'),
 
@@ -150,6 +152,12 @@ export const mediaApi = {
     api.delete('/media/bulk', { data: { file_ids: fileIds } }),
   bulkMove: (fileIds: string[], targetFolderId: string | null) =>
     api.post('/media/bulk/move', { file_ids: fileIds, target_folder_id: targetFolderId }),
+
+  // ✨ NEW: Trash / Deleted files operations
+  getDeletedFiles: () => api.get('/media/deleted'),
+  restore: (fileId: string) => api.post(`/media/${fileId}/restore`),
+  permanentDelete: (fileId: string) => api.delete(`/media/${fileId}/permanent`),
+  emptyTrash: () => api.delete('/media/deleted/empty'),
 };
 
 // Facebook endpoints
@@ -245,6 +253,17 @@ export const activityLogApi = {
   getFilters: () => api.get('/activity-logs/filters'),
 };
 
+// Activity endpoints (per-file activity)
+export const activityApi = {
+  getFileActivity: (fileId: string, params?: {
+    action_type?: string;
+    date_from?: string;
+    date_to?: string;
+    limit?: number;
+    offset?: number;
+  }) => api.get(`/media/${fileId}/activity`, { params }),
+};
+
 // Team endpoints
 export const teamApi = {
   getAll: () => api.get('/teams'),
@@ -277,6 +296,41 @@ export const permissionApi = {
     team_id: string;
     permissions: string[];
   }) => api.post('/permissions/share-folder', data),
+  getSharedByMe: () => api.get('/permissions/shared-by-me'),
+  getSharedWithMe: () => api.get('/permissions/shared-with-me'),
+};
+
+// Public Link endpoints
+export const publicLinkApi = {
+  create: (permissionId: string, options: {
+    password?: string;
+    expires_at?: string;
+    disable_download?: boolean;
+    max_views?: number;
+  }) => api.post(`/permissions/${permissionId}/public-link`, options),
+
+  update: (linkId: string, options: {
+    password?: string;
+    expires_at?: string;
+    disable_download?: boolean;
+    max_views?: number;
+  }) => api.patch(`/permissions/public-link/${linkId}`, options),
+
+  revoke: (linkId: string) => api.delete(`/permissions/public-link/${linkId}`),
+
+  getStats: (linkId: string) => api.get(`/permissions/public-link/${linkId}/stats`),
+
+  // Public endpoints (no auth required)
+  verifyPassword: (token: string, password?: string) =>
+    axios.post(`${API_BASE_URL}/permissions/public/verify`, { token, password }),
+
+  getPublic: (token: string) =>
+    axios.get(`${API_BASE_URL}/permissions/public/${token}`),
+
+  downloadPublic: (token: string, password?: string) =>
+    axios.get(`${API_BASE_URL}/permissions/public/${token}/download`, {
+      params: password ? { password } : undefined,
+    }),
 };
 
 // ✨ NEW: Folder endpoints
@@ -306,12 +360,19 @@ export const folderApi = {
   // Get folder breadcrumb (navigation path)
   getBreadcrumb: (id: string) => api.get(`/folders/${id}/breadcrumb`),
 
+  // Get sibling folders (folders at same level)
+  getSiblings: (id: string) => api.get(`/folders/${id}/siblings`),
+
   // Update folder (rename, change description, color)
   update: (id: string, data: Partial<{
     name: string;
     description: string;
     color: string;
   }>) => api.patch(`/folders/${id}`, data),
+
+  // Rename folder
+  rename: (id: string, newName: string) =>
+    api.patch(`/folders/${id}/rename`, { new_name: newName }),
 
   // Delete folder
   delete: (id: string, deleteContents = false) =>
@@ -322,12 +383,135 @@ export const folderApi = {
     api.post('/folders/move-files', data),
 
   // Copy files to target folder
-  copyFiles: (data: { file_ids: string[]; target_folder_id: string }) =>
+  copyFiles: (data: { file_ids: string[]; target_folder_id: string | null }) =>
     api.post('/folders/copy-files', data),
 
   // Create or get date-based folder structure (jan2024/15-jan/)
   createDateFolder: (data?: { date?: string; parent_folder_id?: string }) =>
     api.post('/folders/date-folder', data),
+
+  // Download folder as ZIP
+  downloadFolder: (id: string) =>
+    api.get(`/folders/${id}/download`, {
+      responseType: 'blob',
+    }),
+};
+
+// Starred endpoints
+export const starredApi = {
+  // Toggle starred status for a file
+  toggleStarred: (fileId: string, isStarred: boolean) =>
+    api.put(`/starred/${fileId}`, { is_starred: isStarred }),
+
+  // Get all starred files
+  getStarredFiles: () => api.get('/starred'),
+};
+
+// Comment endpoints
+export const commentApi = {
+  // Get comments for a file
+  getComments: (fileId: string, includeResolved = true) =>
+    api.get('/comments', { params: { file_id: fileId, include_resolved: includeResolved } }),
+
+  // Create a new comment
+  createComment: (data: {
+    file_id: string;
+    content: string;
+    parent_comment_id?: string;
+  }) => api.post('/comments', data),
+
+  // Update comment
+  updateComment: (id: string, content: string) =>
+    api.patch(`/comments/${id}`, { content }),
+
+  // Delete comment
+  deleteComment: (id: string) => api.delete(`/comments/${id}`),
+
+  // Toggle comment resolution
+  toggleResolve: (id: string) => api.post(`/comments/${id}/resolve`),
+
+  // Add reaction to comment
+  addReaction: (id: string, reactionType: string) =>
+    api.post(`/comments/${id}/reactions`, { reaction_type: reactionType }),
+
+  // Remove reaction from comment
+  removeReaction: (id: string, reactionType: string) =>
+    api.delete(`/comments/${id}/reactions/${reactionType}`),
+};
+
+// Saved Search / Smart Collections endpoints
+export const savedSearchApi = {
+  create: (data: {
+    name: string;
+    description?: string;
+    filters: any;
+    color?: string;
+    icon?: string
+  }) => api.post('/saved-searches', data),
+
+  getAll: () => api.get('/saved-searches'),
+
+  getOne: (id: string) => api.get(`/saved-searches/${id}`),
+
+  getResults: (id: string, params?: { limit?: number; offset?: number }) =>
+    api.get(`/saved-searches/${id}/results`, { params }),
+
+  update: (id: string, data: any) => api.patch(`/saved-searches/${id}`, data),
+
+  delete: (id: string) => api.delete(`/saved-searches/${id}`),
+
+  toggleFavorite: (id: string) => api.post(`/saved-searches/${id}/favorite`),
+};
+
+// File Request endpoints
+export const fileRequestApi = {
+  // Create new file request
+  create: (data: {
+    title: string;
+    description?: string;
+    folder_id?: string;
+    deadline?: string;
+    allow_multiple_uploads?: boolean;
+    require_email?: boolean;
+    custom_message?: string;
+  }) => api.post('/file-requests', data),
+
+  // Get all file requests for current user
+  getAll: (params?: { status?: 'active' | 'closed' | 'all' }) =>
+    api.get('/file-requests', { params }),
+
+  // Get single file request details
+  getOne: (id: string) => api.get(`/file-requests/${id}`),
+
+  // Update file request
+  update: (id: string, data: {
+    title?: string;
+    description?: string;
+    deadline?: string;
+    allow_multiple_uploads?: boolean;
+    require_email?: boolean;
+    custom_message?: string;
+  }) => api.patch(`/file-requests/${id}`, data),
+
+  // Close file request
+  close: (id: string) => api.post(`/file-requests/${id}/close`),
+
+  // Delete file request
+  delete: (id: string) => api.delete(`/file-requests/${id}`),
+
+  // Public endpoints (no auth required)
+  getPublic: (token: string) =>
+    axios.get(`${API_BASE_URL}/file-requests/public/${token}`),
+
+  uploadToRequest: (token: string, file: File, uploaderEmail?: string, uploaderName?: string) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (uploaderEmail) formData.append('uploader_email', uploaderEmail);
+    if (uploaderName) formData.append('uploader_name', uploaderName);
+    return axios.post(`${API_BASE_URL}/file-requests/public/${token}/upload`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
 };
 
 export default api;

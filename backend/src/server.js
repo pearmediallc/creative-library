@@ -23,6 +23,10 @@ const activityLogRoutes = require('./routes/activityLogs');
 const folderRoutes = require('./routes/folders');
 const teamRoutes = require('./routes/teams');
 const permissionRoutes = require('./routes/permissions');
+const starredRoutes = require('./routes/starred');
+const commentRoutes = require('./routes/comments');
+const savedSearchRoutes = require('./routes/savedSearches');
+const fileRequestRoutes = require('./routes/fileRequests');
 
 // Import error handler
 const errorHandler = require('./middleware/errorHandler');
@@ -124,9 +128,13 @@ app.use('/api/folders', folderRoutes);
 app.use('/api/activity-logs', activityLogRoutes);
 app.use('/api/teams', teamRoutes);
 app.use('/api/permissions', permissionRoutes);
+app.use('/api/starred', starredRoutes);
+app.use('/api/comments', commentRoutes);
+app.use('/api/saved-searches', savedSearchRoutes);
+app.use('/api/file-requests', fileRequestRoutes);
 
 // Log registered routes
-logger.info('API routes registered: /api/auth, /api/media, /api/editors, /api/analytics, /api/admin, /api/facebook, /api/activity-logs, /api/folders, /api/teams, /api/permissions');
+logger.info('API routes registered: /api/auth, /api/media, /api/editors, /api/analytics, /api/admin, /api/facebook, /api/activity-logs, /api/folders, /api/teams, /api/permissions, /api/starred, /api/comments, /api/saved-searches, /api/file-requests');
 
 // 404 handler
 app.use((req, res) => {

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, ZoomIn, ZoomOut, ChevronLeft, ChevronRight, Download, Maximize2 } from 'lucide-react';
+import { PDFViewer } from './PDFViewer';
 
 interface MediaFile {
   id: string;
@@ -123,69 +124,106 @@ export function EnhancedLightbox({ files, currentIndex, onClose, onNavigate }: E
 
   if (!currentFile) return null;
 
+  const isPDF = currentFile.file_type === 'pdf' || currentFile.original_filename.toLowerCase().endsWith('.pdf');
+
   return (
     <div className="fixed inset-0 bg-black z-50 flex flex-col">
-      {/* Header */}
-      <div className="absolute top-0 left-0 right-0 bg-gradient-to-b from-black/80 to-transparent p-4 flex items-center justify-between z-10">
-        <div className="flex items-center gap-4 text-white">
-          <h3 className="text-lg font-semibold truncate max-w-md">
-            {currentFile.original_filename}
-          </h3>
-          <span className="text-sm opacity-75">
-            {index + 1} / {files.length}
-          </span>
-        </div>
+      {/* Header - Only show for non-PDF files (PDF has its own toolbar) */}
+      {!isPDF && (
+        <div className="absolute top-0 left-0 right-0 bg-gradient-to-b from-black/80 to-transparent p-4 flex items-center justify-between z-10">
+          <div className="flex items-center gap-4 text-white">
+            <h3 className="text-lg font-semibold truncate max-w-md">
+              {currentFile.original_filename}
+            </h3>
+            <span className="text-sm opacity-75">
+              {index + 1} / {files.length}
+            </span>
+          </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleDownload}
-            className="p-2 text-white hover:bg-white/20 rounded-lg transition-colors"
-            title="Download"
-          >
-            <Download size={20} />
-          </button>
-          <button
-            onClick={onClose}
-            className="p-2 text-white hover:bg-white/20 rounded-lg transition-colors"
-            title="Close (Esc)"
-          >
-            <X size={20} />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleDownload}
+              className="p-2 text-white hover:bg-white/20 rounded-lg transition-colors"
+              title="Download"
+            >
+              <Download size={20} />
+            </button>
+            <button
+              onClick={onClose}
+              className="p-2 text-white hover:bg-white/20 rounded-lg transition-colors"
+              title="Close (Esc)"
+            >
+              <X size={20} />
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Main Content */}
-      <div
-        className="flex-1 flex items-center justify-center overflow-hidden relative"
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
-        onWheel={handleWheel}
-      >
-        {currentFile.file_type === 'video' ? (
-          <video
-            src={currentFile.s3_url}
-            controls
-            autoPlay
-            className="max-w-full max-h-full"
-          />
-        ) : (
-          <img
-            src={currentFile.s3_url}
-            alt={currentFile.original_filename}
-            className="max-w-full max-h-full object-contain transition-transform"
-            style={{
-              transform: `scale(${zoom}) translate(${position.x / zoom}px, ${position.y / zoom}px)`,
-              cursor: zoom > 1 ? (dragging ? 'grabbing' : 'grab') : 'default'
-            }}
-            draggable={false}
-          />
-        )}
-      </div>
+      {isPDF ? (
+        <div className="flex-1 flex flex-col overflow-hidden relative">
+          {/* PDF Header */}
+          <div className="absolute top-0 left-0 right-0 bg-gradient-to-b from-black/80 to-transparent p-4 flex items-center justify-between z-20">
+            <div className="flex items-center gap-4 text-white">
+              <h3 className="text-lg font-semibold truncate max-w-md">
+                {currentFile.original_filename}
+              </h3>
+              <span className="text-sm opacity-75">
+                {index + 1} / {files.length}
+              </span>
+            </div>
 
-      {/* Navigation */}
-      {index > 0 && (
+            <button
+              onClick={onClose}
+              className="p-2 text-white hover:bg-white/20 rounded-lg transition-colors"
+              title="Close (Esc)"
+            >
+              <X size={20} />
+            </button>
+          </div>
+
+          {/* PDF Viewer */}
+          <div className="flex-1 mt-16">
+            <PDFViewer
+              url={currentFile.s3_url}
+              filename={currentFile.original_filename}
+              onDownload={handleDownload}
+            />
+          </div>
+        </div>
+      ) : (
+        <div
+          className="flex-1 flex items-center justify-center overflow-hidden relative"
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={handleMouseUp}
+          onWheel={handleWheel}
+        >
+          {currentFile.file_type === 'video' ? (
+            <video
+              src={currentFile.s3_url}
+              controls
+              autoPlay
+              className="max-w-full max-h-full"
+            />
+          ) : (
+            <img
+              src={currentFile.s3_url}
+              alt={currentFile.original_filename}
+              className="max-w-full max-h-full object-contain transition-transform"
+              style={{
+                transform: `scale(${zoom}) translate(${position.x / zoom}px, ${position.y / zoom}px)`,
+                cursor: zoom > 1 ? (dragging ? 'grabbing' : 'grab') : 'default'
+              }}
+              draggable={false}
+            />
+          )}
+        </div>
+      )}
+
+      {/* Navigation - Hide for PDFs as they have their own navigation */}
+      {!isPDF && index > 0 && (
         <button
           onClick={handlePrevious}
           className="absolute left-4 top-1/2 -translate-y-1/2 p-3 bg-black/50 hover:bg-black/70 text-white rounded-full transition-colors"
@@ -195,7 +233,7 @@ export function EnhancedLightbox({ files, currentIndex, onClose, onNavigate }: E
         </button>
       )}
 
-      {index < files.length - 1 && (
+      {!isPDF && index < files.length - 1 && (
         <button
           onClick={handleNext}
           className="absolute right-4 top-1/2 -translate-y-1/2 p-3 bg-black/50 hover:bg-black/70 text-white rounded-full transition-colors"
@@ -205,8 +243,8 @@ export function EnhancedLightbox({ files, currentIndex, onClose, onNavigate }: E
         </button>
       )}
 
-      {/* Zoom Controls */}
-      {currentFile.file_type === 'image' && (
+      {/* Zoom Controls - Only for images */}
+      {!isPDF && currentFile.file_type === 'image' && (
         <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/80 backdrop-blur rounded-full p-2 flex items-center gap-2">
           <button
             onClick={handleZoomOut}
@@ -242,8 +280,8 @@ export function EnhancedLightbox({ files, currentIndex, onClose, onNavigate }: E
         </div>
       )}
 
-      {/* Thumbnails */}
-      {files.length > 1 && (
+      {/* Thumbnails - Hide for PDFs as they have their own thumbnail sidebar */}
+      {!isPDF && files.length > 1 && (
         <div className="absolute bottom-20 left-0 right-0 flex justify-center">
           <div className="bg-black/80 backdrop-blur rounded-lg p-2 flex gap-2 max-w-full overflow-x-auto">
             {files.slice(Math.max(0, index - 5), Math.min(files.length, index + 6)).map((file, i) => {

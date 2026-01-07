@@ -96,14 +96,28 @@ class MediaFile extends BaseModel {
       params.push(filters.uploaded_by);
     }
 
+    // ✨ FIXED: Support multiple editor IDs (comma-separated from frontend)
     if (filters.editor_id) {
-      conditions.push(`editor_id = $${paramIndex++}`);
-      params.push(filters.editor_id);
+      const editorIds = filters.editor_id.split(',').filter(id => id.trim());
+      if (editorIds.length === 1) {
+        conditions.push(`editor_id = $${paramIndex++}`);
+        params.push(editorIds[0]);
+      } else if (editorIds.length > 1) {
+        conditions.push(`editor_id = ANY($${paramIndex++})`);
+        params.push(editorIds);
+      }
     }
 
+    // ✨ FIXED: Support multiple media types (comma-separated from frontend)
     if (filters.media_type) {
-      conditions.push(`file_type = $${paramIndex++}`);
-      params.push(filters.media_type);
+      const mediaTypes = filters.media_type.split(',').filter(t => t.trim());
+      if (mediaTypes.length === 1) {
+        conditions.push(`file_type = $${paramIndex++}`);
+        params.push(mediaTypes[0]);
+      } else if (mediaTypes.length > 1) {
+        conditions.push(`file_type = ANY($${paramIndex++})`);
+        params.push(mediaTypes);
+      }
     }
 
     if (filters.tags && filters.tags.length > 0) {
@@ -120,27 +134,41 @@ class MediaFile extends BaseModel {
       paramIndex++;
     }
 
-    // ✨ NEW: Date range filters
+    // ✨ FIXED: Date range filters with proper day boundaries
     if (filters.date_from) {
-      conditions.push(`created_at >= $${paramIndex++}`);
+      // Start of day for date_from
+      conditions.push(`created_at >= $${paramIndex++}::date`);
       params.push(filters.date_from);
     }
 
     if (filters.date_to) {
-      conditions.push(`created_at <= $${paramIndex++}`);
+      // End of day for date_to (include full day)
+      conditions.push(`created_at < ($${paramIndex++}::date + interval '1 day')`);
       params.push(filters.date_to);
     }
 
-    // ✨ NEW: Buyer filter
+    // ✨ FIXED: Support multiple buyer IDs (comma-separated from frontend)
     if (filters.buyer_id) {
-      conditions.push(`assigned_buyer_id = $${paramIndex++}`);
-      params.push(filters.buyer_id);
+      const buyerIds = filters.buyer_id.split(',').filter(id => id.trim());
+      if (buyerIds.length === 1) {
+        conditions.push(`assigned_buyer_id = $${paramIndex++}`);
+        params.push(buyerIds[0]);
+      } else if (buyerIds.length > 1) {
+        conditions.push(`assigned_buyer_id = ANY($${paramIndex++})`);
+        params.push(buyerIds);
+      }
     }
 
-    // ✨ NEW: Folder filter
+    // ✨ FIXED: Support multiple folder IDs (comma-separated from frontend)
     if (filters.folder_id) {
-      conditions.push(`folder_id = $${paramIndex++}`);
-      params.push(filters.folder_id);
+      const folderIds = filters.folder_id.split(',').filter(id => id.trim());
+      if (folderIds.length === 1) {
+        conditions.push(`folder_id = $${paramIndex++}`);
+        params.push(folderIds[0]);
+      } else if (folderIds.length > 1) {
+        conditions.push(`folder_id = ANY($${paramIndex++})`);
+        params.push(folderIds);
+      }
     }
 
     // ✨ NEW: File size filters
@@ -368,6 +396,54 @@ class MediaFile extends BaseModel {
       [ids]
     );
 
+    return result.rows;
+  }
+
+  /**
+   * Toggle starred status for a file
+   * @param {string} fileId - File ID
+   * @param {boolean} isStarred - Star or unstar
+   * @returns {Promise<Object>} Updated file
+   */
+  async toggleStarred(fileId, isStarred) {
+    const starred_at = isStarred ? new Date().toISOString() : null;
+
+    const result = await this.query(
+      `UPDATE ${this.tableName}
+       SET is_starred = $1, starred_at = $2, updated_at = NOW()
+       WHERE id = $3 AND deleted_at IS NULL
+       RETURNING *`,
+      [isStarred, starred_at, fileId]
+    );
+
+    return result.rows[0];
+  }
+
+  /**
+   * Get all starred files for a user
+   * @param {string} userId - User ID (optional, for user-specific filtering)
+   * @returns {Promise<Array>} Starred files
+   */
+  async getStarredFiles(userId = null) {
+    let query = `
+      SELECT
+        mf.*,
+        e.display_name as editor_name
+      FROM ${this.tableName} mf
+      LEFT JOIN editors e ON mf.editor_id = e.id
+      WHERE mf.is_starred = TRUE AND mf.deleted_at IS NULL
+    `;
+
+    const params = [];
+
+    if (userId) {
+      query += ` AND mf.uploaded_by = $1`;
+      params.push(userId);
+    }
+
+    query += ` ORDER BY mf.starred_at DESC`;
+
+    const result = await this.query(query, params);
     return result.rows;
   }
 }

@@ -11,6 +11,15 @@ import { AdminPage } from './pages/Admin';
 import { ActivityLogsPage } from './pages/ActivityLogs';
 import { MetadataManagement } from './pages/MetadataManagement';
 import { TeamsPage } from './pages/TeamsPage';
+import { StarredPage } from './pages/StarredPage';
+import { DeletedFilesPage } from './pages/DeletedFilesPage';
+import { RecentsPage } from './pages/RecentsPage';
+import { SharedByMePage } from './pages/SharedByMePage';
+import { SharedWithMePage } from './pages/SharedWithMePage';
+import { SmartCollectionsPage } from './pages/SmartCollectionsPage';
+import { PublicLinkPage } from './pages/PublicLinkPage';
+import { FileRequestsPage } from './pages/FileRequestsPage';
+import { PublicFileRequestPage } from './pages/PublicFileRequestPage';
 
 function PrivateRoute({ children }: { children: React.ReactElement }) {
   const { user, loading } = useAuth();
@@ -65,6 +74,10 @@ function AdminRoute({ children }: { children: React.ReactElement }) {
 function AppRoutes() {
   return (
     <Routes>
+      {/* Public link routes - no auth required */}
+      <Route path="/s/:token" element={<PublicLinkPage />} />
+      <Route path="/request/:token" element={<PublicFileRequestPage />} />
+
       <Route
         path="/login"
         element={
@@ -94,6 +107,46 @@ function AppRoutes() {
         element={
           <PrivateRoute>
             <MediaLibraryPage />
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/starred"
+        element={
+          <PrivateRoute>
+            <StarredPage />
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/recents"
+        element={
+          <PrivateRoute>
+            <RecentsPage />
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/trash"
+        element={
+          <PrivateRoute>
+            <DeletedFilesPage />
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/shared-by-me"
+        element={
+          <PrivateRoute>
+            <SharedByMePage />
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/shared-with-me"
+        element={
+          <PrivateRoute>
+            <SharedWithMePage />
           </PrivateRoute>
         }
       />
@@ -142,6 +195,22 @@ function AppRoutes() {
         element={
           <PrivateRoute>
             <TeamsPage />
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/collections"
+        element={
+          <PrivateRoute>
+            <SmartCollectionsPage />
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/file-requests"
+        element={
+          <PrivateRoute>
+            <FileRequestsPage />
           </PrivateRoute>
         }
       />

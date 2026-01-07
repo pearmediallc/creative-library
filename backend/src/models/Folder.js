@@ -194,6 +194,64 @@ class Folder extends BaseModel {
   }
 
   /**
+   * Get sibling folders (folders at same level as current folder)
+   */
+  async getSiblings(folderId, userId, parentFolderId) {
+    try {
+      const sql = `
+        SELECT
+          f.id,
+          f.name,
+          f.created_at,
+          f.color,
+          f.description,
+          COUNT(mf.id) as file_count
+        FROM folders f
+        LEFT JOIN media_files mf ON mf.folder_id = f.id AND mf.is_deleted = FALSE
+        WHERE f.parent_folder_id ${parentFolderId ? '= $1' : 'IS NULL'}
+          AND f.is_deleted = FALSE
+          AND (
+            -- Owner
+            f.owner_id = $${parentFolderId ? 2 : 1}
+            -- Has explicit permission
+            OR EXISTS (
+              SELECT 1 FROM file_permissions fp
+              WHERE fp.resource_type = 'folder'
+                AND fp.resource_id = f.id
+                AND fp.grantee_type = 'user'
+                AND fp.grantee_id = $${parentFolderId ? 2 : 1}
+                AND (fp.expires_at IS NULL OR fp.expires_at > NOW())
+            )
+            -- Member of team with access
+            OR EXISTS (
+              SELECT 1
+              FROM file_permissions fp
+              JOIN team_members tm ON fp.grantee_id = tm.team_id
+              WHERE fp.resource_type = 'folder'
+                AND fp.resource_id = f.id
+                AND fp.grantee_type = 'team'
+                AND tm.user_id = $${parentFolderId ? 2 : 1}
+                AND (fp.expires_at IS NULL OR fp.expires_at > NOW())
+            )
+          )
+        GROUP BY f.id, f.name, f.created_at, f.color, f.description
+        ORDER BY f.name ASC;
+      `;
+
+      const params = parentFolderId ? [parentFolderId, userId] : [userId];
+      const result = await query(sql, params);
+      return result.rows || result;
+    } catch (error) {
+      logger.error('Get siblings failed', {
+        error: error.message,
+        folderId,
+        userId
+      });
+      throw error;
+    }
+  }
+
+  /**
    * Get folder contents (subfolders + files)
    */
   async getContents(folderId, userId, options = {}) {
@@ -297,10 +355,12 @@ class Folder extends BaseModel {
    */
   async moveFiles(fileIds, targetFolderId, userId) {
     try {
-      // Verify target folder access
-      const hasAccess = await this.canAccess(userId, targetFolderId, 'edit');
-      if (!hasAccess) {
-        throw new Error('No permission to target folder');
+      // Verify target folder access (skip check if root/null)
+      if (targetFolderId) {
+        const hasAccess = await this.canAccess(userId, targetFolderId, 'edit');
+        if (!hasAccess) {
+          throw new Error('No permission to target folder');
+        }
       }
 
       const result = await query(
@@ -330,9 +390,12 @@ class Folder extends BaseModel {
    */
   async copyFiles(fileIds, targetFolderId, userId) {
     try {
-      const hasAccess = await this.canAccess(userId, targetFolderId, 'edit');
-      if (!hasAccess) {
-        throw new Error('No permission to target folder');
+      // Check access to target folder (skip check if root/null)
+      if (targetFolderId) {
+        const hasAccess = await this.canAccess(userId, targetFolderId, 'edit');
+        if (!hasAccess) {
+          throw new Error('No permission to target folder');
+        }
       }
 
       // Get original files

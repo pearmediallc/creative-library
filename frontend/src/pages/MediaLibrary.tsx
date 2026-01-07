@@ -3,10 +3,10 @@ import { DashboardLayout } from '../components/layout/DashboardLayout';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Card } from '../components/ui/Card';
-import { mediaApi, editorApi, folderApi, adminApi } from '../lib/api';
+import { mediaApi, editorApi, folderApi, adminApi, starredApi } from '../lib/api';
 import { MediaFile, Editor } from '../types';
 import { formatBytes, formatDate } from '../lib/utils';
-import { Image as ImageIcon, Video, X, Download, Trash2, Info, PackageOpen, Calendar, Filter, Clock, FolderInput } from 'lucide-react';
+import { Image as ImageIcon, Video, X, Download, Trash2, Info, PackageOpen, Calendar, Filter, Clock, FolderInput, Share2, Star, LayoutGrid, List, FileText } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { BulkMetadataEditor } from '../components/BulkMetadataEditor';
 import { MetadataViewer } from '../components/MetadataViewer';
@@ -15,10 +15,17 @@ import { Breadcrumb } from '../components/Breadcrumb';
 import { FolderCard } from '../components/FolderCard';
 import { CreateFolderModal } from '../components/CreateFolderModal';
 import { FolderContextMenu } from '../components/FolderContextMenu';
+import { FileContextMenu } from '../components/FileContextMenu';
 import { AdvancedFilterPanel } from '../components/AdvancedFilterPanel';
 import { useMediaFilters } from '../hooks/useMediaFilters';
 import { BatchUploadModal } from '../components/BatchUploadModal';
 import { VersionHistoryModal } from '../components/VersionHistoryModal';
+import { ShareDialog } from '../components/ShareDialog';
+import { FolderPickerModal } from '../components/FolderPickerModal';
+import { RenameDialog } from '../components/RenameDialog';
+import { PropertiesPanel } from '../components/PropertiesPanel';
+import { ActivityTimeline } from '../components/ActivityTimeline';
+import { CommentsPanel } from '../components/CommentsPanel';
 
 interface FolderNode {
   id: string;
@@ -32,6 +39,8 @@ interface BreadcrumbItem {
   name: string;
   level: number;
 }
+
+type ViewMode = 'grid' | 'list';
 
 export function MediaLibraryPage() {
   const { user } = useAuth();
@@ -48,6 +57,12 @@ export function MediaLibraryPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const filesPerPage = 12;
 
+  // View mode state with localStorage persistence
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    const saved = localStorage.getItem('mediaLibraryViewMode');
+    return (saved === 'list' || saved === 'grid') ? saved : 'grid';
+  });
+
   // Folder navigation state
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
   const [breadcrumb, setBreadcrumb] = useState<BreadcrumbItem[]>([]);
@@ -57,6 +72,10 @@ export function MediaLibraryPage() {
   // Folder context menu state
   const [contextMenuFolder, setContextMenuFolder] = useState<FolderNode | null>(null);
   const [contextMenuPosition, setContextMenuPosition] = useState({ x: 0, y: 0 });
+
+  // File context menu state
+  const [contextMenuFile, setContextMenuFile] = useState<MediaFile | null>(null);
+  const [fileContextMenuPosition, setFileContextMenuPosition] = useState({ x: 0, y: 0 });
 
   // Bulk editor state
   const [selectionMode, setSelectionMode] = useState(false);
@@ -77,12 +96,64 @@ export function MediaLibraryPage() {
     filename: string;
   } | null>(null);
 
+  // Share dialog state
+  const [shareDialogFile, setShareDialogFile] = useState<{
+    id: string;
+    name: string;
+    type: 'file' | 'folder';
+  } | null>(null);
+
   // Drag and drop state
   const [draggedFileIds, setDraggedFileIds] = useState<string[]>([]);
 
   // Advanced filters
   const filters = useMediaFilters();
   const [showFilters, setShowFilters] = useState(false);
+
+  // Folder picker modal state
+  const [showFolderPicker, setShowFolderPicker] = useState(false);
+  const [folderPickerOperation, setFolderPickerOperation] = useState<'copy' | 'move'>('copy');
+
+  // Rename dialog state
+  const [renameDialog, setRenameDialog] = useState<{
+    isOpen: boolean;
+    resourceType: 'file' | 'folder';
+    resourceId: string;
+    currentName: string;
+  }>({
+    isOpen: false,
+    resourceType: 'file',
+    resourceId: '',
+    currentName: ''
+  });
+
+  // Properties Panel state
+  const [propertiesPanel, setPropertiesPanel] = useState<{
+    isOpen: boolean;
+    resourceType: 'file' | 'folder';
+    resourceId: string;
+  }>({
+    isOpen: false,
+    resourceType: 'file',
+    resourceId: ''
+  });
+
+  // Activity timeline state
+  const [activityTimelineFile, setActivityTimelineFile] = useState<{
+    id: string;
+    filename: string;
+  } | null>(null);
+
+  // Comments panel state
+  const [commentsPanel, setCommentsPanel] = useState<{
+    isOpen: boolean;
+    fileId: string;
+    fileName: string;
+  }>({
+    isOpen: false,
+    fileId: '',
+    fileName: ''
+  });
 
   // Role-based permissions
   const isAdmin = user?.role === 'admin';
@@ -179,12 +250,12 @@ export function MediaLibraryPage() {
 
   const handleRenameFolder = () => {
     if (!contextMenuFolder) return;
-    const newName = prompt('Enter new folder name:', contextMenuFolder.name);
-    if (newName && newName.trim()) {
-      folderApi.update(contextMenuFolder.id, { name: newName.trim() })
-        .then(() => fetchData())
-        .catch((error) => alert('Failed to rename folder: ' + error.message));
-    }
+    setRenameDialog({
+      isOpen: true,
+      resourceType: 'folder',
+      resourceId: contextMenuFolder.id,
+      currentName: contextMenuFolder.name
+    });
   };
 
   const handleDeleteFolder = () => {
@@ -206,7 +277,152 @@ export function MediaLibraryPage() {
 
   const handleFolderProperties = () => {
     if (!contextMenuFolder) return;
-    alert(`Folder: ${contextMenuFolder.name}\nCreated: ${formatDate(contextMenuFolder.created_at)}`);
+    setPropertiesPanel({
+      isOpen: true,
+      resourceType: 'folder',
+      resourceId: contextMenuFolder.id
+    });
+  };
+
+  const handleShareFolder = () => {
+    if (!contextMenuFolder) return;
+    setShareDialogFile({
+      id: contextMenuFolder.id,
+      name: contextMenuFolder.name,
+      type: 'folder'
+    });
+  };
+
+  const handleDownloadFolderZip = async () => {
+    if (!contextMenuFolder) return;
+
+    setDownloadingZip(true);
+    try {
+      const response = await folderApi.downloadFolder(contextMenuFolder.id);
+
+      // Generate filename with date
+      const date = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+      const zipFilename = `${contextMenuFolder.name}-${date}.zip`;
+
+      // Create blob URL and trigger download
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = zipFilename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error: any) {
+      console.error('Failed to download folder as ZIP:', error);
+      alert(error.response?.data?.error || 'Failed to download folder as ZIP');
+    } finally {
+      setDownloadingZip(false);
+    }
+  };
+
+  // File context menu handlers
+  const handleFileContextMenu = (file: MediaFile, event: React.MouseEvent) => {
+    event.preventDefault();
+    setContextMenuFile(file);
+    setFileContextMenuPosition({ x: event.clientX, y: event.clientY });
+  };
+
+  const handleFileDownload = () => {
+    if (!contextMenuFile) return;
+    handleDownload(contextMenuFile);
+  };
+
+  const handleFileShare = () => {
+    if (!contextMenuFile) return;
+    setShareDialogFile({
+      id: contextMenuFile.id,
+      name: contextMenuFile.original_filename,
+      type: 'file'
+    });
+  };
+
+  const handleFileStar = () => {
+    if (!contextMenuFile) return;
+    handleToggleStar(contextMenuFile);
+  };
+
+  const handleFileRename = () => {
+    if (!contextMenuFile) return;
+    setRenameDialog({
+      isOpen: true,
+      resourceType: 'file',
+      resourceId: contextMenuFile.id,
+      currentName: contextMenuFile.original_filename
+    });
+  };
+
+  const handleFileMove = () => {
+    if (!contextMenuFile) return;
+    const targetFolderName = window.prompt(
+      `Move "${contextMenuFile.original_filename}" to which folder?\n\nEnter folder ID or leave empty for root folder:`
+    );
+
+    if (targetFolderName === null) return; // User cancelled
+
+    const targetFolderId = targetFolderName.trim() || null;
+
+    mediaApi.bulkMove([contextMenuFile.id], targetFolderId)
+      .then(() => {
+        alert('File moved successfully');
+        fetchData();
+      })
+      .catch((error) => alert('Failed to move file: ' + error.message));
+  };
+
+  const handleFileCopy = () => {
+    if (!contextMenuFile) return;
+    // Copy file URL or other information to clipboard
+    const url = contextMenuFile.s3_url || contextMenuFile.download_url;
+    if (url) {
+      navigator.clipboard.writeText(url)
+        .then(() => alert('File URL copied to clipboard'))
+        .catch(() => alert('Failed to copy URL'));
+    }
+  };
+
+  const handleFileVersions = () => {
+    if (!contextMenuFile) return;
+    setVersionHistoryFile({
+      id: contextMenuFile.id,
+      filename: contextMenuFile.original_filename
+    });
+  };
+
+  const handleFileActivity = () => {
+    if (!contextMenuFile) return;
+    setActivityTimelineFile({
+      id: contextMenuFile.id,
+      filename: contextMenuFile.original_filename
+    });
+  };
+
+  const handleFileDelete = () => {
+    if (!contextMenuFile) return;
+    setDeleteConfirmId(contextMenuFile.id);
+  };
+
+  const handleFileProperties = () => {
+    if (!contextMenuFile) return;
+    setPropertiesPanel({
+      isOpen: true,
+      resourceType: 'file',
+      resourceId: contextMenuFile.id
+    });
+  };
+
+  const handleFileComments = () => {
+    if (!contextMenuFile) return;
+    setCommentsPanel({
+      isOpen: true,
+      fileId: contextMenuFile.id,
+      fileName: contextMenuFile.original_filename
+    });
   };
 
   const handleDownload = async (file: MediaFile) => {
@@ -234,6 +450,16 @@ export function MediaLibraryPage() {
     } catch (error: any) {
       console.error('Delete failed:', error);
       alert(error.response?.data?.error || 'Failed to delete file');
+    }
+  };
+
+  const handleToggleStar = async (file: MediaFile) => {
+    try {
+      await starredApi.toggleStarred(file.id, !file.is_starred);
+      fetchData();
+    } catch (error: any) {
+      console.error('Failed to toggle star:', error);
+      alert(error.response?.data?.error || 'Failed to toggle star');
     }
   };
 
@@ -274,10 +500,11 @@ export function MediaLibraryPage() {
     try {
       const response = await mediaApi.bulkDownloadZip(selectedFiles);
 
+      // Create blob URL and trigger download
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
       link.href = url;
-      link.download = `creative-library-files-${new Date().toISOString().split('T')[0]}.zip`;
+      link.download = `files-${new Date().toISOString().split('T')[0]}.zip`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -309,26 +536,38 @@ export function MediaLibraryPage() {
     }
   };
 
-  const handleBulkMoveToFolder = async () => {
+  const handleBulkMoveToFolder = () => {
+    if (selectedFiles.length === 0) return;
+    setFolderPickerOperation('move');
+    setShowFolderPicker(true);
+  };
+
+  const handleBulkCopyToFolder = () => {
+    if (selectedFiles.length === 0) return;
+    setFolderPickerOperation('copy');
+    setShowFolderPicker(true);
+  };
+
+  const handleFolderPickerSelect = async (targetFolderId: string | null) => {
     if (selectedFiles.length === 0) return;
 
-    const targetFolderName = window.prompt(
-      `Move ${selectedFiles.length} files to which folder?\n\nEnter folder ID or leave empty for root folder:`
-    );
-
-    if (targetFolderName === null) return; // User cancelled
-
-    const targetFolderId = targetFolderName.trim() || null;
-
     try {
-      const response = await mediaApi.bulkMove(selectedFiles, targetFolderId);
-      alert(response.data.message);
+      if (folderPickerOperation === 'move') {
+        await mediaApi.bulkMove(selectedFiles, targetFolderId);
+        alert(`Successfully moved ${selectedFiles.length} file(s)`);
+      } else if (folderPickerOperation === 'copy') {
+        await folderApi.copyFiles({
+          file_ids: selectedFiles,
+          target_folder_id: targetFolderId,
+        });
+        alert(`Successfully copied ${selectedFiles.length} file(s)`);
+      }
       setSelectedFiles([]);
       setSelectionMode(false);
       fetchData();
     } catch (error: any) {
-      console.error('Failed to bulk move:', error);
-      alert(error.response?.data?.error || 'Failed to move files');
+      console.error(`Failed to ${folderPickerOperation} files:`, error);
+      alert(error.response?.data?.error || `Failed to ${folderPickerOperation} files`);
     }
   };
 
@@ -365,6 +604,21 @@ export function MediaLibraryPage() {
   };
 
   const selectedFileObjects = files.filter(f => selectedFiles.includes(f.id));
+
+  const handleRename = async (newName: string) => {
+    if (renameDialog.resourceType === 'file') {
+      await mediaApi.rename(renameDialog.resourceId, newName);
+    } else {
+      await folderApi.rename(renameDialog.resourceId, newName);
+    }
+    await fetchData();
+  };
+
+  const toggleViewMode = () => {
+    const newMode: ViewMode = viewMode === 'grid' ? 'list' : 'grid';
+    setViewMode(newMode);
+    localStorage.setItem('mediaLibraryViewMode', newMode);
+  };
 
   return (
     <DashboardLayout>
@@ -412,15 +666,22 @@ export function MediaLibraryPage() {
                         onClick={handleBulkDownloadZip}
                         disabled={downloadingZip}
                       >
-                        <PackageOpen className="w-4 h-4 mr-2" />
-                        {downloadingZip ? 'Creating ZIP...' : `Download ${selectedFiles.length} as ZIP`}
+                        <Download className="w-4 h-4 mr-2" />
+                        {downloadingZip ? 'Creating ZIP...' : `Download ZIP (${selectedFiles.length} file${selectedFiles.length !== 1 ? 's' : ''})`}
                       </Button>
                       <Button
                         variant="outline"
                         onClick={handleBulkMoveToFolder}
                       >
                         <FolderInput className="w-4 h-4 mr-2" />
-                        Move to Folder
+                        Move
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={handleBulkCopyToFolder}
+                      >
+                        <FolderInput className="w-4 h-4 mr-2" />
+                        Copy
                       </Button>
                       {canDelete && (
                         <Button
@@ -460,7 +721,7 @@ export function MediaLibraryPage() {
               </div>
             )}
 
-            {/* Filters */}
+            {/* Filters and View Toggle */}
             <div className="flex gap-4 items-center">
               <Button
                 variant={filters.hasActiveFilters ? "default" : "outline"}
@@ -484,6 +745,40 @@ export function MediaLibraryPage() {
                   Clear All Filters
                 </Button>
               )}
+
+              {/* View Mode Toggle */}
+              <div className="flex border rounded-md overflow-hidden">
+                <button
+                  onClick={() => {
+                    setViewMode('grid');
+                    localStorage.setItem('mediaLibraryViewMode', 'grid');
+                  }}
+                  className={`px-3 py-2 flex items-center gap-2 transition-colors ${
+                    viewMode === 'grid'
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-background hover:bg-accent'
+                  }`}
+                  title="Grid view"
+                >
+                  <LayoutGrid size={16} />
+                  <span className="text-sm">Grid</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setViewMode('list');
+                    localStorage.setItem('mediaLibraryViewMode', 'list');
+                  }}
+                  className={`px-3 py-2 flex items-center gap-2 transition-colors ${
+                    viewMode === 'list'
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-background hover:bg-accent'
+                  }`}
+                  title="List view"
+                >
+                  <List size={16} />
+                  <span className="text-sm">List</span>
+                </button>
+              </div>
             </div>
 
             {/* Content */}
@@ -525,6 +820,7 @@ export function MediaLibraryPage() {
                 {files.length > 0 ? (
                   <>
                     {folders.length > 0 && <h2 className="text-lg font-semibold mb-4 mt-8">Files</h2>}
+                    {viewMode === 'grid' ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                       {(() => {
                         const totalPages = Math.ceil(files.length / filesPerPage);
@@ -538,6 +834,7 @@ export function MediaLibraryPage() {
                             className="overflow-hidden"
                             draggable
                             onDragStart={(e) => handleFileDragStart(e, file.id)}
+                            onContextMenu={(e) => handleFileContextMenu(file, e)}
                           >
                             <div className="aspect-video bg-muted relative">
                               {file.thumbnail_url ? (
@@ -550,8 +847,12 @@ export function MediaLibraryPage() {
                                 <div className="flex items-center justify-center h-full">
                                   {file.file_type === 'image' ? (
                                     <ImageIcon className="w-16 h-16 text-muted-foreground" />
-                                  ) : (
+                                  ) : file.file_type === 'video' ? (
                                     <Video className="w-16 h-16 text-muted-foreground" />
+                                  ) : file.original_filename.toLowerCase().endsWith('.pdf') ? (
+                                    <FileText className="w-16 h-16 text-muted-foreground" />
+                                  ) : (
+                                    <ImageIcon className="w-16 h-16 text-muted-foreground" />
                                   )}
                                 </div>
                               )}
@@ -615,6 +916,30 @@ export function MediaLibraryPage() {
                                   </Button>
                                 </div>
                                 <div className="flex gap-2">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="flex-1"
+                                    onClick={() => handleToggleStar(file)}
+                                    title={file.is_starred ? 'Remove from starred' : 'Add to starred'}
+                                  >
+                                    <Star className={`w-4 h-4 mr-1 ${file.is_starred ? 'fill-yellow-500 text-yellow-500' : 'text-gray-400'}`} />
+                                    Star
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="flex-1"
+                                    onClick={() => setShareDialogFile({
+                                      id: file.id,
+                                      name: file.original_filename,
+                                      type: 'file'
+                                    })}
+                                    title="Share with people or get link"
+                                  >
+                                    <Share2 className="w-4 h-4 mr-1" />
+                                    Share
+                                  </Button>
                                   {canUpload && (
                                     <Button
                                       variant="outline"
@@ -645,6 +970,160 @@ export function MediaLibraryPage() {
                         ));
                       })()}
                     </div>
+                    ) : (
+                      /* List View */
+                      <div className="overflow-x-auto">
+                        <table className="w-full border-collapse">
+                          <thead className="bg-muted/50 sticky top-0 z-10">
+                            <tr className="border-b">
+                              {selectionMode && (
+                                <th className="text-left p-3 w-12">
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedFiles.length === files.length && files.length > 0}
+                                    onChange={toggleSelectAll}
+                                    className="w-4 h-4 cursor-pointer"
+                                  />
+                                </th>
+                              )}
+                              <th className="text-left p-3 w-16"></th>
+                              <th className="text-left p-3 font-medium">Filename</th>
+                              <th className="text-left p-3 font-medium">Editor</th>
+                              <th className="text-left p-3 font-medium">Type</th>
+                              <th className="text-left p-3 font-medium">Size</th>
+                              <th className="text-left p-3 font-medium">Uploaded</th>
+                              <th className="text-left p-3 font-medium w-64">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {(() => {
+                              const totalPages = Math.ceil(files.length / filesPerPage);
+                              const startIdx = (currentPage - 1) * filesPerPage;
+                              const endIdx = startIdx + filesPerPage;
+                              const paginatedFiles = files.slice(startIdx, endIdx);
+
+                              return paginatedFiles.map((file, index) => (
+                                <tr
+                                  key={file.id}
+                                  className={`border-b transition-colors hover:bg-muted/50 group ${
+                                    index % 2 === 0 ? 'bg-background' : 'bg-muted/20'
+                                  } ${selectedFiles.includes(file.id) ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
+                                  draggable
+                                  onDragStart={(e) => handleFileDragStart(e, file.id)}
+                                  onContextMenu={(e) => handleFileContextMenu(file, e)}
+                                >
+                                  {selectionMode && (
+                                    <td className="p-3">
+                                      <input
+                                        type="checkbox"
+                                        checked={selectedFiles.includes(file.id)}
+                                        onChange={() => toggleFileSelection(file.id)}
+                                        className="w-4 h-4 cursor-pointer"
+                                      />
+                                    </td>
+                                  )}
+                                  <td className="p-3">
+                                    <div className="w-12 h-12 rounded overflow-hidden bg-muted flex items-center justify-center">
+                                      {file.thumbnail_url ? (
+                                        <img
+                                          src={file.thumbnail_url}
+                                          alt={file.original_filename}
+                                          className="w-full h-full object-cover"
+                                        />
+                                      ) : (
+                                        file.file_type === 'image' ? (
+                                          <ImageIcon className="w-6 h-6 text-muted-foreground" />
+                                        ) : file.file_type === 'video' ? (
+                                          <Video className="w-6 h-6 text-muted-foreground" />
+                                        ) : file.original_filename.toLowerCase().endsWith('.pdf') ? (
+                                          <FileText className="w-6 h-6 text-muted-foreground" />
+                                        ) : (
+                                          <ImageIcon className="w-6 h-6 text-muted-foreground" />
+                                        )
+                                      )}
+                                    </div>
+                                  </td>
+                                  <td className="p-3">
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-medium truncate max-w-xs" title={file.original_filename}>
+                                        {file.original_filename}
+                                      </span>
+                                      {file.is_starred && (
+                                        <Star className="w-4 h-4 fill-yellow-500 text-yellow-500 flex-shrink-0" />
+                                      )}
+                                    </div>
+                                    {file.tags && file.tags.length > 0 && (
+                                      <div className="flex flex-wrap gap-1 mt-1">
+                                        {file.tags.slice(0, 3).map((tag, idx) => (
+                                          <span
+                                            key={idx}
+                                            className="px-1.5 py-0.5 text-xs rounded bg-accent/20 text-accent-foreground"
+                                          >
+                                            {tag}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </td>
+                                  <td className="p-3 text-sm text-muted-foreground">
+                                    {file.editor_name || 'N/A'}
+                                  </td>
+                                  <td className="p-3">
+                                    <span className="px-2 py-1 text-xs font-medium rounded bg-accent/20">
+                                      {file.file_type}
+                                    </span>
+                                  </td>
+                                  <td className="p-3 text-sm text-muted-foreground">
+                                    {formatBytes(file.file_size)}
+                                  </td>
+                                  <td className="p-3 text-sm text-muted-foreground">
+                                    {formatDate(file.created_at)}
+                                  </td>
+                                  <td className="p-3">
+                                    <div className="flex gap-1">
+                                      <button
+                                        onClick={() => handleDownload(file)}
+                                        className="p-1.5 hover:bg-accent rounded transition-colors"
+                                        title="Download"
+                                      >
+                                        <Download className="w-4 h-4" />
+                                      </button>
+                                      <button
+                                        onClick={() => setShareDialogFile({
+                                          id: file.id,
+                                          name: file.original_filename,
+                                          type: 'file'
+                                        })}
+                                        className="p-1.5 hover:bg-accent rounded transition-colors"
+                                        title="Share"
+                                      >
+                                        <Share2 className="w-4 h-4" />
+                                      </button>
+                                      <button
+                                        onClick={() => handleToggleStar(file)}
+                                        className="p-1.5 hover:bg-accent rounded transition-colors"
+                                        title={file.is_starred ? 'Remove from starred' : 'Add to starred'}
+                                      >
+                                        <Star className={`w-4 h-4 ${file.is_starred ? 'fill-yellow-500 text-yellow-500' : ''}`} />
+                                      </button>
+                                      {canDelete && (
+                                        <button
+                                          onClick={() => setDeleteConfirmId(file.id)}
+                                          className="p-1.5 hover:bg-destructive/10 rounded transition-colors text-destructive"
+                                          title="Delete"
+                                        >
+                                          <Trash2 className="w-4 h-4" />
+                                        </button>
+                                      )}
+                                    </div>
+                                  </td>
+                                </tr>
+                              ));
+                            })()}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
 
                     {/* Pagination */}
                     {files.length > filesPerPage && (
@@ -750,7 +1229,30 @@ export function MediaLibraryPage() {
         onDelete={handleDeleteFolder}
         onCreateSubfolder={handleCreateSubfolder}
         onProperties={handleFolderProperties}
+        onShare={handleShareFolder}
+        onDownloadZip={handleDownloadFolderZip}
       />
+
+      {contextMenuFile && (
+        <FileContextMenu
+          isOpen={contextMenuFile !== null}
+          position={fileContextMenuPosition}
+          file={contextMenuFile}
+          onClose={() => setContextMenuFile(null)}
+          onDownload={handleFileDownload}
+          onShare={handleFileShare}
+          onStar={handleFileStar}
+          onRename={handleFileRename}
+          onMove={handleFileMove}
+          onCopy={handleFileCopy}
+          onVersions={handleFileVersions}
+          onActivity={handleFileActivity}
+          onProperties={handleFileProperties}
+          onComments={handleFileComments}
+          onDelete={canDelete ? handleFileDelete : undefined}
+          isAdmin={isAdmin}
+        />
+      )}
 
       {showFilters && (
         <AdvancedFilterPanel
@@ -779,6 +1281,57 @@ export function MediaLibraryPage() {
           onVersionRestored={fetchData}
         />
       )}
+
+      {activityTimelineFile && (
+        <ActivityTimeline
+          fileId={activityTimelineFile.id}
+          fileName={activityTimelineFile.filename}
+          isOpen={true}
+          onClose={() => setActivityTimelineFile(null)}
+        />
+      )}
+
+      {shareDialogFile && (
+        <ShareDialog
+          isOpen={true}
+          onClose={() => setShareDialogFile(null)}
+          resourceId={shareDialogFile.id}
+          resourceName={shareDialogFile.name}
+          resourceType={shareDialogFile.type}
+        />
+      )}
+
+      <FolderPickerModal
+        isOpen={showFolderPicker}
+        onClose={() => setShowFolderPicker(false)}
+        onSelect={handleFolderPickerSelect}
+        title={folderPickerOperation === 'copy' ? `Copy ${selectedFiles.length} File(s)` : `Move ${selectedFiles.length} File(s)`}
+        description={folderPickerOperation === 'copy' ? 'Select destination folder to copy files to' : 'Select destination folder to move files to'}
+        currentFolderId={currentFolderId}
+      />
+
+      <RenameDialog
+        isOpen={renameDialog.isOpen}
+        onClose={() => setRenameDialog({ ...renameDialog, isOpen: false })}
+        onRename={handleRename}
+        currentName={renameDialog.currentName}
+        resourceType={renameDialog.resourceType}
+      />
+
+      <PropertiesPanel
+        isOpen={propertiesPanel.isOpen}
+        onClose={() => setPropertiesPanel({ ...propertiesPanel, isOpen: false })}
+        resourceType={propertiesPanel.resourceType}
+        resourceId={propertiesPanel.resourceId}
+        onUpdate={fetchData}
+      />
+
+      <CommentsPanel
+        isOpen={commentsPanel.isOpen}
+        onClose={() => setCommentsPanel({ ...commentsPanel, isOpen: false })}
+        fileId={commentsPanel.fileId}
+        fileName={commentsPanel.fileName}
+      />
     </DashboardLayout>
   );
 }

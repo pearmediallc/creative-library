@@ -2,22 +2,27 @@ import React, { useState, useEffect } from 'react';
 import { DashboardLayout } from '../components/layout/DashboardLayout';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
+import { TeamMembersModal } from '../components/TeamMembersModal';
 import { teamApi } from '../lib/api';
-import { Users, Plus, Edit2, Trash2, UserPlus } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
+import { Users, Plus, Trash2, UserPlus } from 'lucide-react';
 
 interface Team {
   id: string;
   name: string;
   description?: string;
+  owner_id: string;
   owner_name?: string;
   member_count?: number;
   created_at: string;
 }
 
 export function TeamsPage() {
+  const { user } = useAuth();
   const [teams, setTeams] = useState<Team[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [membersModalTeam, setMembersModalTeam] = useState<{ id: string; name: string; isAdmin: boolean } | null>(null);
 
   useEffect(() => {
     fetchTeams();
@@ -114,7 +119,16 @@ export function TeamsPage() {
                 )}
 
                 <div className="flex items-center gap-2 pt-4 border-t border-gray-200 dark:border-gray-700">
-                  <Button variant="outline" size="sm" className="flex-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex-1"
+                    onClick={() => setMembersModalTeam({
+                      id: team.id,
+                      name: team.name,
+                      isAdmin: user?.id === team.owner_id || user?.role === 'admin'
+                    })}
+                  >
                     <UserPlus size={14} className="mr-1" />
                     Members
                   </Button>
@@ -136,6 +150,17 @@ export function TeamsPage() {
           <CreateTeamModal
             onClose={() => setShowCreateModal(false)}
             onSubmit={handleCreateTeam}
+          />
+        )}
+
+        {/* Team Members Modal */}
+        {membersModalTeam && (
+          <TeamMembersModal
+            isOpen={true}
+            onClose={() => setMembersModalTeam(null)}
+            teamId={membersModalTeam.id}
+            teamName={membersModalTeam.name}
+            isAdmin={membersModalTeam.isAdmin}
           />
         )}
       </div>

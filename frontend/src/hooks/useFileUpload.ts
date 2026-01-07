@@ -11,6 +11,7 @@ export interface UploadFile {
   speed?: number; // bytes per second
   startTime?: number;
   cancelToken?: AbortController;
+  folderPath?: string; // Relative folder path for folder uploads
 }
 
 export interface UploadOptions {
@@ -28,13 +29,14 @@ export function useFileUpload() {
   const [uploadFiles, setUploadFiles] = useState<UploadFile[]>([]);
   const [isUploading, setIsUploading] = useState(false);
 
-  const addFiles = useCallback((files: File[]) => {
+  const addFiles = useCallback((files: File[], folderPath?: string) => {
     const newFiles: UploadFile[] = files.map(file => ({
       id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       file,
       progress: 0,
       status: 'pending' as const,
       cancelToken: new AbortController(),
+      folderPath, // Store folder path for nested uploads
     }));
     setUploadFiles(prev => [...prev, ...newFiles]);
     return newFiles;
@@ -98,6 +100,9 @@ export function useFileUpload() {
         if (options.assignedBuyerId) formData.append('assigned_buyer_id', options.assignedBuyerId);
         if (options.removeMetadata) formData.append('remove_metadata', 'true');
         if (options.addMetadata) formData.append('add_metadata', 'true');
+
+        // Add folder path for folder uploads
+        if (uploadFile.folderPath) formData.append('folder_path', uploadFile.folderPath);
 
         // Track upload progress
         xhr.upload.addEventListener('progress', (e) => {

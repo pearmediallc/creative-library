@@ -84,6 +84,21 @@ class User extends BaseModel {
 
     return uploadCount >= user.upload_limit_monthly;
   }
+
+  /**
+   * Search users by name (for @mentions autocomplete)
+   */
+  async searchByName(searchTerm) {
+    const result = await this.raw(
+      `SELECT id, name, email
+       FROM ${this.tableName}
+       WHERE is_active = true
+         AND (name ILIKE $1 OR email ILIKE $1)
+       LIMIT 10`,
+      [`%${searchTerm}%`]
+    );
+    return result;
+  }
 }
 
 module.exports = new User();

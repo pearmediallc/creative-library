@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { Edit2, Trash2, FolderPlus, Info } from 'lucide-react';
+import { Edit2, Trash2, FolderPlus, Info, Share2, Download } from 'lucide-react';
 
 interface FolderContextMenuProps {
   isOpen: boolean;
@@ -9,6 +9,8 @@ interface FolderContextMenuProps {
   onDelete: () => void;
   onCreateSubfolder: () => void;
   onProperties: () => void;
+  onShare?: () => void;
+  onDownloadZip?: () => void;
 }
 
 export function FolderContextMenu({
@@ -18,7 +20,9 @@ export function FolderContextMenu({
   onRename,
   onDelete,
   onCreateSubfolder,
-  onProperties
+  onProperties,
+  onShare,
+  onDownloadZip
 }: FolderContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -65,6 +69,22 @@ export function FolderContextMenu({
         onClose();
       }
     },
+    ...(onDownloadZip ? [{
+      icon: Download,
+      label: 'Download as ZIP',
+      onClick: () => {
+        onDownloadZip();
+        onClose();
+      }
+    }] : []),
+    ...(onShare ? [{
+      icon: Share2,
+      label: 'Share',
+      onClick: () => {
+        onShare();
+        onClose();
+      }
+    }] : []),
     {
       icon: Info,
       label: 'Properties',

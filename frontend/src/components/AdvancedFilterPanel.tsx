@@ -1,6 +1,7 @@
-import React from 'react';
-import { X, Calendar, Image as ImageIcon, Video, User, Folder, Tag, SlidersHorizontal } from 'lucide-react';
+import React, { useState } from 'react';
+import { X, Calendar, Image as ImageIcon, Video, User, Folder, Tag, SlidersHorizontal, Save } from 'lucide-react';
 import { MediaFilters } from '../hooks/useMediaFilters';
+import { CreateCollectionModal } from './CreateCollectionModal';
 
 interface AdvancedFilterPanelProps {
   filters: MediaFilters;
@@ -33,7 +34,29 @@ export function AdvancedFilterPanel({
   folders = [],
   availableTags = [],
 }: AdvancedFilterPanelProps) {
+  const [showSaveModal, setShowSaveModal] = useState(false);
+
+  const hasActiveFilters = () => {
+    return (
+      filters.search !== '' ||
+      filters.dateFrom !== null ||
+      filters.dateTo !== null ||
+      filters.mediaTypes.length > 0 ||
+      filters.editorIds.length > 0 ||
+      filters.buyerIds.length > 0 ||
+      filters.folderIds.length > 0 ||
+      filters.tags.length > 0 ||
+      filters.sizeMin !== undefined ||
+      filters.sizeMax !== undefined ||
+      filters.widthMin !== undefined ||
+      filters.widthMax !== undefined ||
+      filters.heightMin !== undefined ||
+      filters.heightMax !== undefined
+    );
+  };
+
   return (
+    <>
     <div className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:relative lg:bg-transparent">
       <div className="absolute right-0 top-0 bottom-0 w-full max-w-md bg-white dark:bg-gray-800 shadow-2xl overflow-y-auto lg:relative lg:w-80 lg:shadow-none">
         {/* Header */}
@@ -305,7 +328,16 @@ export function AdvancedFilterPanel({
         </div>
 
         {/* Footer */}
-        <div className="sticky bottom-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 p-4">
+        <div className="sticky bottom-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 p-4 space-y-2">
+          {hasActiveFilters() && (
+            <button
+              onClick={() => setShowSaveModal(true)}
+              className="w-full px-4 py-2 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 border border-blue-300 dark:border-blue-600 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 flex items-center justify-center gap-2"
+            >
+              <Save size={16} />
+              Save as Collection
+            </button>
+          )}
           <button
             onClick={onClear}
             className="w-full px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700"
@@ -315,5 +347,16 @@ export function AdvancedFilterPanel({
         </div>
       </div>
     </div>
+
+    {/* Save Collection Modal */}
+    {showSaveModal && (
+      <CreateCollectionModal
+        isOpen={showSaveModal}
+        onClose={() => setShowSaveModal(false)}
+        onSuccess={() => setShowSaveModal(false)}
+        prefilledFilters={filters}
+      />
+    )}
+    </>
   );
 }

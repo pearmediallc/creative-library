@@ -38,6 +38,10 @@ export interface MediaFile {
   tags: string[];
   description?: string;
   is_deleted: boolean;
+  deleted_at?: string;
+  deleted_by?: string;
+  folder_id?: string;
+  is_starred?: boolean;
   created_at: string;
   updated_at: string;
   upload_date?: string;

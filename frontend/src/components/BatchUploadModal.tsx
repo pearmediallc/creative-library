@@ -1,5 +1,5 @@
-import React, { useState, useCallback } from 'react';
-import { X, Upload, CheckCircle, XCircle, AlertCircle, Loader, Trash2, RotateCcw } from 'lucide-react';
+import React, { useState, useCallback, useRef } from 'react';
+import { X, Upload, CheckCircle, XCircle, AlertCircle, Loader, Trash2, RotateCcw, FolderOpen, ChevronRight, ChevronDown, Folder } from 'lucide-react';
 import { useFileUpload, formatBytes, formatSpeed, formatTimeRemaining } from '../hooks/useFileUpload';
 
 interface BatchUploadModalProps {
@@ -41,19 +41,130 @@ export function BatchUploadModal({
   const [assignedBuyerId, setAssignedBuyerId] = useState('');
   const [removeMetadata, setRemoveMetadata] = useState(false);
   const [addMetadata, setAddMetadata] = useState(false);
+  const [folderStructure, setFolderStructure] = useState<any>(null);
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
+  const [showFolderTree, setShowFolderTree] = useState(false);
+  const folderInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
-      const files = Array.from(e.target.files);
+      const files = Array.from(e.target.files) as File[];
       addFiles(files);
     }
   }, [addFiles]);
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
+  const handleFolderSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const files = Array.from(e.target.files) as File[];
+
+      // Build folder structure from webkitRelativePath
+      const structure: any = { name: 'root', children: {}, files: [] };
+      const fileList: { file: File; path: string }[] = [];
+
+      files.forEach(file => {
+        // @ts-ignore - webkitRelativePath exists on File
+        const relativePath = file.webkitRelativePath || file.name;
+        const pathParts = relativePath.split('/');
+
+        // Remove the root folder name (first part) and filename (last part)
+        const folderPath = pathParts.slice(1, -1).join('/');
+
+        fileList.push({ file, path: folderPath });
+
+        // Build tree structure for preview
+        let current = structure;
+        pathParts.slice(0, -1).forEach((part, index) => {
+          if (!current.children[part]) {
+            current.children[part] = { name: part, children: {}, files: [], path: pathParts.slice(0, index + 1).join('/') };
+          }
+          current = current.children[part];
+        });
+        current.files.push(file.name);
+      });
+
+      setFolderStructure(structure);
+      setShowFolderTree(true);
+      setExpandedFolders(new Set(['root']));
+
+      // Add all files with their folder paths
+      fileList.forEach(({ file, path }) => {
+        addFiles([file], path);
+      });
+    }
+  }, [addFiles]);
+
+  const handleDrop = useCallback(async (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
 
-    if (e.dataTransfer.files) {
+    const items = Array.from(e.dataTransfer.items);
+    const fileList: { file: File; path: string }[] = [];
+
+    // Process directory entries recursively
+    const processEntry = async (entry: any, path: string = ''): Promise<void> => {
+      if (entry.isFile) {
+        return new Promise((resolve) => {
+          entry.file((file: File) => {
+            fileList.push({ file, path });
+            resolve();
+          });
+        });
+      } else if (entry.isDirectory) {
+        const dirReader = entry.createReader();
+        return new Promise((resolve) => {
+          dirReader.readEntries(async (entries: any[]) => {
+            for (const subEntry of entries) {
+              const newPath = path ? `${path}/${entry.name}` : entry.name;
+              await processEntry(subEntry, newPath);
+            }
+            resolve();
+          });
+        });
+      }
+    };
+
+    // Check if we have DataTransferItem API support (for folders)
+    if (items.length > 0 && typeof items[0].webkitGetAsEntry === 'function') {
+      for (const item of items) {
+        const entry = item.webkitGetAsEntry();
+        if (entry) {
+          await processEntry(entry);
+        }
+      }
+
+      if (fileList.length > 0) {
+        // Build folder structure
+        const structure: any = { name: 'root', children: {}, files: [] };
+
+        fileList.forEach(({ file, path }) => {
+          const pathParts = path ? path.split('/') : [];
+
+          let current = structure;
+          pathParts.forEach((part, index) => {
+            if (!current.children[part]) {
+              current.children[part] = {
+                name: part,
+                children: {},
+                files: [],
+                path: pathParts.slice(0, index + 1).join('/')
+              };
+            }
+            current = current.children[part];
+          });
+          current.files.push(file.name);
+        });
+
+        setFolderStructure(structure);
+        setShowFolderTree(true);
+        setExpandedFolders(new Set(['root']));
+
+        // Add files with paths
+        fileList.forEach(({ file, path }) => {
+          addFiles([file], path);
+        });
+      }
+    } else if (e.dataTransfer.files) {
+      // Fallback for simple file drops
       const files = Array.from(e.dataTransfer.files);
       addFiles(files);
     }
@@ -89,6 +200,61 @@ export function BatchUploadModal({
       clearAll();
     }
     onClose();
+  };
+
+  const toggleFolder = (path: string) => {
+    setExpandedFolders(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(path)) {
+        newSet.delete(path);
+      } else {
+        newSet.add(path);
+      }
+      return newSet;
+    });
+  };
+
+  const renderFolderTree = (node: any, depth: number = 0): React.ReactElement | null => {
+    if (!node || node.name === 'root') {
+      return (
+        <>
+          {Object.values(node.children).map((child: any) => renderFolderTree(child, depth))}
+        </>
+      );
+    }
+
+    const isExpanded = expandedFolders.has(node.path);
+    const hasChildren = Object.keys(node.children).length > 0;
+    const fileCount = node.files.length + Object.values(node.children).reduce((acc: number, child: any) => {
+      return acc + child.files.length;
+    }, 0);
+
+    return (
+      <div key={node.path} style={{ marginLeft: `${depth * 20}px` }}>
+        <div
+          className="flex items-center gap-2 py-1 px-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded cursor-pointer"
+          onClick={() => toggleFolder(node.path)}
+        >
+          {hasChildren ? (
+            isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />
+          ) : (
+            <div style={{ width: 16 }} />
+          )}
+          <Folder size={16} className="text-blue-500" />
+          <span className="text-sm font-medium text-gray-900 dark:text-white">
+            {node.name}
+          </span>
+          <span className="text-xs text-gray-500 dark:text-gray-400">
+            ({fileCount} files)
+          </span>
+        </div>
+        {isExpanded && hasChildren && (
+          <div>
+            {Object.values(node.children).map((child: any) => renderFolderTree(child, depth + 1))}
+          </div>
+        )}
+      </div>
+    );
   };
 
   const totalProgress = stats.total > 0
@@ -236,24 +402,66 @@ export function BatchUploadModal({
             >
               <Upload className="mx-auto h-12 w-12 text-gray-400 mb-4" />
               <p className="text-gray-600 dark:text-gray-400 mb-2">
-                Drag and drop files here, or click to select
+                Drag and drop files or folders here, or click to select
               </p>
-              <input
-                type="file"
-                multiple
-                onChange={handleFileSelect}
-                className="hidden"
-                id="file-input"
-              />
-              <label
-                htmlFor="file-input"
-                className="inline-block px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 cursor-pointer"
-              >
-                Select Files
-              </label>
+              <div className="flex gap-3 justify-center">
+                <input
+                  type="file"
+                  multiple
+                  onChange={handleFileSelect}
+                  className="hidden"
+                  id="file-input"
+                />
+                <label
+                  htmlFor="file-input"
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 cursor-pointer"
+                >
+                  <Upload size={18} />
+                  Select Files
+                </label>
+
+                <input
+                  type="file"
+                  ref={folderInputRef}
+                  multiple
+                  onChange={handleFolderSelect}
+                  className="hidden"
+                  id="folder-input"
+                  {...({ webkitdirectory: '', directory: '' } as any)}
+                />
+                <label
+                  htmlFor="folder-input"
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 cursor-pointer"
+                >
+                  <FolderOpen size={18} />
+                  Select Folder
+                </label>
+              </div>
             </div>
           ) : (
             <>
+              {/* Folder Structure Preview */}
+              {showFolderTree && folderStructure && (
+                <div className="mb-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                      <FolderOpen size={16} className="text-blue-500" />
+                      Folder Structure Preview
+                    </h3>
+                    <button
+                      onClick={() => setShowFolderTree(false)}
+                      className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                      title="Hide preview"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+                  <div className="max-h-48 overflow-y-auto">
+                    {renderFolderTree(folderStructure)}
+                  </div>
+                </div>
+              )}
+
               {uploadFiles.map(file => (
                 <div
                   key={file.id}
@@ -271,25 +479,33 @@ export function BatchUploadModal({
                           {file.file.name}
                         </span>
                       </div>
-                      <div className="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400 mt-1">
-                        <span>{formatBytes(file.file.size)}</span>
-                        {file.status === 'uploading' && file.speed && (
-                          <>
-                            <span>•</span>
-                            <span>{formatSpeed(file.speed)}</span>
-                            <span>•</span>
-                            <span>{formatTimeRemaining(
-                              file.file.size * (1 - file.progress / 100),
-                              file.speed
-                            )}</span>
-                          </>
+                      <div className="flex flex-col gap-1 text-sm text-gray-500 dark:text-gray-400 mt-1">
+                        {file.folderPath && (
+                          <div className="flex items-center gap-1 text-xs">
+                            <Folder size={12} className="text-blue-500" />
+                            <span className="text-blue-600 dark:text-blue-400">{file.folderPath}/</span>
+                          </div>
                         )}
-                        {file.status === 'error' && file.error && (
-                          <>
-                            <span>•</span>
-                            <span className="text-red-500">{file.error}</span>
-                          </>
-                        )}
+                        <div className="flex items-center gap-4">
+                          <span>{formatBytes(file.file.size)}</span>
+                          {file.status === 'uploading' && file.speed && (
+                            <>
+                              <span>•</span>
+                              <span>{formatSpeed(file.speed)}</span>
+                              <span>•</span>
+                              <span>{formatTimeRemaining(
+                                file.file.size * (1 - file.progress / 100),
+                                file.speed
+                              )}</span>
+                            </>
+                          )}
+                          {file.status === 'error' && file.error && (
+                            <>
+                              <span>•</span>
+                              <span className="text-red-500">{file.error}</span>
+                            </>
+                          )}
+                        </div>
                       </div>
                     </div>
 
@@ -346,8 +562,8 @@ export function BatchUploadModal({
                 </div>
               ))}
 
-              {/* Add More Files Button */}
-              <div className="flex justify-center">
+              {/* Add More Files/Folders Buttons */}
+              <div className="flex justify-center gap-3">
                 <input
                   type="file"
                   multiple
@@ -364,6 +580,25 @@ export function BatchUploadModal({
                 >
                   <Upload size={18} />
                   Add More Files
+                </label>
+
+                <input
+                  type="file"
+                  multiple
+                  onChange={handleFolderSelect}
+                  className="hidden"
+                  id="add-more-folders"
+                  disabled={isUploading}
+                  {...({ webkitdirectory: '', directory: '' } as any)}
+                />
+                <label
+                  htmlFor="add-more-folders"
+                  className={`inline-flex items-center gap-2 px-4 py-2 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg hover:border-green-500 dark:hover:border-green-500 cursor-pointer text-gray-600 dark:text-gray-400 hover:text-green-600 dark:hover:text-green-400 ${
+                    isUploading ? 'opacity-50 cursor-not-allowed' : ''
+                  }`}
+                >
+                  <FolderOpen size={18} />
+                  Add More Folders
                 </label>
               </div>
             </>

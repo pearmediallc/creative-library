@@ -1,13 +1,20 @@
-import React from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Image, TrendingUp, Users, Settings, LogOut, FileText, Tags } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { LayoutDashboard, Image, Star, Clock, Trash2, TrendingUp, Users, Settings, LogOut, FileText, Tags, Share2, UserCheck, Layers, ChevronRight, Inbox } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { cn } from '../../lib/utils';
+import { savedSearchApi } from '../../lib/api';
 
 // Base navigation available to all users
 const baseNavigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
   { name: 'Media Library', href: '/media', icon: Image },
+  { name: 'File Requests', href: '/file-requests', icon: Inbox },
+  { name: 'Starred', href: '/starred', icon: Star },
+  { name: 'Recents', href: '/recents', icon: Clock },
+  { name: 'Shared with me', href: '/shared-with-me', icon: UserCheck },
+  { name: 'Trash', href: '/trash', icon: Trash2 },
+  { name: 'Shared by You', href: '/shared-by-me', icon: Share2 },
   { name: 'Teams', href: '/teams', icon: Users },
 ];
 
@@ -25,7 +32,9 @@ const adminNavigation = [
 
 export function Sidebar() {
   const location = useLocation();
+  const navigate = useNavigate();
   const { user, logout } = useAuth();
+  const [favoriteCollections, setFavoriteCollections] = useState<any[]>([]);
 
   // Build navigation based on user role
   const navigation = user?.role === 'admin'
@@ -35,6 +44,40 @@ export function Sidebar() {
   const isActive = (href: string) => {
     if (href === '/') return location.pathname === '/';
     return location.pathname.startsWith(href);
+  };
+
+  // Fetch favorite collections
+  useEffect(() => {
+    const fetchFavoriteCollections = async () => {
+      try {
+        const response = await savedSearchApi.getAll();
+        const collections = response.data.data || [];
+        const favorites = collections.filter((c: any) => c.is_favorite).slice(0, 5);
+        setFavoriteCollections(favorites);
+      } catch (error) {
+        console.error('Failed to fetch favorite collections:', error);
+      }
+    };
+
+    if (user) {
+      fetchFavoriteCollections();
+    }
+  }, [user]);
+
+  const handleCollectionClick = (collection: any) => {
+    const filters = collection.filters;
+    const params = new URLSearchParams();
+
+    if (filters.search_term) params.set('search', filters.search_term);
+    if (filters.media_types?.length) params.set('media_type', filters.media_types.join(','));
+    if (filters.editor_ids?.length) params.set('editor_id', filters.editor_ids.join(','));
+    if (filters.buyer_ids?.length) params.set('buyer_id', filters.buyer_ids.join(','));
+    if (filters.folder_ids?.length) params.set('folder_id', filters.folder_ids.join(','));
+    if (filters.tags?.length) params.set('tags', filters.tags.join(','));
+    if (filters.date_from) params.set('date_from', filters.date_from);
+    if (filters.date_to) params.set('date_to', filters.date_to);
+
+    navigate(`/media?${params.toString()}&collection=${collection.id}&collection_name=${encodeURIComponent(collection.name)}`);
   };
 
   return (
@@ -62,6 +105,43 @@ export function Sidebar() {
             </Link>
           );
         })}
+
+        {/* Collections Section */}
+        <div className="h-px bg-sidebar-border my-4" />
+        <div className="px-3 py-2">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-xs font-semibold text-muted-foreground uppercase">Collections</h3>
+            <Link
+              to="/collections"
+              className="text-xs text-muted-foreground hover:text-sidebar-foreground"
+            >
+              View All
+            </Link>
+          </div>
+          {favoriteCollections.length > 0 ? (
+            <div className="space-y-1">
+              {favoriteCollections.map((collection) => (
+                <button
+                  key={collection.id}
+                  onClick={() => handleCollectionClick(collection)}
+                  className="w-full flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-sidebar-foreground hover:bg-sidebar-accent/50 transition-colors text-left"
+                >
+                  <Layers size={16} style={{ color: collection.color || '#3B82F6' }} />
+                  <span className="truncate flex-1">{collection.name}</span>
+                  <ChevronRight size={14} className="text-muted-foreground" />
+                </button>
+              ))}
+            </div>
+          ) : (
+            <Link
+              to="/collections"
+              className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-sidebar-accent/50 transition-colors"
+            >
+              <Layers size={16} />
+              <span>Create Collection</span>
+            </Link>
+          )}
+        </div>
 
         {user?.role === 'admin' && (
           <>
