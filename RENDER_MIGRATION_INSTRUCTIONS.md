@@ -37,7 +37,7 @@ Run the comprehensive migration script that includes ALL required schema changes
 
 ```bash
 cd /app
-export DATABASE_URL="your-database-url-from-step-1"
+export DATABASE_URL="postgresql://creative_library_user:dhEneE0oJmdC7hBJ0KQvQ85t9PECO5Uo@dpg-d45o9463jp1c73dma5sg-a.oregon-postgres.render.com/creative_library"
 psql "$DATABASE_URL" -f backend/migrations/RENDER_PRODUCTION_MIGRATION.sql
 ```
 

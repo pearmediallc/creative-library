@@ -9,7 +9,7 @@ import { AnalyticsPage } from './pages/Analytics';
 import { EditorsPage } from './pages/Editors';
 import { AdminPage } from './pages/Admin';
 import { ActivityLogsPage } from './pages/ActivityLogs';
-import { MetadataManagement } from './pages/MetadataManagement';
+import { MetadataExtraction } from './pages/MetadataExtraction';
 import { TeamsPage } from './pages/TeamsPage';
 import { StarredPage } from './pages/StarredPage';
 import { DeletedFilesPage } from './pages/DeletedFilesPage';
@@ -186,7 +186,7 @@ function AppRoutes() {
         path="/metadata"
         element={
           <AdminRoute>
-            <MetadataManagement />
+            <MetadataExtraction />
           </AdminRoute>
         }
       />

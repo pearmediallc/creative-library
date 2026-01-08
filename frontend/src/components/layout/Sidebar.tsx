@@ -22,7 +22,7 @@ const baseNavigation = [
 const adminOnlyNavigation = [
   { name: 'Analytics', href: '/analytics', icon: TrendingUp },
   { name: 'Editors', href: '/editors', icon: Users },
-  { name: 'Metadata Management', href: '/metadata', icon: Tags },
+  { name: 'Metadata Extraction', href: '/metadata', icon: Tags },
 ];
 
 const adminNavigation = [
