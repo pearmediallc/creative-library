@@ -517,4 +517,46 @@ export const fileRequestApi = {
   },
 };
 
+// Metadata Tags endpoints
+export const metadataTagApi = {
+  // Get all tags with usage counts
+  getAll: (params?: { category?: string; search?: string }) =>
+    api.get('/metadata-tags', { params }),
+
+  // Get tag by ID
+  getById: (id: string) => api.get(`/metadata-tags/${id}`),
+
+  // Create new tag
+  create: (data: { name: string; category?: string; description?: string }) =>
+    api.post('/metadata-tags', data),
+
+  // Update tag
+  update: (id: string, data: { name?: string; category?: string; description?: string }) =>
+    api.patch(`/metadata-tags/${id}`, data),
+
+  // Delete tag
+  delete: (id: string) => api.delete(`/metadata-tags/${id}`),
+
+  // Get all unique categories
+  getCategories: () => api.get('/metadata-tags/categories'),
+
+  // Get files with a specific tag
+  getFilesWithTag: (id: string) => api.get(`/metadata-tags/${id}/files`),
+
+  // Add tag to media file
+  addTagToFile: (mediaId: string, tagId: string) =>
+    api.post(`/media/${mediaId}/tags`, { tag_id: tagId }),
+
+  // Remove tag from media file
+  removeTagFromFile: (mediaId: string, tagId: string) =>
+    api.delete(`/media/${mediaId}/tags/${tagId}`),
+
+  // Get tags for a specific media file
+  getFileTags: (mediaId: string) => api.get(`/media/${mediaId}/tags`),
+
+  // Bulk add tags to file
+  bulkAddTagsToFile: (mediaId: string, tagIds: string[]) =>
+    api.post(`/media/${mediaId}/tags/bulk`, { tag_ids: tagIds }),
+};
+
 export default api;

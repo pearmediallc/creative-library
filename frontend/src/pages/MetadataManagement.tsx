@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { DashboardLayout } from '../components/layout/DashboardLayout';
 import { Tags, Plus, Search, Edit2, Trash2, Save, X } from 'lucide-react';
+import { metadataTagApi } from '../lib/api';
 
 interface MetadataTag {
   id: string;
   name: string;
   category: string;
-  usageCount: number;
-  createdAt: string;
+  usage_count?: number;
+  created_at: string;
 }
 
 export function MetadataManagement() {
@@ -17,19 +18,34 @@ export function MetadataManagement() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingTag, setEditingTag] = useState<MetadataTag | null>(null);
   const [newTag, setNewTag] = useState({ name: '', category: 'general' });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   const categories = ['all', 'general', 'campaign', 'product', 'location', 'custom'];
 
-  // Mock data for demonstration
+  // Fetch tags from API
+  const fetchTags = async () => {
+    try {
+      setLoading(true);
+      setError('');
+      const params: { category?: string; search?: string } = {};
+      if (selectedCategory !== 'all') params.category = selectedCategory;
+      if (searchTerm) params.search = searchTerm;
+
+      const response = await metadataTagApi.getAll(params);
+      setTags(response.data.data || []);
+    } catch (err: any) {
+      console.error('Failed to fetch tags:', err);
+      setError(err.response?.data?.error || 'Failed to load tags');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    // TODO: Fetch from API
-    setTags([
-      { id: '1', name: 'auto insurance', category: 'campaign', usageCount: 45, createdAt: '2024-01-01' },
-      { id: '2', name: 'refi', category: 'campaign', usageCount: 32, createdAt: '2024-01-05' },
-      { id: '3', name: 'summer sale', category: 'campaign', usageCount: 28, createdAt: '2024-01-10' },
-      { id: '4', name: 'product launch', category: 'product', usageCount: 15, createdAt: '2024-01-15' },
-    ]);
-  }, []);
+    fetchTags();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCategory]);
 
   const filteredTags = tags.filter(tag => {
     const matchesSearch = tag.name.toLowerCase().includes(searchTerm.toLowerCase());
@@ -37,34 +53,53 @@ export function MetadataManagement() {
     return matchesSearch && matchesCategory;
   });
 
-  const handleAddTag = () => {
-    if (newTag.name.trim()) {
-      const tag: MetadataTag = {
-        id: String(Date.now()),
+  const handleAddTag = async () => {
+    if (!newTag.name.trim()) return;
+
+    try {
+      setError('');
+      await metadataTagApi.create({
         name: newTag.name.trim(),
         category: newTag.category,
-        usageCount: 0,
-        createdAt: new Date().toISOString(),
-      };
-      setTags([...tags, tag]);
+      });
       setNewTag({ name: '', category: 'general' });
       setShowAddModal(false);
-      // TODO: Save to API
+      await fetchTags();
+    } catch (err: any) {
+      console.error('Failed to create tag:', err);
+      setError(err.response?.data?.error || 'Failed to create tag');
     }
   };
 
-  const handleUpdateTag = () => {
-    if (editingTag) {
-      setTags(tags.map(t => t.id === editingTag.id ? editingTag : t));
+  const handleUpdateTag = async () => {
+    if (!editingTag) return;
+
+    try {
+      setError('');
+      await metadataTagApi.update(editingTag.id, {
+        name: editingTag.name,
+        category: editingTag.category,
+      });
       setEditingTag(null);
-      // TODO: Update via API
+      await fetchTags();
+    } catch (err: any) {
+      console.error('Failed to update tag:', err);
+      setError(err.response?.data?.error || 'Failed to update tag');
     }
   };
 
-  const handleDeleteTag = (id: string) => {
-    if (window.confirm('Delete this tag? This will remove it from all associated files.')) {
-      setTags(tags.filter(t => t.id !== id));
-      // TODO: Delete via API
+  const handleDeleteTag = async (id: string) => {
+    if (!window.confirm('Delete this tag? This will remove it from all associated files.')) {
+      return;
+    }
+
+    try {
+      setError('');
+      await metadataTagApi.delete(id);
+      await fetchTags();
+    } catch (err: any) {
+      console.error('Failed to delete tag:', err);
+      setError(err.response?.data?.error || 'Failed to delete tag');
     }
   };
 
@@ -90,6 +125,20 @@ export function MetadataManagement() {
           </button>
         </div>
 
+        {/* Error Display */}
+        {error && (
+          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+            <p className="text-sm text-red-800 dark:text-red-200">{error}</p>
+          </div>
+        )}
+
+        {/* Loading State */}
+        {loading ? (
+          <div className="flex items-center justify-center h-64">
+            <p className="text-muted-foreground">Loading tags...</p>
+          </div>
+        ) : (
+          <>
         {/* Search and Filter */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
           <div className="flex gap-4">
@@ -138,7 +187,7 @@ export function MetadataManagement() {
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
             <div className="text-sm text-gray-600 dark:text-gray-400">Total Usage</div>
             <div className="text-3xl font-bold text-purple-600 mt-2">
-              {tags.reduce((sum, t) => sum + t.usageCount, 0)}
+              {tags.reduce((sum, t) => sum + (t.usage_count || 0), 0)}
             </div>
           </div>
         </div>
@@ -201,10 +250,10 @@ export function MetadataManagement() {
                     )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                    {tag.usageCount} files
+                    {tag.usage_count || 0} files
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                    {new Date(tag.createdAt).toLocaleDateString()}
+                    {new Date(tag.created_at).toLocaleDateString()}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     {editingTag?.id === tag.id ? (
@@ -244,6 +293,8 @@ export function MetadataManagement() {
             </tbody>
           </table>
         </div>
+          </>
+        )}
 
         {/* Add Tag Modal */}
         {showAddModal && (
