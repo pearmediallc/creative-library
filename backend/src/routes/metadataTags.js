@@ -1,10 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const metadataTagController = require('../controllers/metadataTagController');
-const { authenticate } = require('../middleware/auth');
+const { authenticateToken } = require('../middleware/auth');
 
 // All routes require authentication
-router.use(authenticate);
+router.use(authenticateToken);
 
 // Tag management routes
 router.get('/', metadataTagController.getAllTags);
