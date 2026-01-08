@@ -32,7 +32,9 @@ done
 # Load environment variables
 if [ -f "$ENV_FILE" ]; then
   echo -e "${BLUE}Loading environment from $ENV_FILE${NC}"
-  export $(grep -v '^#' "$ENV_FILE" | xargs)
+  set -a
+  source "$ENV_FILE"
+  set +a
 else
   echo -e "${RED}Error: Environment file not found at $ENV_FILE${NC}"
   exit 1
