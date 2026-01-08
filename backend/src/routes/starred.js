@@ -11,13 +11,13 @@ router.use(authenticateToken);
  * @desc    Toggle starred status for a file
  * @access  Private
  */
-router.put('/:fileId', starredController.toggleStarred);
+router.put('/:fileId', starredController.toggleStarred.bind(starredController));
 
 /**
  * @route   GET /api/starred
  * @desc    Get all starred files for current user
  * @access  Private
  */
-router.get('/', starredController.getStarredFiles);
+router.get('/', starredController.getStarredFiles.bind(starredController));
 
 module.exports = router;

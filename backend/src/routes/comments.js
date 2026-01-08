@@ -11,7 +11,7 @@ router.use(authenticateToken);
  * @desc    Create a new comment
  * @access  Private
  */
-router.post('/', commentController.createComment);
+router.post('/', commentController.createComment.bind(commentController));
 
 /**
  * @route   GET /api/comments
@@ -20,41 +20,41 @@ router.post('/', commentController.createComment);
  * @query   include_resolved - Include resolved comments (default: true)
  * @access  Private
  */
-router.get('/', commentController.getComments);
+router.get('/', commentController.getComments.bind(commentController));
 
 /**
  * @route   PATCH /api/comments/:id
  * @desc    Update a comment
  * @access  Private (Author or Admin only)
  */
-router.patch('/:id', commentController.updateComment);
+router.patch('/:id', commentController.updateComment.bind(commentController));
 
 /**
  * @route   DELETE /api/comments/:id
  * @desc    Delete a comment (soft delete)
  * @access  Private (Author or Admin only)
  */
-router.delete('/:id', commentController.deleteComment);
+router.delete('/:id', commentController.deleteComment.bind(commentController));
 
 /**
  * @route   POST /api/comments/:id/resolve
  * @desc    Toggle comment resolution
  * @access  Private
  */
-router.post('/:id/resolve', commentController.toggleResolve);
+router.post('/:id/resolve', commentController.toggleResolve.bind(commentController));
 
 /**
  * @route   POST /api/comments/:id/reactions
  * @desc    Add reaction to a comment
  * @access  Private
  */
-router.post('/:id/reactions', commentController.addReaction);
+router.post('/:id/reactions', commentController.addReaction.bind(commentController));
 
 /**
  * @route   DELETE /api/comments/:id/reactions/:type
  * @desc    Remove reaction from a comment
  * @access  Private
  */
-router.delete('/:id/reactions/:type', commentController.removeReaction);
+router.delete('/:id/reactions/:type', commentController.removeReaction.bind(commentController));
 
 module.exports = router;
