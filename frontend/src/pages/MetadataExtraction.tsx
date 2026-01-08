@@ -1,3 +1,7 @@
+/**
+ * Metadata Extraction Page
+ * Allows users to extract and view detailed metadata from media files
+ */
 import React, { useState, useEffect } from 'react';
 import { DashboardLayout } from '../components/layout/DashboardLayout';
 import {
@@ -203,7 +207,7 @@ export function MetadataExtraction() {
               <div>
                 <p className="text-sm text-gray-600 dark:text-gray-400">Images</p>
                 <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {files.filter(f => f.file_type?.startsWith('image/')).length}
+                  {(files || []).filter(f => f.file_type?.startsWith('image/')).length}
                 </p>
               </div>
             </div>
@@ -217,7 +221,7 @@ export function MetadataExtraction() {
               <div>
                 <p className="text-sm text-gray-600 dark:text-gray-400">Videos</p>
                 <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {files.filter(f => f.file_type?.startsWith('video/')).length}
+                  {(files || []).filter(f => f.file_type?.startsWith('video/')).length}
                 </p>
               </div>
             </div>
