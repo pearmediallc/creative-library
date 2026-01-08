@@ -156,9 +156,9 @@ export function MetadataExtraction() {
     return String(value);
   };
 
-  const filteredFiles = files.filter(file => {
+  const filteredFiles = (files || []).filter(file => {
     if (!searchTerm) return true;
-    return file.original_filename.toLowerCase().includes(searchTerm.toLowerCase());
+    return file.original_filename?.toLowerCase().includes(searchTerm.toLowerCase());
   });
 
   const getFileIcon = (fileType: string) => {

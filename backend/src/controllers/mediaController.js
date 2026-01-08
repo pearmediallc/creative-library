@@ -1258,6 +1258,155 @@ class MediaController {
       next(error);
     }
   }
+
+  /**
+   * Get all tags for a media file
+   */
+  async getFileTags(req, res, next) {
+    try {
+      const { id } = req.params;
+      const userId = req.user.id;
+
+      // Verify file exists and user has access
+      const file = await this.mediaFileModel.findById(id);
+      if (!file) {
+        return res.status(404).json({
+          success: false,
+          error: 'File not found'
+        });
+      }
+
+      // Get tags for this file
+      const result = await this.pool.query(`
+        SELECT
+          mt.id,
+          mt.name,
+          mt.category,
+          mt.description,
+          mft.created_at as added_at,
+          u.name as added_by_name
+        FROM media_file_tags mft
+        JOIN metadata_tags mt ON mft.tag_id = mt.id
+        LEFT JOIN users u ON mft.added_by = u.id
+        WHERE mft.media_file_id = $1 AND mt.is_active = TRUE
+        ORDER BY mft.created_at DESC
+      `, [id]);
+
+      res.json({
+        success: true,
+        data: result.rows
+      });
+    } catch (error) {
+      logger.error('Get file tags error', { error: error.message, fileId: req.params.id });
+      next(error);
+    }
+  }
+
+  /**
+   * Add a tag to a media file
+   */
+  async addFileTag(req, res, next) {
+    try {
+      const { id } = req.params;
+      const { tag_id } = req.body;
+      const userId = req.user.id;
+
+      // Verify file exists and user has access
+      const file = await this.mediaFileModel.findById(id);
+      if (!file) {
+        return res.status(404).json({
+          success: false,
+          error: 'File not found'
+        });
+      }
+
+      // Verify tag exists and is active
+      const tagResult = await this.pool.query(
+        'SELECT id FROM metadata_tags WHERE id = $1 AND is_active = TRUE',
+        [tag_id]
+      );
+
+      if (tagResult.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          error: 'Tag not found or inactive'
+        });
+      }
+
+      // Add tag to file (ignore if already exists)
+      await this.pool.query(`
+        INSERT INTO media_file_tags (media_file_id, tag_id, added_by)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (media_file_id, tag_id) DO NOTHING
+      `, [id, tag_id, userId]);
+
+      // Log activity
+      await this.activityLogModel.create({
+        user_id: userId,
+        action: 'tag_added',
+        entity_type: 'media_file',
+        entity_id: id,
+        details: { tag_id }
+      });
+
+      res.json({
+        success: true,
+        message: 'Tag added successfully'
+      });
+    } catch (error) {
+      logger.error('Add file tag error', { error: error.message, fileId: req.params.id });
+      next(error);
+    }
+  }
+
+  /**
+   * Remove a tag from a media file
+   */
+  async removeFileTag(req, res, next) {
+    try {
+      const { id, tagId } = req.params;
+      const userId = req.user.id;
+
+      // Verify file exists and user has access
+      const file = await this.mediaFileModel.findById(id);
+      if (!file) {
+        return res.status(404).json({
+          success: false,
+          error: 'File not found'
+        });
+      }
+
+      // Remove tag from file
+      const result = await this.pool.query(`
+        DELETE FROM media_file_tags
+        WHERE media_file_id = $1 AND tag_id = $2
+      `, [id, tagId]);
+
+      if (result.rowCount === 0) {
+        return res.status(404).json({
+          success: false,
+          error: 'Tag not found on this file'
+        });
+      }
+
+      // Log activity
+      await this.activityLogModel.create({
+        user_id: userId,
+        action: 'tag_removed',
+        entity_type: 'media_file',
+        entity_id: id,
+        details: { tag_id: tagId }
+      });
+
+      res.json({
+        success: true,
+        message: 'Tag removed successfully'
+      });
+    } catch (error) {
+      logger.error('Remove file tag error', { error: error.message, fileId: req.params.id });
+      next(error);
+    }
+  }
 }
 
 module.exports = new MediaController();

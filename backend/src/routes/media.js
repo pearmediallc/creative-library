@@ -76,6 +76,22 @@ router.get('/:id/activity',
   mediaController.getFileActivity.bind(mediaController)
 );
 
+// ✨ NEW: Media file tags endpoints
+router.get('/:id/tags',
+  authenticateToken,
+  mediaController.getFileTags.bind(mediaController)
+);
+
+router.post('/:id/tags',
+  authenticateToken,
+  mediaController.addFileTag.bind(mediaController)
+);
+
+router.delete('/:id/tags/:tagId',
+  authenticateToken,
+  mediaController.removeFileTag.bind(mediaController)
+);
+
 // Update file metadata
 router.patch('/:id',
   authenticateToken,
