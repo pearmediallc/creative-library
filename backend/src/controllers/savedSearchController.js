@@ -83,15 +83,10 @@ class SavedSearchController {
     try {
       const userId = req.user.id;
 
+      // Fixed: Removed broken buildFilterConditions() call
+      // File count will be calculated when user views the collection
       const query = `
-        SELECT
-          ss.*,
-          (
-            SELECT COUNT(*)::int
-            FROM media_files mf
-            WHERE 1=1
-            ${this.buildFilterConditions()}
-          ) as file_count
+        SELECT ss.*
         FROM saved_searches ss
         WHERE ss.user_id = $1
         ORDER BY ss.is_favorite DESC, ss.updated_at DESC
@@ -662,14 +657,6 @@ class SavedSearchController {
     return { query, params };
   }
 
-  /**
-   * Helper: Build filter conditions (for COUNT in getAll)
-   */
-  buildFilterConditions() {
-    // This is a simplified version for counting files
-    // In production, you'd want to properly parse and apply ss.filters
-    return '';
-  }
 }
 
 module.exports = new SavedSearchController();
