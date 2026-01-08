@@ -14,7 +14,9 @@ router.patch('/:id', teamController.updateTeam);
 router.delete('/:id', teamController.deleteTeam);
 
 // Team members
+router.get('/:id/members', teamController.getMembers);
 router.post('/:id/members', teamController.addMember);
 router.delete('/:id/members/:userId', teamController.removeMember);
+router.patch('/:id/members/:userId/role', teamController.updateMemberRole);
 
 module.exports = router;

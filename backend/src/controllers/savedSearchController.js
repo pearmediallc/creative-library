@@ -37,8 +37,16 @@ class SavedSearchController {
 
       const savedSearch = result.rows[0];
 
-      // Parse filters back to JSON
-      savedSearch.filters = JSON.parse(savedSearch.filters);
+      // Parse filters back to JSON with error handling
+      try {
+        savedSearch.filters = JSON.parse(savedSearch.filters);
+      } catch (parseError) {
+        logger.error('Invalid JSON in saved search filters', {
+          searchId: savedSearch.id,
+          error: parseError.message
+        });
+        savedSearch.filters = {}; // Default to empty filters if JSON is invalid
+      }
 
       // Log activity
       await logActivity({
@@ -92,10 +100,21 @@ class SavedSearchController {
       const result = await pool.query(query, [userId]);
 
       // Parse filters for each saved search
-      const savedSearches = result.rows.map(row => ({
-        ...row,
-        filters: JSON.parse(row.filters)
-      }));
+      const savedSearches = result.rows.map(row => {
+        let filters = {};
+        try {
+          filters = JSON.parse(row.filters);
+        } catch (parseError) {
+          logger.error('Invalid JSON in saved search filters', {
+            searchId: row.id,
+            error: parseError.message
+          });
+        }
+        return {
+          ...row,
+          filters
+        };
+      });
 
       res.json({
         success: true,
@@ -131,7 +150,15 @@ class SavedSearchController {
       }
 
       const savedSearch = result.rows[0];
-      savedSearch.filters = JSON.parse(savedSearch.filters);
+      try {
+        savedSearch.filters = JSON.parse(savedSearch.filters);
+      } catch (parseError) {
+        logger.error('Invalid JSON in saved search filters', {
+          searchId: savedSearch.id,
+          error: parseError.message
+        });
+        savedSearch.filters = {};
+      }
 
       res.json({
         success: true,
@@ -171,7 +198,19 @@ class SavedSearchController {
       }
 
       const savedSearch = searchResult.rows[0];
-      const filters = JSON.parse(savedSearch.filters);
+      let filters = {};
+      try {
+        filters = JSON.parse(savedSearch.filters);
+      } catch (parseError) {
+        logger.error('Invalid JSON in saved search filters', {
+          searchId: savedSearch.id,
+          error: parseError.message
+        });
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid filter configuration for this collection'
+        });
+      }
 
       // Build query to fetch files based on filters
       const { query, params } = this.buildMediaQuery(filters, userId, userRole, limit, offset);
@@ -270,7 +309,15 @@ class SavedSearchController {
       }
 
       const savedSearch = result.rows[0];
-      savedSearch.filters = JSON.parse(savedSearch.filters);
+      try {
+        savedSearch.filters = JSON.parse(savedSearch.filters);
+      } catch (parseError) {
+        logger.error('Invalid JSON in saved search filters', {
+          searchId: savedSearch.id,
+          error: parseError.message
+        });
+        savedSearch.filters = {};
+      }
 
       // Log activity
       await logActivity({
@@ -371,7 +418,15 @@ class SavedSearchController {
       }
 
       const savedSearch = result.rows[0];
-      savedSearch.filters = JSON.parse(savedSearch.filters);
+      try {
+        savedSearch.filters = JSON.parse(savedSearch.filters);
+      } catch (parseError) {
+        logger.error('Invalid JSON in saved search filters', {
+          searchId: savedSearch.id,
+          error: parseError.message
+        });
+        savedSearch.filters = {};
+      }
 
       logger.info('Saved search favorite toggled', {
         userId,

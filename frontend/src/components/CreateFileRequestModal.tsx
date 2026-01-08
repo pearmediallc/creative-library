@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Inbox } from 'lucide-react';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
-import { fileRequestApi, folderApi } from '../lib/api';
+import { fileRequestApi, folderApi, editorApi, adminApi } from '../lib/api';
 
 interface CreateFileRequestModalProps {
   onClose: () => void;
@@ -14,6 +14,18 @@ interface Folder {
   name: string;
 }
 
+interface Editor {
+  id: string;
+  name: string;
+  display_name?: string;
+}
+
+interface Buyer {
+  id: string;
+  name: string;
+  email: string;
+}
+
 export function CreateFileRequestModal({ onClose, onSuccess }: CreateFileRequestModalProps) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -22,12 +34,18 @@ export function CreateFileRequestModal({ onClose, onSuccess }: CreateFileRequest
   const [allowMultipleUploads, setAllowMultipleUploads] = useState(true);
   const [requireEmail, setRequireEmail] = useState(false);
   const [customMessage, setCustomMessage] = useState('');
+  const [editorId, setEditorId] = useState<string>('');
+  const [assignedBuyerId, setAssignedBuyerId] = useState<string>('');
   const [folders, setFolders] = useState<Folder[]>([]);
+  const [editors, setEditors] = useState<Editor[]>([]);
+  const [buyers, setBuyers] = useState<Buyer[]>([]);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
     fetchFolders();
+    fetchEditors();
+    fetchBuyers();
   }, []);
 
   const fetchFolders = async () => {
@@ -49,6 +67,35 @@ export function CreateFileRequestModal({ onClose, onSuccess }: CreateFileRequest
       }
     });
     return result;
+  };
+
+  const fetchEditors = async () => {
+    try {
+      const response = await editorApi.getAll();
+      const editorsData = response.data.data || [];
+      setEditors(editorsData.map((e: any) => ({
+        id: e.id,
+        name: e.name,
+        display_name: e.display_name
+      })));
+    } catch (error: any) {
+      console.error('Failed to fetch editors:', error);
+    }
+  };
+
+  const fetchBuyers = async () => {
+    try {
+      const response = await adminApi.getUsers();
+      const usersData = response.data.data || [];
+      const buyerUsers = usersData.filter((u: any) => u.role === 'buyer');
+      setBuyers(buyerUsers.map((b: any) => ({
+        id: b.id,
+        name: b.name,
+        email: b.email
+      })));
+    } catch (error: any) {
+      console.error('Failed to fetch buyers:', error);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -79,6 +126,8 @@ export function CreateFileRequestModal({ onClose, onSuccess }: CreateFileRequest
         allow_multiple_uploads: allowMultipleUploads,
         require_email: requireEmail,
         custom_message: customMessage.trim() || undefined,
+        editor_id: editorId || undefined,
+        assigned_buyer_id: assignedBuyerId || undefined,
       });
 
       onSuccess();
@@ -160,6 +209,52 @@ export function CreateFileRequestModal({ onClose, onSuccess }: CreateFileRequest
             </select>
             <p className="text-xs text-muted-foreground mt-1">
               Uploaded files will be saved to this folder
+            </p>
+          </div>
+
+          {/* Editor Assignment */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Assign to Editor (optional)
+            </label>
+            <select
+              value={editorId}
+              onChange={(e) => setEditorId(e.target.value)}
+              disabled={creating}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+            >
+              <option value="">No editor assignment</option>
+              {editors.map((editor) => (
+                <option key={editor.id} value={editor.id}>
+                  {editor.display_name || editor.name}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-muted-foreground mt-1">
+              Uploaded files will be automatically assigned to this editor
+            </p>
+          </div>
+
+          {/* Buyer Assignment */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Assign to Buyer (optional)
+            </label>
+            <select
+              value={assignedBuyerId}
+              onChange={(e) => setAssignedBuyerId(e.target.value)}
+              disabled={creating}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+            >
+              <option value="">No buyer assignment</option>
+              {buyers.map((buyer) => (
+                <option key={buyer.id} value={buyer.id}>
+                  {buyer.name} ({buyer.email})
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-muted-foreground mt-1">
+              Uploaded files will be automatically assigned to this buyer
             </p>
           </div>
 

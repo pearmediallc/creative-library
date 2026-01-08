@@ -57,21 +57,27 @@ export function AdvancedFilterPanel({
 
   return (
     <>
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:relative lg:bg-transparent">
-      <div className="absolute right-0 top-0 bottom-0 w-full max-w-md bg-white dark:bg-gray-800 shadow-2xl overflow-y-auto lg:relative lg:w-80 lg:shadow-none">
-        {/* Header */}
-        <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-4 flex items-center justify-between z-10">
-          <div className="flex items-center gap-2">
-            <SlidersHorizontal size={20} className="text-gray-600 dark:text-gray-400" />
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Advanced Filters</h2>
-          </div>
-          <button
-            onClick={onClose}
-            className="lg:hidden text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-          >
-            <X size={20} />
-          </button>
+    {/* Backdrop overlay */}
+    <div className="fixed inset-0 z-40" onClick={onClose}></div>
+
+    {/* Dropdown panel - positioned absolutely near the filter button */}
+    <div className="absolute top-full left-0 mt-2 w-96 max-h-[80vh] bg-white dark:bg-gray-800 shadow-2xl rounded-lg overflow-hidden z-50 border border-gray-200 dark:border-gray-700">
+      {/* Header */}
+      <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-4 flex items-center justify-between z-10">
+        <div className="flex items-center gap-2">
+          <SlidersHorizontal size={20} className="text-gray-600 dark:text-gray-400" />
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Advanced Filters</h2>
         </div>
+        <button
+          onClick={onClose}
+          className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+        >
+          <X size={20} />
+        </button>
+      </div>
+
+      {/* Scrollable content container */}
+      <div className="overflow-y-auto max-h-[calc(80vh-140px)]">
 
         {/* Filter Content */}
         <div className="p-4 space-y-6">
@@ -326,25 +332,25 @@ export function AdvancedFilterPanel({
             </div>
           </div>
         </div>
+      </div>
 
-        {/* Footer */}
-        <div className="sticky bottom-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 p-4 space-y-2">
-          {hasActiveFilters() && (
-            <button
-              onClick={() => setShowSaveModal(true)}
-              className="w-full px-4 py-2 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 border border-blue-300 dark:border-blue-600 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 flex items-center justify-center gap-2"
-            >
-              <Save size={16} />
-              Save as Collection
-            </button>
-          )}
+      {/* Footer */}
+      <div className="sticky bottom-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 p-4 space-y-2">
+        {hasActiveFilters() && (
           <button
-            onClick={onClear}
-            className="w-full px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700"
+            onClick={() => setShowSaveModal(true)}
+            className="w-full px-4 py-2 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 border border-blue-300 dark:border-blue-600 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 flex items-center justify-center gap-2 transition-colors"
           >
-            Clear All Filters
+            <Save size={16} />
+            Save as Collection
           </button>
-        </div>
+        )}
+        <button
+          onClick={onClear}
+          className="w-full px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+        >
+          Clear All Filters
+        </button>
       </div>
     </div>
 

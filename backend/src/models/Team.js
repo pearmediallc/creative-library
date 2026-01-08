@@ -172,6 +172,66 @@ class Team extends BaseModel {
     const result = await this.raw(sql, [teamId, userId]);
     return !!(Array.isArray(result) ? result[0] : result.rows?.[0]);
   }
+
+  /**
+   * Check if user is a member of team
+   * @param {string} teamId - Team ID
+   * @param {string} userId - User ID
+   * @returns {Promise<boolean>} Is member
+   */
+  async isMember(teamId, userId) {
+    const sql = `
+      SELECT 1
+      FROM team_members
+      WHERE team_id = $1 AND user_id = $2 AND is_active = TRUE
+      LIMIT 1
+    `;
+    const result = await this.raw(sql, [teamId, userId]);
+    return !!(Array.isArray(result) ? result[0] : result.rows?.[0]);
+  }
+
+  /**
+   * Get team members
+   * @param {string} teamId - Team ID
+   * @returns {Promise<Array>} Team members with user details
+   */
+  async getMembers(teamId) {
+    const sql = `
+      SELECT
+        tm.id,
+        tm.team_id,
+        tm.user_id,
+        tm.role,
+        tm.joined_at,
+        u.name,
+        u.email,
+        u.role as user_role
+      FROM team_members tm
+      JOIN users u ON u.id = tm.user_id
+      WHERE tm.team_id = $1 AND tm.is_active = TRUE
+      ORDER BY tm.joined_at DESC
+    `;
+    const result = await this.raw(sql, [teamId]);
+    return Array.isArray(result) ? result : result.rows || [];
+  }
+
+  /**
+   * Update member role
+   * @param {string} teamId - Team ID
+   * @param {string} userId - User ID
+   * @param {string} role - New role (member, admin)
+   * @returns {Promise<Object>} Updated membership
+   */
+  async updateMemberRole(teamId, userId, role) {
+    const sql = `
+      UPDATE team_members
+      SET role = $1, updated_at = NOW()
+      WHERE team_id = $2 AND user_id = $3 AND is_active = TRUE
+      RETURNING *
+    `;
+    const result = await this.raw(sql, [role, teamId, userId]);
+    return Array.isArray(result) ? result[0] : result.rows?.[0];
+  }
 }
 
 module.exports = new Team();

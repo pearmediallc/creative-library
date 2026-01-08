@@ -272,10 +272,13 @@ export const teamApi = {
   update: (id: string, data: { name?: string; description?: string }) =>
     api.patch(`/teams/${id}`, data),
   delete: (id: string) => api.delete(`/teams/${id}`),
+  getMembers: (id: string) => api.get(`/teams/${id}/members`),
   addMember: (id: string, data: { user_id: string; role?: string }) =>
     api.post(`/teams/${id}/members`, data),
   removeMember: (id: string, userId: string) =>
     api.delete(`/teams/${id}/members/${userId}`),
+  updateMemberRole: (id: string, userId: string, role: string) =>
+    api.patch(`/teams/${id}/members/${userId}/role`, { role }),
 };
 
 // Permission endpoints

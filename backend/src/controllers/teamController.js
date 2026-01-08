@@ -221,6 +221,83 @@ class TeamController {
       next(error);
     }
   }
+
+  /**
+   * Get team members
+   * GET /api/teams/:id/members
+   */
+  async getMembers(req, res, next) {
+    try {
+      const { id } = req.params;
+      const userId = req.user.id;
+
+      // Check if user has access to this team
+      const team = await Team.findById(id);
+      if (!team) {
+        return res.status(404).json({ error: 'Team not found' });
+      }
+
+      const hasAccess = team.owner_id === userId ||
+        await Team.isMember(id, userId);
+
+      if (!hasAccess) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+
+      const members = await Team.getMembers(id);
+
+      res.json({
+        success: true,
+        data: members
+      });
+    } catch (error) {
+      logger.error('Get team members failed', { error: error.message, teamId: req.params.id });
+      next(error);
+    }
+  }
+
+  /**
+   * Update member role
+   * PATCH /api/teams/:id/members/:userId/role
+   */
+  async updateMemberRole(req, res, next) {
+    try {
+      const { id, userId: memberUserId } = req.params;
+      const { role } = req.body;
+      const userId = req.user.id;
+
+      if (!role || !['member', 'admin'].includes(role)) {
+        return res.status(400).json({ error: 'Invalid role. Must be "member" or "admin"' });
+      }
+
+      // Check if user is team admin
+      const isAdmin = await Team.isTeamAdmin(id, userId);
+      if (!isAdmin) {
+        return res.status(403).json({ error: 'Only team admins can update member roles' });
+      }
+
+      const updatedMember = await Team.updateMemberRole(id, memberUserId, role);
+
+      logger.info('Team member role updated', {
+        teamId: id,
+        memberId: memberUserId,
+        newRole: role,
+        updatedBy: userId
+      });
+
+      res.json({
+        success: true,
+        data: updatedMember
+      });
+    } catch (error) {
+      logger.error('Update member role failed', {
+        error: error.message,
+        teamId: req.params.id,
+        memberId: req.params.userId
+      });
+      next(error);
+    }
+  }
 }
 
 module.exports = new TeamController();

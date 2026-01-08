@@ -26,7 +26,9 @@ class FileRequestController {
         deadline,
         allow_multiple_uploads = true,
         require_email = false,
-        custom_message
+        custom_message,
+        editor_id,
+        assigned_buyer_id
       } = req.body;
 
       // Validation
@@ -62,6 +64,34 @@ class FileRequestController {
         }
       }
 
+      // Verify editor exists if provided
+      if (editor_id) {
+        const editorResult = await query(
+          'SELECT id FROM editors WHERE id = $1 AND is_active = TRUE',
+          [editor_id]
+        );
+        if (editorResult.rows.length === 0) {
+          return res.status(404).json({
+            success: false,
+            error: 'Editor not found'
+          });
+        }
+      }
+
+      // Verify buyer exists if provided
+      if (assigned_buyer_id) {
+        const buyerResult = await query(
+          'SELECT id FROM users WHERE id = $1 AND role = $2',
+          [assigned_buyer_id, 'buyer']
+        );
+        if (buyerResult.rows.length === 0) {
+          return res.status(404).json({
+            success: false,
+            error: 'Buyer not found'
+          });
+        }
+      }
+
       // Generate unique token
       const requestToken = this.generateToken();
 
@@ -69,8 +99,8 @@ class FileRequestController {
       const result = await query(
         `INSERT INTO file_requests
         (title, description, created_by, folder_id, request_token, deadline,
-         allow_multiple_uploads, require_email, custom_message)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+         allow_multiple_uploads, require_email, custom_message, editor_id, assigned_buyer_id)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
         RETURNING *`,
         [
           title.trim(),
@@ -81,7 +111,9 @@ class FileRequestController {
           deadline || null,
           allow_multiple_uploads,
           require_email,
-          custom_message || null
+          custom_message || null,
+          editor_id || null,
+          assigned_buyer_id || null
         ]
       );
 
@@ -529,14 +561,16 @@ class FileRequestController {
       }
 
       // Upload file to S3 (as the request creator)
+      // Use editor_id and assigned_buyer_id from file request if specified
       const mediaFile = await mediaService.uploadMedia(
         req.file,
         fileRequest.creator_id,
-        null, // No editor assignment for public uploads
+        fileRequest.editor_id || null, // Use editor from request if specified
         {
           tags: ['file-request-upload'],
           description: `Uploaded via file request: ${fileRequest.title}`,
-          folder_id: fileRequest.folder_id
+          folder_id: fileRequest.folder_id,
+          assigned_buyer_id: fileRequest.assigned_buyer_id || null // Assign to buyer if specified
         }
       );
 

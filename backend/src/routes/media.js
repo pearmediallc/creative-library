@@ -46,6 +46,12 @@ router.get('/select',
   mediaController.selectFromLibrary.bind(mediaController)
 );
 
+// ✨ NEW: Trash / Deleted files endpoints (MUST be before /:id routes)
+router.get('/deleted',
+  authenticateToken,
+  mediaController.getDeletedFiles.bind(mediaController)
+);
+
 // Download file (proxy from S3/CloudFront with CORS headers)
 router.get('/:id/download',
   authenticateToken,
@@ -126,12 +132,7 @@ router.post('/bulk/move',
   mediaController.bulkMove.bind(mediaController)
 );
 
-// ✨ NEW: Trash / Deleted files endpoints
-router.get('/deleted',
-  authenticateToken,
-  mediaController.getDeletedFiles.bind(mediaController)
-);
-
+// ✨ NEW: Restore and permanent delete endpoints
 router.post('/:id/restore',
   authenticateToken,
   mediaController.restoreFile.bind(mediaController)
