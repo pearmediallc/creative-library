@@ -477,6 +477,8 @@ export const fileRequestApi = {
     allow_multiple_uploads?: boolean;
     require_email?: boolean;
     custom_message?: string;
+    editor_id?: string;
+    assigned_buyer_id?: string;
   }) => api.post('/file-requests', data),
 
   // Get all file requests for current user
