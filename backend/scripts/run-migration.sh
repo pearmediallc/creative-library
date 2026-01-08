@@ -65,9 +65,15 @@ done
 # Load environment variables
 if [ -f "$ENV_FILE" ]; then
   echo -e "${BLUE}Loading environment from $ENV_FILE${NC}"
-  set -a
-  source "$ENV_FILE"
-  set +a
+  # Use a safer method: only export valid key=value pairs
+  while IFS='=' read -r key value; do
+    # Skip empty lines and comments
+    [[ -z "$key" || "$key" =~ ^#.* ]] && continue
+    # Skip lines that don't have = sign (like the cron expression)
+    [[ ! "$key" =~ = ]] || continue
+    # Export the variable
+    export "$key=$value"
+  done < <(grep -v '^\s*#' "$ENV_FILE" | grep '=')
 else
   echo -e "${RED}Error: Environment file not found at $ENV_FILE${NC}"
   exit 1
