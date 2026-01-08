@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { Download, Share2, Star, Edit2, FolderInput, Copy, Clock, Trash2, History, Info, MessageSquare } from 'lucide-react';
+import { Download, Share2, Star, Edit2, FolderInput, Copy, Clock, Trash2, History, Info, MessageSquare, Tag } from 'lucide-react';
 import { MediaFile } from '../types';
 
 interface FileContextMenuProps {
@@ -17,6 +17,7 @@ interface FileContextMenuProps {
   onActivity?: () => void;
   onProperties?: () => void;
   onComments?: () => void;
+  onTags?: () => void;
   onDelete?: () => void;
   isAdmin?: boolean;
 }
@@ -36,6 +37,7 @@ export function FileContextMenu({
   onActivity,
   onProperties,
   onComments,
+  onTags,
   onDelete,
   isAdmin = false
 }: FileContextMenuProps) {
@@ -92,6 +94,14 @@ export function FileContextMenu({
         onClose();
       }
     },
+    ...(onTags ? [{
+      icon: Tag,
+      label: 'Manage Tags',
+      onClick: () => {
+        onTags();
+        onClose();
+      }
+    }] : []),
     {
       icon: Edit2,
       label: 'Rename',

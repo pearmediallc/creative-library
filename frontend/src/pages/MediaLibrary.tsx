@@ -6,7 +6,7 @@ import { Card } from '../components/ui/Card';
 import { mediaApi, editorApi, folderApi, adminApi, starredApi } from '../lib/api';
 import { MediaFile, Editor } from '../types';
 import { formatBytes, formatDate } from '../lib/utils';
-import { Image as ImageIcon, Video, X, Download, Trash2, Info, PackageOpen, Calendar, Filter, Clock, FolderInput, Share2, Star, LayoutGrid, List, FileText } from 'lucide-react';
+import { Image as ImageIcon, Video, X, Download, Trash2, Info, PackageOpen, Calendar, Filter, Clock, FolderInput, Share2, Star, LayoutGrid, List, FileText, Tag } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { BulkMetadataEditor } from '../components/BulkMetadataEditor';
 import { MetadataViewer } from '../components/MetadataViewer';
@@ -26,6 +26,7 @@ import { RenameDialog } from '../components/RenameDialog';
 import { PropertiesPanel } from '../components/PropertiesPanel';
 import { ActivityTimeline } from '../components/ActivityTimeline';
 import { CommentsPanel } from '../components/CommentsPanel';
+import { FileTagsManager } from '../components/FileTagsManager';
 
 interface FolderNode {
   id: string;
@@ -152,6 +153,17 @@ export function MediaLibraryPage() {
   }>({
     isOpen: false,
     fileId: '',
+    fileName: ''
+  });
+
+  // Tags manager state
+  const [tagsManager, setTagsManager] = useState<{
+    isOpen: boolean;
+    mediaId: string;
+    fileName: string;
+  }>({
+    isOpen: false,
+    mediaId: '',
     fileName: ''
   });
 
@@ -422,6 +434,16 @@ export function MediaLibraryPage() {
       isOpen: true,
       fileId: contextMenuFile.id,
       fileName: contextMenuFile.original_filename
+    });
+  };
+
+  const handleFileTags = (file?: MediaFile) => {
+    const targetFile = file || contextMenuFile;
+    if (!targetFile) return;
+    setTagsManager({
+      isOpen: true,
+      mediaId: targetFile.id,
+      fileName: targetFile.original_filename
     });
   };
 
@@ -904,18 +926,6 @@ export function MediaLibraryPage() {
                                 <p>Size: {formatBytes(file.file_size)}</p>
                                 <p>Uploaded: {formatDate(file.created_at)}</p>
                               </div>
-                              {file.tags && file.tags.length > 0 && (
-                                <div className="flex flex-wrap gap-1 mt-2">
-                                  {file.tags.slice(0, 3).map((tag, idx) => (
-                                    <span
-                                      key={idx}
-                                      className="px-2 py-0.5 text-xs rounded-full bg-accent/20 text-accent-foreground"
-                                    >
-                                      {tag}
-                                    </span>
-                                  ))}
-                                </div>
-                              )}
                               <div className="space-y-2">
                                 <div className="flex gap-2 pt-3 border-t border-border">
                                   <Button
@@ -943,6 +953,16 @@ export function MediaLibraryPage() {
                                     variant="outline"
                                     size="sm"
                                     className="flex-1"
+                                    onClick={() => handleFileTags(file)}
+                                    title="Manage tags"
+                                  >
+                                    <Tag className="w-4 h-4 mr-1" />
+                                    Tags
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="flex-1"
                                     onClick={() => handleToggleStar(file)}
                                     title={file.is_starred ? 'Remove from starred' : 'Add to starred'}
                                   >
@@ -963,6 +983,8 @@ export function MediaLibraryPage() {
                                     <Share2 className="w-4 h-4 mr-1" />
                                     Share
                                   </Button>
+                                </div>
+                                <div className="flex gap-2">
                                   {canUpload && (
                                     <Button
                                       variant="outline"
@@ -1104,6 +1126,13 @@ export function MediaLibraryPage() {
                                   </td>
                                   <td className="p-3">
                                     <div className="flex gap-1">
+                                      <button
+                                        onClick={() => handleFileTags(file)}
+                                        className="p-1.5 hover:bg-accent rounded transition-colors"
+                                        title="Manage tags"
+                                      >
+                                        <Tag className="w-4 h-4" />
+                                      </button>
                                       <button
                                         onClick={() => handleDownload(file)}
                                         className="p-1.5 hover:bg-accent rounded transition-colors"
@@ -1265,6 +1294,7 @@ export function MediaLibraryPage() {
           onDownload={handleFileDownload}
           onShare={handleFileShare}
           onStar={handleFileStar}
+          onTags={() => handleFileTags()}
           onRename={handleFileRename}
           onMove={handleFileMove}
           onCopy={handleFileCopy}
@@ -1336,6 +1366,14 @@ export function MediaLibraryPage() {
         onClose={() => setCommentsPanel({ ...commentsPanel, isOpen: false })}
         fileId={commentsPanel.fileId}
         fileName={commentsPanel.fileName}
+      />
+
+      <FileTagsManager
+        isOpen={tagsManager.isOpen}
+        onClose={() => setTagsManager({ ...tagsManager, isOpen: false })}
+        mediaId={tagsManager.mediaId}
+        fileName={tagsManager.fileName}
+        onTagsUpdated={fetchData}
       />
     </DashboardLayout>
   );

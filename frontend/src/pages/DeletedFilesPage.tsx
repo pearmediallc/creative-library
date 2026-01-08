@@ -5,7 +5,7 @@ import { Card } from '../components/ui/Card';
 import { mediaApi } from '../lib/api';
 import { MediaFile } from '../types';
 import { formatBytes, formatDate } from '../lib/utils';
-import { Image as ImageIcon, Video, RotateCcw, Trash2, AlertTriangle } from 'lucide-react';
+import { Image as ImageIcon, Video, RotateCcw, Trash2, AlertTriangle, FileText, File } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 export function DeletedFilesPage() {
@@ -27,7 +27,9 @@ export function DeletedFilesPage() {
     try {
       setLoading(true);
       const response = await mediaApi.getDeletedFiles();
-      setFiles(response.data.data || []);
+      const deletedFiles = response.data.data || [];
+      console.log('Fetched deleted files:', deletedFiles.length, deletedFiles);
+      setFiles(deletedFiles);
     } catch (error: any) {
       console.error('Failed to fetch deleted files:', error);
       alert(error.response?.data?.error || 'Failed to fetch deleted files');
@@ -118,22 +120,38 @@ export function DeletedFilesPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {files.map((file) => (
               <Card key={file.id} className="overflow-hidden opacity-75 hover:opacity-100 transition-opacity">
-                <div className="aspect-video bg-muted relative">
-                  {file.thumbnail_url ? (
+                <div className="aspect-video bg-muted relative overflow-hidden">
+                  {(file.thumbnail_url || file.s3_url) ? (
                     <img
-                      src={file.thumbnail_url}
+                      src={file.thumbnail_url || file.s3_url}
                       alt={file.original_filename}
                       className="w-full h-full object-cover grayscale"
+                      loading="lazy"
+                      onError={(e) => {
+                        // Fallback to placeholder icon on error
+                        const target = e.target as HTMLImageElement;
+                        target.style.display = 'none';
+                        const fallback = target.nextElementSibling as HTMLElement;
+                        if (fallback) {
+                          fallback.style.display = 'flex';
+                        }
+                      }}
                     />
-                  ) : (
-                    <div className="flex items-center justify-center h-full grayscale">
-                      {file.file_type === 'image' ? (
-                        <ImageIcon className="w-16 h-16 text-muted-foreground" />
-                      ) : (
-                        <Video className="w-16 h-16 text-muted-foreground" />
-                      )}
-                    </div>
-                  )}
+                  ) : null}
+                  <div
+                    className="absolute inset-0 flex items-center justify-center h-full grayscale bg-muted"
+                    style={{ display: (file.thumbnail_url || file.s3_url) ? 'none' : 'flex' }}
+                  >
+                    {file.file_type === 'image' ? (
+                      <ImageIcon className="w-16 h-16 text-muted-foreground" />
+                    ) : file.file_type === 'video' ? (
+                      <Video className="w-16 h-16 text-muted-foreground" />
+                    ) : file.original_filename?.toLowerCase().endsWith('.pdf') ? (
+                      <FileText className="w-16 h-16 text-muted-foreground" />
+                    ) : (
+                      <File className="w-16 h-16 text-muted-foreground" />
+                    )}
+                  </div>
                   <div className="absolute top-2 right-2">
                     <span className="px-2 py-1 text-xs font-medium rounded bg-destructive/80 text-destructive-foreground backdrop-blur">
                       Deleted

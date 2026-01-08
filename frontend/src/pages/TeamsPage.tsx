@@ -3,9 +3,9 @@ import { DashboardLayout } from '../components/layout/DashboardLayout';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { TeamMembersModal } from '../components/TeamMembersModal';
-import { teamApi } from '../lib/api';
+import { teamApi, adminApi } from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
-import { Users, Plus, Trash2, UserPlus } from 'lucide-react';
+import { Users, Plus, Trash2, UserPlus, Search, X as XIcon, Shield, User } from 'lucide-react';
 
 interface Team {
   id: string;
@@ -40,13 +40,26 @@ export function TeamsPage() {
     }
   };
 
-  const handleCreateTeam = async (name: string, description: string) => {
+  const handleCreateTeam = async (name: string, description: string, members: Array<{ userId: string; role: string }>) => {
     try {
-      await teamApi.create({ name, description });
+      // First, create the team
+      const response = await teamApi.create({ name, description });
+      const teamId = response.data.data.id;
+
+      // Then add members if any were selected
+      if (members.length > 0) {
+        await Promise.all(
+          members.map(member =>
+            teamApi.addMember(teamId, { user_id: member.userId, role: member.role })
+          )
+        );
+      }
+
       setShowCreateModal(false);
       fetchTeams();
     } catch (error: any) {
       alert(error.response?.data?.error || 'Failed to create team');
+      throw error;
     }
   };
 
@@ -168,16 +181,58 @@ export function TeamsPage() {
   );
 }
 
+interface SelectedMember {
+  userId: string;
+  name: string;
+  email: string;
+  role: 'admin' | 'member';
+}
+
+interface AvailableUser {
+  id: string;
+  name: string;
+  email: string;
+}
+
 function CreateTeamModal({
   onClose,
   onSubmit
 }: {
   onClose: () => void;
-  onSubmit: (name: string, description: string) => Promise<void>;
+  onSubmit: (name: string, description: string, members: Array<{ userId: string; role: string }>) => Promise<void>;
 }) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  // Member selection state
+  const [availableUsers, setAvailableUsers] = useState<AvailableUser[]>([]);
+  const [selectedMembers, setSelectedMembers] = useState<SelectedMember[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [loadingUsers, setLoadingUsers] = useState(false);
+  const [showUserDropdown, setShowUserDropdown] = useState(false);
+
+  // Fetch available users when modal opens
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        setLoadingUsers(true);
+        const response = await adminApi.getUsers();
+        const users = response.data.data || [];
+        setAvailableUsers(users.map((u: any) => ({
+          id: u.id,
+          name: u.name,
+          email: u.email
+        })));
+      } catch (error) {
+        console.error('Failed to fetch users:', error);
+      } finally {
+        setLoadingUsers(false);
+      }
+    };
+
+    fetchUsers();
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -185,21 +240,64 @@ function CreateTeamModal({
 
     try {
       setSubmitting(true);
-      await onSubmit(name.trim(), description.trim());
+      await onSubmit(
+        name.trim(),
+        description.trim(),
+        selectedMembers.map(m => ({ userId: m.userId, role: m.role }))
+      );
+    } catch (error) {
+      console.error('Failed to create team:', error);
     } finally {
       setSubmitting(false);
     }
   };
 
+  const handleAddMember = (user: AvailableUser) => {
+    if (!selectedMembers.find(m => m.userId === user.id)) {
+      setSelectedMembers([...selectedMembers, {
+        userId: user.id,
+        name: user.name,
+        email: user.email,
+        role: 'member'
+      }]);
+    }
+    setSearchQuery('');
+    setShowUserDropdown(false);
+  };
+
+  const handleRemoveMember = (userId: string) => {
+    setSelectedMembers(selectedMembers.filter(m => m.userId !== userId));
+  };
+
+  const handleRoleChange = (userId: string, role: 'admin' | 'member') => {
+    setSelectedMembers(selectedMembers.map(m =>
+      m.userId === userId ? { ...m, role } : m
+    ));
+  };
+
+  // Filter users based on search query and exclude already selected
+  const filteredUsers = availableUsers.filter(user => {
+    const matchesSearch = user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         user.email.toLowerCase().includes(searchQuery.toLowerCase());
+    const notSelected = !selectedMembers.find(m => m.userId === user.id);
+    return matchesSearch && notSelected;
+  });
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-gray-800 rounded-lg w-full max-w-md">
-        <form onSubmit={handleSubmit}>
+      <div className="bg-white dark:bg-gray-800 rounded-lg w-full max-w-2xl max-h-[90vh] flex flex-col">
+        <form onSubmit={handleSubmit} className="flex flex-col h-full">
+          {/* Header */}
           <div className="p-6 border-b border-gray-200 dark:border-gray-700">
             <h2 className="text-xl font-bold">Create Team</h2>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+              Create a new team and optionally add members
+            </p>
           </div>
 
-          <div className="p-6 space-y-4">
+          {/* Content - Scrollable */}
+          <div className="flex-1 overflow-y-auto p-6 space-y-4">
+            {/* Team Name */}
             <div>
               <label className="block text-sm font-medium mb-1">
                 Team Name *
@@ -215,6 +313,7 @@ function CreateTeamModal({
               />
             </div>
 
+            {/* Description */}
             <div>
               <label className="block text-sm font-medium mb-1">
                 Description
@@ -228,8 +327,120 @@ function CreateTeamModal({
                 disabled={submitting}
               />
             </div>
+
+            {/* Member Selection */}
+            <div>
+              <label className="block text-sm font-medium mb-2">
+                Team Members (Optional)
+              </label>
+
+              {/* Search/Add User */}
+              <div className="relative mb-3">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => {
+                      setSearchQuery(e.target.value);
+                      setShowUserDropdown(e.target.value.length > 0);
+                    }}
+                    onFocus={() => searchQuery.length > 0 && setShowUserDropdown(true)}
+                    placeholder="Search users by name or email..."
+                    className="w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                    disabled={submitting || loadingUsers}
+                  />
+                </div>
+
+                {/* User Dropdown */}
+                {showUserDropdown && searchQuery.length > 0 && (
+                  <div className="absolute z-10 w-full mt-1 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                    {loadingUsers ? (
+                      <div className="p-4 text-sm text-gray-600 dark:text-gray-400 text-center">
+                        Loading users...
+                      </div>
+                    ) : filteredUsers.length === 0 ? (
+                      <div className="p-4 text-sm text-gray-600 dark:text-gray-400 text-center">
+                        No users found
+                      </div>
+                    ) : (
+                      filteredUsers.map(user => (
+                        <button
+                          key={user.id}
+                          type="button"
+                          onClick={() => handleAddMember(user)}
+                          className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-600 flex items-start gap-2"
+                        >
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                              {user.name}
+                            </div>
+                            <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                              {user.email}
+                            </div>
+                          </div>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Selected Members List */}
+              {selectedMembers.length > 0 && (
+                <div className="space-y-2 border border-gray-200 dark:border-gray-700 rounded-lg p-3">
+                  <div className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">
+                    Selected Members ({selectedMembers.length})
+                  </div>
+                  {selectedMembers.map(member => (
+                    <div
+                      key={member.userId}
+                      className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                          {member.name}
+                        </div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                          {member.email}
+                        </div>
+                      </div>
+
+                      {/* Role Selector */}
+                      <select
+                        value={member.role}
+                        onChange={(e) => handleRoleChange(member.userId, e.target.value as 'admin' | 'member')}
+                        disabled={submitting}
+                        className="px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="member">Member</option>
+                        <option value="admin">Admin</option>
+                      </select>
+
+                      {/* Remove Button */}
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveMember(member.userId)}
+                        disabled={submitting}
+                        className="p-1 text-red-600 hover:bg-red-100 dark:hover:bg-red-900/20 rounded transition-colors"
+                        title="Remove member"
+                      >
+                        <XIcon className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {selectedMembers.length === 0 && (
+                <div className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                  You can add members now or later. Search above to add users.
+                </div>
+              )}
+            </div>
           </div>
 
+          {/* Footer */}
           <div className="flex justify-end gap-3 p-6 border-t border-gray-200 dark:border-gray-700">
             <Button type="button" variant="outline" onClick={onClose} disabled={submitting}>
               Cancel

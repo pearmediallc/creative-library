@@ -764,6 +764,7 @@ class MediaController {
   async getDeletedFiles(req, res, next) {
     try {
       const MediaFile = require('../models/MediaFile');
+      const s3Service = require('../services/s3Service');
 
       // Query for deleted files only
       const sql = `
@@ -781,11 +782,32 @@ class MediaController {
 
       const result = await MediaFile.raw(sql);
 
-      logger.info(`Retrieved ${result.length} deleted files for user ${req.user.id}`);
+      // Refresh signed URLs for files that need it (expired or missing)
+      const filesWithFreshUrls = await Promise.all(
+        result.map(async (file) => {
+          try {
+            // Generate fresh signed URLs for S3 files
+            if (file.s3_key && (!file.s3_url || file.s3_url.includes('X-Amz-Expires'))) {
+              file.s3_url = await s3Service.getSignedUrl(file.s3_key);
+            }
+            if (file.thumbnail_s3_key && (!file.thumbnail_url || file.thumbnail_url.includes('X-Amz-Expires'))) {
+              file.thumbnail_url = await s3Service.getSignedUrl(file.thumbnail_s3_key);
+            }
+          } catch (urlError) {
+            logger.warn('Failed to generate signed URL for deleted file', {
+              fileId: file.id,
+              error: urlError.message
+            });
+          }
+          return file;
+        })
+      );
+
+      logger.info(`Retrieved ${filesWithFreshUrls.length} deleted files for user ${req.user.id}`);
 
       res.json({
         success: true,
-        data: result
+        data: filesWithFreshUrls
       });
     } catch (error) {
       logger.error('Get deleted files error', { error: error.message });
