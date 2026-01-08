@@ -10,6 +10,7 @@
     "lint": "eslint src/",
     "migrate": "node src/utils/migrate.js",
     "migrate:run": "cd scripts && ./run-migration.sh -f ../migrations/COMPLETE_MIGRATION_SCRIPT.sql",
+    "migrate:direct": "cd scripts && ./run-migration-direct.sh ../migrations/COMPLETE_MIGRATION_SCRIPT.sql",
     "migrate:run-all": "cd scripts && ./run-migration.sh --all",
     "migrate:create": "cd scripts && ./create-migration.sh",
     "db:check": "cd scripts && ./check-db.sh",
