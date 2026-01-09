@@ -44,11 +44,17 @@ export function TeamMembersModal({
       setMembers(response.data.data.members || []);
     } catch (err: any) {
       console.error('Failed to fetch team members:', err);
-      setError(err.response?.data?.error || 'Failed to load team members');
+      // If team is not found (404), close the modal
+      if (err.response?.status === 404) {
+        setError('Team not found');
+        setTimeout(() => onClose(), 1500); // Close after showing error briefly
+      } else {
+        setError(err.response?.data?.error || 'Failed to load team members');
+      }
     } finally {
       setLoading(false);
     }
-  }, [teamId]);
+  }, [teamId, onClose]);
 
   const fetchAllUsers = useCallback(async () => {
     try {

@@ -229,6 +229,142 @@ class MediaFile extends BaseModel {
   }
 
   /**
+   * Count media files matching ALL filters (mirrors findWithFilters WHERE clause)
+   * @param {Object} filters - Same filter object as findWithFilters
+   * @returns {Promise<number>} Count of matching files
+   */
+  async countWithFilters(filters = {}) {
+    const conditions = [];
+    const params = [];
+    let paramIndex = 1;
+
+    // Only active files (use is_deleted column)
+    conditions.push(`is_deleted = FALSE`);
+
+    if (filters.uploaded_by) {
+      conditions.push(`uploaded_by = $${paramIndex++}`);
+      params.push(filters.uploaded_by);
+    }
+
+    // Support multiple editor IDs (comma-separated from frontend)
+    if (filters.editor_id) {
+      const editorIds = filters.editor_id.split(',').filter(id => id.trim());
+      if (editorIds.length === 1) {
+        conditions.push(`editor_id = $${paramIndex++}`);
+        params.push(editorIds[0]);
+      } else if (editorIds.length > 1) {
+        conditions.push(`editor_id = ANY($${paramIndex++})`);
+        params.push(editorIds);
+      }
+    }
+
+    // Support multiple media types (comma-separated from frontend)
+    if (filters.media_type) {
+      const mediaTypes = filters.media_type.split(',').filter(t => t.trim());
+      if (mediaTypes.length === 1) {
+        conditions.push(`file_type = $${paramIndex++}`);
+        params.push(mediaTypes[0]);
+      } else if (mediaTypes.length > 1) {
+        conditions.push(`file_type = ANY($${paramIndex++})`);
+        params.push(mediaTypes);
+      }
+    }
+
+    if (filters.tags && filters.tags.length > 0) {
+      conditions.push(`tags && $${paramIndex++}`);
+      params.push(filters.tags);
+    }
+
+    if (filters.search) {
+      conditions.push(`(
+        original_filename ILIKE $${paramIndex} OR
+        description ILIKE $${paramIndex}
+      )`);
+      params.push(`%${filters.search}%`);
+      paramIndex++;
+    }
+
+    // Date range filters with proper day boundaries
+    if (filters.date_from) {
+      conditions.push(`created_at >= $${paramIndex++}::date`);
+      params.push(filters.date_from);
+    }
+
+    if (filters.date_to) {
+      conditions.push(`created_at < ($${paramIndex++}::date + interval '1 day')`);
+      params.push(filters.date_to);
+    }
+
+    // Support multiple buyer IDs (comma-separated from frontend)
+    if (filters.buyer_id) {
+      const buyerIds = filters.buyer_id.split(',').filter(id => id.trim());
+      if (buyerIds.length === 1) {
+        conditions.push(`assigned_buyer_id = $${paramIndex++}`);
+        params.push(buyerIds[0]);
+      } else if (buyerIds.length > 1) {
+        conditions.push(`assigned_buyer_id = ANY($${paramIndex++})`);
+        params.push(buyerIds);
+      }
+    }
+
+    // Support multiple folder IDs (comma-separated from frontend)
+    if (filters.folder_id) {
+      const folderIds = filters.folder_id.split(',').filter(id => id.trim());
+      if (folderIds.length === 1) {
+        conditions.push(`folder_id = $${paramIndex++}`);
+        params.push(folderIds[0]);
+      } else if (folderIds.length > 1) {
+        conditions.push(`folder_id = ANY($${paramIndex++})`);
+        params.push(folderIds);
+      }
+    }
+
+    // File size filters
+    if (filters.size_min !== undefined && filters.size_min !== null) {
+      conditions.push(`file_size >= $${paramIndex++}`);
+      params.push(filters.size_min);
+    }
+
+    if (filters.size_max !== undefined && filters.size_max !== null) {
+      conditions.push(`file_size <= $${paramIndex++}`);
+      params.push(filters.size_max);
+    }
+
+    // Resolution filters (width)
+    if (filters.width_min !== undefined && filters.width_min !== null) {
+      conditions.push(`width >= $${paramIndex++}`);
+      params.push(filters.width_min);
+    }
+
+    if (filters.width_max !== undefined && filters.width_max !== null) {
+      conditions.push(`width <= $${paramIndex++}`);
+      params.push(filters.width_max);
+    }
+
+    // Resolution filters (height)
+    if (filters.height_min !== undefined && filters.height_min !== null) {
+      conditions.push(`height >= $${paramIndex++}`);
+      params.push(filters.height_min);
+    }
+
+    if (filters.height_max !== undefined && filters.height_max !== null) {
+      conditions.push(`height <= $${paramIndex++}`);
+      params.push(filters.height_max);
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    const sql = `
+      SELECT COUNT(*)::int as count
+      FROM ${this.tableName}
+      ${whereClause}
+    `;
+
+    const result = await this.raw(sql, params);
+    return result[0]?.count || 0;
+  }
+
+  /**
    * Get media file with presigned download URL
    * @param {string} id - Media file ID
    * @returns {Promise<Object>} Media file with download_url

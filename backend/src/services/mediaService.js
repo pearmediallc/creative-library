@@ -285,13 +285,8 @@ class MediaService {
         };
       });
 
-      // Get total count for pagination
-      const totalCount = await MediaFile.count({
-        is_deleted: false,
-        ...(filters.uploaded_by && { uploaded_by: filters.uploaded_by }),
-        ...(filters.editor_id && { editor_id: filters.editor_id }),
-        ...(filters.media_type && { file_type: filters.media_type })
-      });
+      // Get total count for pagination (using same filters as results)
+      const totalCount = await MediaFile.countWithFilters(filters);
 
       return {
         files: mediaFilesWithUrls,

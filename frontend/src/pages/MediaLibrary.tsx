@@ -891,12 +891,12 @@ export function MediaLibraryPage() {
                                 </div>
                               )}
                               {selectionMode && (
-                                <div className="absolute top-2 left-2">
+                                <div className="absolute top-2 left-2 bg-white dark:bg-gray-800 rounded p-1 shadow-md border border-gray-200 dark:border-gray-700">
                                   <input
                                     type="checkbox"
                                     checked={selectedFiles.includes(file.id)}
                                     onChange={() => toggleFileSelection(file.id)}
-                                    className="w-5 h-5 cursor-pointer"
+                                    className="w-5 h-5 cursor-pointer accent-blue-600"
                                   />
                                 </div>
                               )}
@@ -1016,7 +1016,8 @@ export function MediaLibraryPage() {
                                     type="checkbox"
                                     checked={selectedFiles.length === files.length && files.length > 0}
                                     onChange={toggleSelectAll}
-                                    className="w-4 h-4 cursor-pointer"
+                                    className="w-5 h-5 cursor-pointer accent-blue-600"
+                                    title="Select all files"
                                   />
                                 </th>
                               )}
@@ -1052,7 +1053,7 @@ export function MediaLibraryPage() {
                                         type="checkbox"
                                         checked={selectedFiles.includes(file.id)}
                                         onChange={() => toggleFileSelection(file.id)}
-                                        className="w-4 h-4 cursor-pointer"
+                                        className="w-5 h-5 cursor-pointer accent-blue-600"
                                       />
                                     </td>
                                   )}
