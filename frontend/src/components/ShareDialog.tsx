@@ -55,7 +55,7 @@ export function ShareDialog({
   // Share with people form state
   const [shareType, setShareType] = useState<'user' | 'team'>('user');
   const [selectedId, setSelectedId] = useState('');
-  const [selectedPermissions, setSelectedPermissions] = useState<Set<'view' | 'download' | 'edit' | 'delete'>>(new Set(['view']));
+  const [selectedPermissions, setSelectedPermissions] = useState<Set<'view' | 'download' | 'edit' | 'delete'>>(new Set(['view' as const]));
   const [expiresAt, setExpiresAt] = useState('');
 
   // Link sharing state
