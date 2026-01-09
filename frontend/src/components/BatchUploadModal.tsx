@@ -66,8 +66,9 @@ export function BatchUploadModal({
         const relativePath = file.webkitRelativePath || file.name;
         const pathParts = relativePath.split('/');
 
-        // Remove the root folder name (first part) and filename (last part)
-        const folderPath = pathParts.slice(1, -1).join('/');
+        // Remove ONLY the filename (last part), keep the full folder path including root folder
+        // Example: "test/subfolder/image.jpg" -> "test/subfolder"
+        const folderPath = pathParts.slice(0, -1).join('/');
 
         fileList.push({ file, path: folderPath });
 

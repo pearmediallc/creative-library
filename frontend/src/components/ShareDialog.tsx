@@ -55,7 +55,7 @@ export function ShareDialog({
   // Share with people form state
   const [shareType, setShareType] = useState<'user' | 'team'>('user');
   const [selectedId, setSelectedId] = useState('');
-  const [selectedPermission, setSelectedPermission] = useState<'view' | 'download' | 'edit' | 'delete'>('view');
+  const [selectedPermissions, setSelectedPermissions] = useState<Set<'view' | 'download' | 'edit' | 'delete'>>(new Set(['view']));
   const [expiresAt, setExpiresAt] = useState('');
 
   // Link sharing state
@@ -135,22 +135,33 @@ export function ShareDialog({
       return;
     }
 
+    if (selectedPermissions.size === 0) {
+      setError('Please select at least one permission');
+      return;
+    }
+
     setSharing(true);
     setError('');
     setSuccess('');
 
     try {
-      await permissionApi.grant({
-        resource_type: resourceType,
-        resource_id: resourceId,
-        grantee_type: shareType,
-        grantee_id: selectedId,
-        permission_type: selectedPermission,
-        expires_at: expiresAt || undefined
-      });
+      // Grant each selected permission
+      await Promise.all(
+        Array.from(selectedPermissions).map(permType =>
+          permissionApi.grant({
+            resource_type: resourceType,
+            resource_id: resourceId,
+            grantee_type: shareType,
+            grantee_id: selectedId,
+            permission_type: permType,
+            expires_at: expiresAt || undefined
+          })
+        )
+      );
 
       setSuccess(`Shared successfully with ${shareType === 'user' ? 'user' : 'team'}!`);
       setSelectedId('');
+      setSelectedPermissions(new Set(['view']));
       setExpiresAt('');
       await fetchPermissions();
 
@@ -460,23 +471,97 @@ export function ShareDialog({
                   </select>
 
                   {/* Permission Selection */}
-                  <div className="grid grid-cols-2 gap-2">
-                    <select
-                      value={selectedPermission}
-                      onChange={(e) => setSelectedPermission(e.target.value as any)}
-                      disabled={sharing}
-                      className="h-10 px-3 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
-                    >
-                      <option value="view">Can view</option>
-                      <option value="download">Can download</option>
-                      <option value="edit">Can edit</option>
-                      <option value="delete">Can delete</option>
-                    </select>
+                  <div>
+                    <label className="block text-xs text-gray-600 dark:text-gray-400 mb-2">
+                      Select permissions
+                    </label>
+                    <div className="grid grid-cols-2 gap-2 mb-3">
+                      <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer p-2 rounded border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                        <input
+                          type="checkbox"
+                          checked={selectedPermissions.has('view')}
+                          onChange={(e) => {
+                            const newPerms = new Set(selectedPermissions);
+                            if (e.target.checked) {
+                              newPerms.add('view');
+                            } else {
+                              newPerms.delete('view');
+                            }
+                            setSelectedPermissions(newPerms);
+                          }}
+                          disabled={sharing}
+                          className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        />
+                        <Eye className="w-4 h-4 text-blue-500" />
+                        Can view
+                      </label>
+
+                      <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer p-2 rounded border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                        <input
+                          type="checkbox"
+                          checked={selectedPermissions.has('download')}
+                          onChange={(e) => {
+                            const newPerms = new Set(selectedPermissions);
+                            if (e.target.checked) {
+                              newPerms.add('download');
+                            } else {
+                              newPerms.delete('download');
+                            }
+                            setSelectedPermissions(newPerms);
+                          }}
+                          disabled={sharing}
+                          className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        />
+                        <Download className="w-4 h-4 text-green-500" />
+                        Can download
+                      </label>
+
+                      <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer p-2 rounded border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                        <input
+                          type="checkbox"
+                          checked={selectedPermissions.has('edit')}
+                          onChange={(e) => {
+                            const newPerms = new Set(selectedPermissions);
+                            if (e.target.checked) {
+                              newPerms.add('edit');
+                            } else {
+                              newPerms.delete('edit');
+                            }
+                            setSelectedPermissions(newPerms);
+                          }}
+                          disabled={sharing}
+                          className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        />
+                        <Edit className="w-4 h-4 text-orange-500" />
+                        Can edit
+                      </label>
+
+                      <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer p-2 rounded border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                        <input
+                          type="checkbox"
+                          checked={selectedPermissions.has('delete')}
+                          onChange={(e) => {
+                            const newPerms = new Set(selectedPermissions);
+                            if (e.target.checked) {
+                              newPerms.add('delete');
+                            } else {
+                              newPerms.delete('delete');
+                            }
+                            setSelectedPermissions(newPerms);
+                          }}
+                          disabled={sharing}
+                          className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        />
+                        <Trash2 className="w-4 h-4 text-red-500" />
+                        Can delete
+                      </label>
+                    </div>
 
                     <Button
                       type="submit"
                       size="sm"
-                      disabled={sharing || !selectedId}
+                      className="w-full"
+                      disabled={sharing || !selectedId || selectedPermissions.size === 0}
                     >
                       {sharing ? 'Sharing...' : 'Share'}
                     </Button>

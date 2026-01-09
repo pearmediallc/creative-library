@@ -361,7 +361,7 @@ class PermissionController {
         LEFT JOIN folders f ON fp.resource_type = 'folder' AND fp.resource_id = f.id AND f.is_deleted = FALSE
         LEFT JOIN users u ON (
           (fp.resource_type = 'file' AND mf.uploaded_by = u.id) OR
-          (fp.resource_type = 'folder' AND f.created_by = u.id)
+          (fp.resource_type = 'folder' AND f.owner_id = u.id)
         )
         WHERE (
           (fp.grantee_type = 'user' AND fp.grantee_id = $1)

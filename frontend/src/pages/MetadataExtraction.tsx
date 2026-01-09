@@ -50,6 +50,8 @@ export function MetadataExtraction() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'image' | 'video'>('all');
   const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   // Fetch files
   const fetchFiles = async () => {
@@ -108,6 +110,41 @@ export function MetadataExtraction() {
       alert(error.response?.data?.error || 'Failed to extract metadata');
     } finally {
       setExtracting(false);
+    }
+  };
+
+  // Handle file upload
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || e.target.files.length === 0) return;
+
+    const filesToUpload = Array.from(e.target.files);
+
+    try {
+      setUploading(true);
+
+      // Upload files one by one
+      for (const file of filesToUpload) {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('editor_id', 'self'); // Use 'self' as editor_id for metadata extraction uploads
+
+        await mediaApi.uploadFile(formData);
+      }
+
+      alert(`Successfully uploaded ${filesToUpload.length} file(s)!`);
+
+      // Refresh file list
+      await fetchFiles();
+
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    } catch (error: any) {
+      console.error('Failed to upload files:', error);
+      alert(error.response?.data?.error || 'Failed to upload files');
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -190,14 +227,42 @@ export function MetadataExtraction() {
     <DashboardLayout>
       <div className="space-y-6">
         {/* Header */}
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
-            <FileSearch className="w-8 h-8" />
-            Metadata Extraction
-          </h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-1">
-            Extract and view EXIF, GPS, and camera metadata from your media files
-          </p>
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
+              <FileSearch className="w-8 h-8" />
+              Metadata Extraction
+            </h1>
+            <p className="text-gray-600 dark:text-gray-400 mt-1">
+              Extract and view EXIF, GPS, and camera metadata from your media files
+            </p>
+          </div>
+          <div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              accept="image/*,video/*"
+              onChange={handleFileUpload}
+              className="hidden"
+            />
+            <Button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+            >
+              {uploading ? (
+                <>
+                  <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                  Uploading...
+                </>
+              ) : (
+                <>
+                  <Upload className="w-4 h-4 mr-2" />
+                  Upload Files
+                </>
+              )}
+            </Button>
+          </div>
         </div>
 
         {/* Stats Cards */}

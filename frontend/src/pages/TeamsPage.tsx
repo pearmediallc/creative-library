@@ -69,6 +69,10 @@ export function TeamsPage() {
 
     try {
       await teamApi.delete(teamId);
+      // Close the members modal if it's open for this team
+      if (membersModalTeam?.id === teamId) {
+        setMembersModalTeam(null);
+      }
       fetchTeams();
     } catch (error: any) {
       alert(error.response?.data?.error || 'Failed to delete team');

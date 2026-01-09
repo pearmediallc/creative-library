@@ -78,8 +78,8 @@ export function MediaLibraryPage() {
   const [contextMenuFile, setContextMenuFile] = useState<MediaFile | null>(null);
   const [fileContextMenuPosition, setFileContextMenuPosition] = useState({ x: 0, y: 0 });
 
-  // Bulk editor state
-  const [selectionMode, setSelectionMode] = useState(false);
+  // Bulk editor state - checkboxes always visible
+  const [selectionMode, setSelectionMode] = useState(true);
   const [selectedFiles, setSelectedFiles] = useState<string[]>([]);
   const [showBulkEditor, setShowBulkEditor] = useState(false);
 
@@ -650,20 +650,11 @@ export function MediaLibraryPage() {
                 <p className="text-muted-foreground">Manage your creative assets</p>
               </div>
               {canUpload && (
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
                   <Button onClick={() => setShowUploadModal(true)}>
                     Upload Files
                   </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setSelectionMode(!selectionMode);
-                      setSelectedFiles([]);
-                    }}
-                  >
-                    {selectionMode ? 'Cancel Selection' : 'Bulk Edit'}
-                  </Button>
-                  {selectionMode && selectedFiles.length > 0 && (
+                  {selectedFiles.length > 0 && (
                     <>
                       <Button onClick={() => setShowBulkEditor(true)}>
                         Edit {selectedFiles.length} Selected
@@ -700,6 +691,14 @@ export function MediaLibraryPage() {
                           Delete {selectedFiles.length}
                         </Button>
                       )}
+                      <Button
+                        variant="outline"
+                        onClick={() => setSelectedFiles([])}
+                        title="Clear selection"
+                      >
+                        <X className="w-4 h-4 mr-2" />
+                        Clear
+                      </Button>
                     </>
                   )}
                 </div>
@@ -711,8 +710,8 @@ export function MediaLibraryPage() {
               <Breadcrumb items={breadcrumb} onNavigate={handleFolderSelect} />
             )}
 
-            {/* Selection Mode */}
-            {selectionMode && (
+            {/* Selection Info */}
+            {files.length > 0 && (
               <div className="flex items-center gap-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-md">
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
@@ -725,6 +724,11 @@ export function MediaLibraryPage() {
                     Select All ({selectedFiles.length} / {files.length})
                   </span>
                 </label>
+                {selectedFiles.length > 0 && (
+                  <span className="text-sm text-blue-700 dark:text-blue-300">
+                    {selectedFiles.length} file{selectedFiles.length !== 1 ? 's' : ''} selected
+                  </span>
+                )}
               </div>
             )}
 
