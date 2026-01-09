@@ -161,7 +161,7 @@ export function ShareDialog({
 
       setSuccess(`Shared successfully with ${shareType === 'user' ? 'user' : 'team'}!`);
       setSelectedId('');
-      setSelectedPermissions(new Set(['view']));
+      setSelectedPermissions(new Set(['view' as const]));
       setExpiresAt('');
       await fetchPermissions();
 
