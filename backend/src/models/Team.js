@@ -6,6 +6,17 @@ class Team extends BaseModel {
   }
 
   /**
+   * Override findById to filter by is_active
+   * @param {string} id - Team ID
+   * @returns {Promise<Object|null>} Team or null
+   */
+  async findById(id) {
+    const sql = `SELECT * FROM ${this.tableName} WHERE id = $1 AND is_active = TRUE`;
+    const result = await this.raw(sql, [id]);
+    return result[0] || null;
+  }
+
+  /**
    * Create a new team
    * @param {Object} data - Team data
    * @returns {Promise<Object>} Created team
