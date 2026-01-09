@@ -150,6 +150,13 @@ class BaseModel {
     const result = await query(sql, params);
     return result.rows;
   }
+
+  /**
+   * Direct query method (returns full result object with rows)
+   */
+  async query(sql, params = []) {
+    return await query(sql, params);
+  }
 }
 
 module.exports = BaseModel;

@@ -226,6 +226,9 @@ class FileRequestController {
       }
 
       // Get uploaded files
+      // 📝 LOGGING: Fetching file request uploads
+      logger.info('Fetching uploaded files for file request', { file_request_id: id });
+
       const uploadsResult = await query(
         `SELECT
           fru.*,
@@ -233,13 +236,15 @@ class FileRequestController {
           mf.file_type,
           mf.file_size,
           mf.thumbnail_url,
-          mf.cloudfront_url
+          mf.s3_url
         FROM file_request_uploads fru
         JOIN media_files mf ON fru.file_id = mf.id
         WHERE fru.file_request_id = $1
         ORDER BY fru.created_at DESC`,
         [id]
       );
+
+      logger.info('File request uploads fetched', { count: uploadsResult.rows.length });
 
       const fileRequest = result.rows[0];
       fileRequest.uploads = uploadsResult.rows;

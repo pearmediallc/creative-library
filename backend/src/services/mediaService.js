@@ -62,8 +62,14 @@ class MediaService {
       let folderPath = null;
       let targetFolderId = metadata.folder_id;
 
+      // 📝 PRIORITY: Use s3_folder_path if provided from controller (folder upload)
+      if (metadata.s3_folder_path) {
+        console.log('\n📁 Using provided S3 folder path from controller...');
+        folderPath = metadata.s3_folder_path;
+        console.log(`  └─ S3 Folder Path: ${folderPath}`);
+      }
       // If organize_by_date is true, create date-based folder structure
-      if (metadata.organize_by_date) {
+      else if (metadata.organize_by_date) {
         console.log('\n📅 Creating date-based folder structure...');
         const Folder = require('../models/Folder');
         const folderController = require('../controllers/folderController');

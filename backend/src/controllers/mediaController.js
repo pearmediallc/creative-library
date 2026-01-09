@@ -23,6 +23,16 @@ class MediaController {
       const { editor_id, tags, description, folder_id, organize_by_date, assigned_buyer_id, folder_path } = req.body;
       const userId = req.user.id;
 
+      // 📝 LOGGING: Upload request received
+      logger.info('Media upload request received', {
+        userId,
+        editor_id,
+        folder_id,
+        folder_path: folder_path || 'NOT PROVIDED',
+        organize_by_date,
+        filename: req.file?.originalname
+      });
+
       // Parse tags if it's a string (from multipart form)
       const parsedTags = typeof tags === 'string' ? JSON.parse(tags || '[]') : tags;
 
@@ -31,8 +41,15 @@ class MediaController {
 
       // ✨ NEW: Handle folder_path for folder uploads - create hierarchy if needed
       let targetFolderId = folder_id;
+      let s3FolderPath = null; // S3 path for the created hierarchy
+
       if (folder_path && folder_path.trim()) {
+        logger.info('Creating folder hierarchy', { folder_path, base_folder_id: folder_id });
         targetFolderId = await this.createFolderHierarchy(folder_id, folder_path, userId);
+
+        // Use the folder_path directly for S3 path generation
+        s3FolderPath = folder_path;
+        logger.info('Folder hierarchy created', { targetFolderId, s3FolderPath });
       }
 
       const mediaFile = await mediaService.uploadMedia(
@@ -45,7 +62,8 @@ class MediaController {
           metadataOperations,  // ✨ Include metadata operations
           folder_id: targetFolderId,  // ✨ NEW: Target folder ID (potentially from hierarchy)
           organize_by_date: organize_by_date === 'true' || organize_by_date === true,  // ✨ NEW: Auto date-based folders
-          assigned_buyer_id    // ✨ NEW: Buyer assignment
+          assigned_buyer_id,    // ✨ NEW: Buyer assignment
+          s3_folder_path: s3FolderPath  // ✨ NEW: Direct S3 folder path for folder uploads
         }
       );
 
