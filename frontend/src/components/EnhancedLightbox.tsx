@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, ZoomIn, ZoomOut, ChevronLeft, ChevronRight, Download, Maximize2 } from 'lucide-react';
 import { PDFViewer } from './PDFViewer';
+import { VideoPlayer } from './VideoPlayer';
 
 interface MediaFile {
   id: string;
@@ -201,12 +202,14 @@ export function EnhancedLightbox({ files, currentIndex, onClose, onNavigate }: E
           onWheel={handleWheel}
         >
           {currentFile.file_type === 'video' ? (
-            <video
-              src={currentFile.s3_url}
-              controls
-              autoPlay
-              className="max-w-full max-h-full"
-            />
+            <div className="w-full max-w-5xl mx-auto">
+              <VideoPlayer
+                src={currentFile.s3_url}
+                poster={currentFile.thumbnail_url}
+                autoPlay
+                className="w-full"
+              />
+            </div>
           ) : (
             <img
               src={currentFile.s3_url}

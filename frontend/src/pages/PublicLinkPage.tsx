@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { Lock, Download, Eye, AlertCircle, FileIcon, Image, Video, FileText, Clock, XCircle } from 'lucide-react';
 import { publicLinkApi } from '../lib/api';
 import { Button } from '../components/ui/Button';
+import { VideoPlayer } from '../components/VideoPlayer';
 
 export function PublicLinkPage() {
   const { token } = useParams<{ token: string }>();
@@ -233,13 +234,13 @@ export function PublicLinkPage() {
                   className="max-w-full max-h-[600px] object-contain rounded-lg shadow-lg"
                 />
               ) : isVideo && resource.s3_url ? (
-                <video
-                  src={resource.s3_url}
-                  controls
-                  className="max-w-full max-h-[600px] rounded-lg shadow-lg"
-                >
-                  Your browser does not support the video tag.
-                </video>
+                <div className="w-full max-w-3xl mx-auto">
+                  <VideoPlayer
+                    src={resource.s3_url}
+                    poster={resource.thumbnail_url}
+                    className="w-full"
+                  />
+                </div>
               ) : resource.thumbnail_url ? (
                 <img
                   src={resource.thumbnail_url}
