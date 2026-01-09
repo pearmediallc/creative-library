@@ -371,31 +371,16 @@ export function MediaLibraryPage() {
 
   const handleFileMove = () => {
     if (!contextMenuFile) return;
-    const targetFolderName = window.prompt(
-      `Move "${contextMenuFile.original_filename}" to which folder?\n\nEnter folder ID or leave empty for root folder:`
-    );
-
-    if (targetFolderName === null) return; // User cancelled
-
-    const targetFolderId = targetFolderName.trim() || null;
-
-    mediaApi.bulkMove([contextMenuFile.id], targetFolderId)
-      .then(() => {
-        alert('File moved successfully');
-        fetchData();
-      })
-      .catch((error) => alert('Failed to move file: ' + error.message));
+    setSelectedFiles([contextMenuFile.id]);
+    setFolderPickerOperation('move');
+    setShowFolderPicker(true);
   };
 
   const handleFileCopy = () => {
     if (!contextMenuFile) return;
-    // Copy file URL or other information to clipboard
-    const url = contextMenuFile.s3_url || contextMenuFile.download_url;
-    if (url) {
-      navigator.clipboard.writeText(url)
-        .then(() => alert('File URL copied to clipboard'))
-        .catch(() => alert('Failed to copy URL'));
-    }
+    setSelectedFiles([contextMenuFile.id]);
+    setFolderPickerOperation('copy');
+    setShowFolderPicker(true);
   };
 
   const handleFileVersions = () => {
@@ -578,18 +563,18 @@ export function MediaLibraryPage() {
         await mediaApi.bulkMove(selectedFiles, targetFolderId);
         alert(`Successfully moved ${selectedFiles.length} file(s)`);
       } else if (folderPickerOperation === 'copy') {
-        await folderApi.copyFiles({
-          file_ids: selectedFiles,
-          target_folder_id: targetFolderId,
-        });
+        await mediaApi.bulkCopy(selectedFiles, targetFolderId);
         alert(`Successfully copied ${selectedFiles.length} file(s)`);
       }
       setSelectedFiles([]);
       setSelectionMode(false);
+      setContextMenuFile(null);
       fetchData();
     } catch (error: any) {
       console.error(`Failed to ${folderPickerOperation} files:`, error);
       alert(error.response?.data?.error || `Failed to ${folderPickerOperation} files`);
+    } finally {
+      setShowFolderPicker(false);
     }
   };
 

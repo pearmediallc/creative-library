@@ -64,9 +64,9 @@ BEGIN
     ALTER TABLE team_members
     ADD COLUMN joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
 
-    -- Update existing rows to have a joined_at value
+    -- Update existing rows to have a joined_at value (use CURRENT_TIMESTAMP since created_at may not exist)
     UPDATE team_members
-    SET joined_at = created_at
+    SET joined_at = CURRENT_TIMESTAMP
     WHERE joined_at IS NULL;
 
     RAISE NOTICE '  ✓ Added joined_at column to team_members';

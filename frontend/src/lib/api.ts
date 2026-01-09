@@ -152,6 +152,14 @@ export const mediaApi = {
     api.delete('/media/bulk', { data: { file_ids: fileIds } }),
   bulkMove: (fileIds: string[], targetFolderId: string | null) =>
     api.post('/media/bulk/move', { file_ids: fileIds, target_folder_id: targetFolderId }),
+  bulkCopy: (fileIds: string[], targetFolderId: string | null) =>
+    api.post('/media/bulk/copy', { file_ids: fileIds, target_folder_id: targetFolderId }),
+
+  // ✨ NEW: Individual file move/copy operations
+  moveFile: (fileId: string, targetFolderId: string | null) =>
+    api.post(`/media/${fileId}/move`, { target_folder_id: targetFolderId }),
+  copyFile: (fileId: string, targetFolderId: string | null) =>
+    api.post(`/media/${fileId}/copy`, { target_folder_id: targetFolderId }),
 
   // ✨ NEW: Trash / Deleted files operations
   getDeletedFiles: () => api.get('/media/deleted'),

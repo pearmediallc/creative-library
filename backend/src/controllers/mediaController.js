@@ -758,6 +758,326 @@ class MediaController {
   }
 
   /**
+   * ✨ NEW: Move single file to folder
+   * POST /api/media/:id/move
+   * Body: { target_folder_id: string | null }
+   */
+  async moveFile(req, res, next) {
+    try {
+      const { id } = req.params;
+      const { target_folder_id } = req.body;
+      const userId = req.user.id;
+
+      const MediaFile = require('../models/MediaFile');
+
+      // Get file info
+      const file = await MediaFile.findById(id);
+
+      if (!file) {
+        return res.status(404).json({
+          success: false,
+          error: 'File not found'
+        });
+      }
+
+      if (file.is_deleted) {
+        return res.status(400).json({
+          success: false,
+          error: 'Cannot move deleted file'
+        });
+      }
+
+      // Check permissions (owner or admin can move)
+      const User = require('../models/User');
+      const user = await User.findById(userId);
+
+      if (file.uploaded_by !== userId && user.role !== 'admin') {
+        return res.status(403).json({
+          success: false,
+          error: 'Permission denied'
+        });
+      }
+
+      // Update file's folder_id
+      await MediaFile.update(id, {
+        folder_id: target_folder_id || null
+      });
+
+      // Log activity
+      await logActivity({
+        req,
+        actionType: 'media_move',
+        resourceType: 'media_file',
+        resourceId: id,
+        resourceName: file.original_filename,
+        details: {
+          from_folder: file.folder_id,
+          to_folder: target_folder_id
+        },
+        status: 'success'
+      });
+
+      logger.info(`File moved: ${id} to folder ${target_folder_id || 'root'} by user ${userId}`);
+
+      res.json({
+        success: true,
+        message: 'File moved successfully'
+      });
+    } catch (error) {
+      logger.error('Move file error', { error: error.message, fileId: req.params.id });
+      next(error);
+    }
+  }
+
+  /**
+   * ✨ NEW: Copy single file to folder
+   * POST /api/media/:id/copy
+   * Body: { target_folder_id: string | null }
+   */
+  async copyFile(req, res, next) {
+    try {
+      const { id } = req.params;
+      const { target_folder_id } = req.body;
+      const userId = req.user.id;
+
+      const MediaFile = require('../models/MediaFile');
+      const s3Service = require('../services/s3Service');
+
+      // Get original file info
+      const originalFile = await MediaFile.findById(id);
+
+      if (!originalFile) {
+        return res.status(404).json({
+          success: false,
+          error: 'File not found'
+        });
+      }
+
+      if (originalFile.is_deleted) {
+        return res.status(400).json({
+          success: false,
+          error: 'Cannot copy deleted file'
+        });
+      }
+
+      // Generate new S3 key for the copy
+      const timestamp = Date.now();
+      const newFilename = `copy_${timestamp}_${originalFile.original_filename}`;
+      const { generateS3Key } = require('../config/aws');
+
+      const newS3Key = generateS3Key(
+        newFilename,
+        'originals',
+        originalFile.editor_name,
+        originalFile.file_type
+      );
+
+      // Copy file in S3
+      await s3Service.copyFile(originalFile.s3_key, newS3Key);
+
+      // Get signed URL for the new file
+      const newS3Url = await s3Service.getSignedUrl(newS3Key);
+
+      // Copy thumbnail if exists
+      let newThumbnailS3Key = null;
+      let newThumbnailUrl = null;
+
+      if (originalFile.thumbnail_s3_key) {
+        const newThumbnailFilename = `thumb_copy_${timestamp}_${originalFile.original_filename}`;
+        newThumbnailS3Key = generateS3Key(
+          newThumbnailFilename,
+          'thumbnails',
+          originalFile.editor_name,
+          originalFile.file_type
+        );
+
+        await s3Service.copyFile(originalFile.thumbnail_s3_key, newThumbnailS3Key);
+        newThumbnailUrl = await s3Service.getSignedUrl(newThumbnailS3Key);
+      }
+
+      // Create new database record
+      const newFile = await MediaFile.create({
+        uploaded_by: userId,
+        editor_id: originalFile.editor_id,
+        editor_name: originalFile.editor_name,
+        filename: newFilename,
+        original_filename: `Copy of ${originalFile.original_filename}`,
+        file_type: originalFile.file_type,
+        mime_type: originalFile.mime_type,
+        file_size: originalFile.file_size,
+        s3_key: newS3Key,
+        s3_url: newS3Url,
+        width: originalFile.width,
+        height: originalFile.height,
+        duration: originalFile.duration,
+        thumbnail_s3_key: newThumbnailS3Key,
+        thumbnail_url: newThumbnailUrl,
+        tags: originalFile.tags || [],
+        description: originalFile.description,
+        folder_id: target_folder_id || null,
+        assigned_buyer_id: originalFile.assigned_buyer_id,
+        metadata_stripped: originalFile.metadata_stripped,
+        metadata_embedded: originalFile.metadata_embedded,
+        metadata_operations: originalFile.metadata_operations || []
+      });
+
+      // Log activity
+      await logActivity({
+        req,
+        actionType: 'media_copy',
+        resourceType: 'media_file',
+        resourceId: newFile.id,
+        resourceName: newFile.original_filename,
+        details: {
+          original_file_id: id,
+          original_filename: originalFile.original_filename,
+          target_folder: target_folder_id
+        },
+        status: 'success'
+      });
+
+      logger.info(`File copied: ${id} -> ${newFile.id} to folder ${target_folder_id || 'root'} by user ${userId}`);
+
+      res.json({
+        success: true,
+        message: 'File copied successfully',
+        data: newFile
+      });
+    } catch (error) {
+      logger.error('Copy file error', { error: error.message, fileId: req.params.id });
+      next(error);
+    }
+  }
+
+  /**
+   * ✨ NEW: Bulk copy files to folder
+   * POST /api/media/bulk/copy
+   * Body: { file_ids: string[], target_folder_id: string | null }
+   */
+  async bulkCopy(req, res, next) {
+    try {
+      const { file_ids, target_folder_id } = req.body;
+      const userId = req.user.id;
+
+      if (!file_ids || !Array.isArray(file_ids) || file_ids.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'file_ids array is required'
+        });
+      }
+
+      logger.info(`Bulk copy initiated: ${file_ids.length} files to folder ${target_folder_id || 'root'} by user ${userId}`);
+
+      const MediaFile = require('../models/MediaFile');
+      const s3Service = require('../services/s3Service');
+      const { generateS3Key } = require('../config/aws');
+
+      const results = {
+        success: [],
+        failed: []
+      };
+
+      for (const fileId of file_ids) {
+        try {
+          // Get original file info
+          const originalFile = await MediaFile.findById(fileId);
+
+          if (!originalFile) {
+            results.failed.push({ fileId, error: 'File not found' });
+            continue;
+          }
+
+          if (originalFile.is_deleted) {
+            results.failed.push({ fileId, error: 'Cannot copy deleted file' });
+            continue;
+          }
+
+          // Generate new S3 key for the copy
+          const timestamp = Date.now();
+          const randomStr = Math.random().toString(36).substr(2, 9);
+          const newFilename = `copy_${timestamp}_${randomStr}_${originalFile.original_filename}`;
+
+          const newS3Key = generateS3Key(
+            newFilename,
+            'originals',
+            originalFile.editor_name,
+            originalFile.file_type
+          );
+
+          // Copy file in S3
+          await s3Service.copyFile(originalFile.s3_key, newS3Key);
+
+          // Get signed URL for the new file
+          const newS3Url = await s3Service.getSignedUrl(newS3Key);
+
+          // Copy thumbnail if exists
+          let newThumbnailS3Key = null;
+          let newThumbnailUrl = null;
+
+          if (originalFile.thumbnail_s3_key) {
+            const newThumbnailFilename = `thumb_copy_${timestamp}_${randomStr}_${originalFile.original_filename}`;
+            newThumbnailS3Key = generateS3Key(
+              newThumbnailFilename,
+              'thumbnails',
+              originalFile.editor_name,
+              originalFile.file_type
+            );
+
+            await s3Service.copyFile(originalFile.thumbnail_s3_key, newThumbnailS3Key);
+            newThumbnailUrl = await s3Service.getSignedUrl(newThumbnailS3Key);
+          }
+
+          // Create new database record
+          const newFile = await MediaFile.create({
+            uploaded_by: userId,
+            editor_id: originalFile.editor_id,
+            editor_name: originalFile.editor_name,
+            filename: newFilename,
+            original_filename: `Copy of ${originalFile.original_filename}`,
+            file_type: originalFile.file_type,
+            mime_type: originalFile.mime_type,
+            file_size: originalFile.file_size,
+            s3_key: newS3Key,
+            s3_url: newS3Url,
+            width: originalFile.width,
+            height: originalFile.height,
+            duration: originalFile.duration,
+            thumbnail_s3_key: newThumbnailS3Key,
+            thumbnail_url: newThumbnailUrl,
+            tags: originalFile.tags || [],
+            description: originalFile.description,
+            folder_id: target_folder_id || null,
+            assigned_buyer_id: originalFile.assigned_buyer_id,
+            metadata_stripped: originalFile.metadata_stripped,
+            metadata_embedded: originalFile.metadata_embedded,
+            metadata_operations: originalFile.metadata_operations || []
+          });
+
+          results.success.push({ fileId, newFileId: newFile.id });
+        } catch (error) {
+          logger.error(`Failed to copy file ${fileId}`, { error: error.message });
+          results.failed.push({ fileId, error: error.message });
+        }
+      }
+
+      logger.info(`Bulk copy completed: ${results.success.length} succeeded, ${results.failed.length} failed`);
+
+      res.json({
+        success: true,
+        data: {
+          copied: results.success.length,
+          failed: results.failed.length,
+          results
+        },
+        message: `Successfully copied ${results.success.length} of ${file_ids.length} files`
+      });
+    } catch (error) {
+      logger.error('Bulk copy error', { error: error.message });
+      next(error);
+    }
+  }
+
+  /**
    * ✨ NEW: Get deleted files (trash)
    * GET /api/media/deleted
    */

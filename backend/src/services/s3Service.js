@@ -1,5 +1,5 @@
 const { s3Client, getPresignedDownloadUrl, generateS3Key } = require('../config/aws');
-const { PutObjectCommand, DeleteObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
+const { PutObjectCommand, DeleteObjectCommand, GetObjectCommand, CopyObjectCommand } = require('@aws-sdk/client-s3');
 const sharp = require('sharp');
 const ffmpeg = require('fluent-ffmpeg');
 const path = require('path');
@@ -444,6 +444,51 @@ class S3Service {
     } catch (error) {
       logger.error(`Failed to download from S3: ${s3Key}`, error);
       throw new Error(`S3 download failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Copy file within S3 bucket
+   * @param {string} sourceKey - Source S3 object key
+   * @param {string} destinationKey - Destination S3 object key
+   * @returns {Promise<Object>} Copy result with new s3Key
+   */
+  async copyFile(sourceKey, destinationKey) {
+    try {
+      logger.info(`Copying file in S3: ${sourceKey} -> ${destinationKey}`);
+
+      const command = new CopyObjectCommand({
+        Bucket: S3_BUCKET,
+        CopySource: `${S3_BUCKET}/${sourceKey}`,
+        Key: destinationKey,
+        ServerSideEncryption: 'AES256'
+      });
+
+      await s3Client.send(command);
+
+      logger.info(`File copied successfully in S3: ${destinationKey}`);
+
+      return {
+        s3Key: destinationKey,
+        s3Bucket: S3_BUCKET
+      };
+    } catch (error) {
+      logger.error('S3 copy error', { error: error.message, sourceKey, destinationKey });
+      throw new Error(`Failed to copy file in S3: ${error.message}`);
+    }
+  }
+
+  /**
+   * Get signed URL for S3 object
+   * @param {string} s3Key - S3 object key
+   * @returns {Promise<string>} Signed URL
+   */
+  async getSignedUrl(s3Key) {
+    try {
+      return await getPresignedDownloadUrl(s3Key);
+    } catch (error) {
+      logger.error('Failed to generate signed URL', { error: error.message, s3Key });
+      throw new Error('Failed to generate signed URL');
     }
   }
 

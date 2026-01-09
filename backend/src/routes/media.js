@@ -148,6 +148,24 @@ router.post('/bulk/move',
   mediaController.bulkMove.bind(mediaController)
 );
 
+// ✨ NEW: Bulk copy files to folder
+router.post('/bulk/copy',
+  authenticateToken,
+  mediaController.bulkCopy.bind(mediaController)
+);
+
+// ✨ NEW: Move single file to folder
+router.post('/:id/move',
+  authenticateToken,
+  mediaController.moveFile.bind(mediaController)
+);
+
+// ✨ NEW: Copy single file to folder
+router.post('/:id/copy',
+  authenticateToken,
+  mediaController.copyFile.bind(mediaController)
+);
+
 // ✨ NEW: Restore and permanent delete endpoints
 router.post('/:id/restore',
   authenticateToken,
