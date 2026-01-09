@@ -124,11 +124,7 @@ export function MetadataExtraction() {
 
       // Upload files one by one
       for (const file of filesToUpload) {
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('editor_id', 'self'); // Use 'self' as editor_id for metadata extraction uploads
-
-        await mediaApi.uploadFile(formData);
+        await mediaApi.upload(file, 'self'); // Use 'self' as editor_id for metadata extraction uploads
       }
 
       alert(`Successfully uploaded ${filesToUpload.length} file(s)!`);
