@@ -66,7 +66,12 @@ class Team extends BaseModel {
 
     // Get team members
     const membersSql = `
-      SELECT tm.*, u.name, u.email, u.role
+      SELECT
+        tm.user_id,
+        tm.role,
+        tm.joined_at as added_at,
+        u.name as user_name,
+        u.email as user_email
       FROM team_members tm
       JOIN users u ON u.id = tm.user_id
       WHERE tm.team_id = $1 AND tm.is_active = TRUE

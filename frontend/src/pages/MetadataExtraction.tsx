@@ -51,6 +51,8 @@ export function MetadataExtraction() {
   const [filterType, setFilterType] = useState<'all' | 'image' | 'video'>('all');
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [editors, setEditors] = useState<Array<{ id: string; name: string }>>([]);
+  const [defaultEditorId, setDefaultEditorId] = useState<string | null>(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   // Fetch files
@@ -91,6 +93,23 @@ export function MetadataExtraction() {
     }
   };
 
+  // Fetch editors on mount
+  useEffect(() => {
+    const fetchEditors = async () => {
+      try {
+        const response = await mediaApi.getEditors();
+        const editorList = response.data.data || response.data || [];
+        setEditors(editorList);
+        if (editorList.length > 0) {
+          setDefaultEditorId(editorList[0].id);
+        }
+      } catch (error) {
+        console.error('Failed to fetch editors:', error);
+      }
+    };
+    fetchEditors();
+  }, []);
+
   useEffect(() => {
     fetchFiles();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -117,6 +136,11 @@ export function MetadataExtraction() {
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return;
 
+    if (!defaultEditorId) {
+      alert('No editor available. Please create an editor first.');
+      return;
+    }
+
     const filesToUpload = Array.from(e.target.files);
 
     try {
@@ -124,7 +148,7 @@ export function MetadataExtraction() {
 
       // Upload files one by one
       for (const file of filesToUpload) {
-        await mediaApi.upload(file, 'self'); // Use 'self' as editor_id for metadata extraction uploads
+        await mediaApi.upload(file, defaultEditorId);
       }
 
       alert(`Successfully uploaded ${filesToUpload.length} file(s)!`);
