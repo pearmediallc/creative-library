@@ -95,25 +95,8 @@
 
 ## 🔴 CRITICAL ISSUES REQUIRING ACTION
 
-### 6. CloudFront URL Typo
-**Issue**: Old thumbnails showing 404 errors
-
-**Root Cause**: Typo in Render environment variable
-- Wrong: `https://d1119q1lrtir1.cloudfront.net`
-- Correct: `https://d1119rg1irtir1.cloudfront.net`
-
-**Fix Required**: Update Render environment variable
-
-**Steps**:
-1. Go to [Render Dashboard](https://dashboard.render.com/)
-2. Click on your **Backend service**
-3. Go to **"Environment"** tab
-4. Find `AWS_CLOUDFRONT_URL`
-5. Change value to: `https://d1119rg1irtir1.cloudfront.net`
-6. Click **"Save Changes"**
-7. Service will automatically redeploy
-
-**Status**: ⚠️ **YOU MUST FIX THIS IN RENDER DASHBOARD**
+### 6. CloudFront URL
+**Status**: ✅ Already correct (`https://d1119rg1irtir1.cloudfront.net`)
 
 ---
 
@@ -211,11 +194,11 @@ npm run build
 **Option A: Using Render Shell (Recommended)**
 1. Go to Render Dashboard → **Backend service**
 2. Click **"Shell"** tab
-3. Run this command:
+3. Run these commands:
 ```bash
-cd /app
+cd ~/project/src/backend/migrations
 export DATABASE_URL="YOUR_DATABASE_URL_FROM_STEP_1"
-psql "$DATABASE_URL" -f backend/migrations/FIX_STARRED_AND_JOINED_AT.sql
+psql "$DATABASE_URL" -f FIX_STARRED_AND_JOINED_AT.sql
 ```
 
 **Option B: From Your Local Machine**

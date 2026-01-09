@@ -77,7 +77,7 @@ export function AdvancedFilterPanel({
       </div>
 
       {/* Scrollable content container */}
-      <div className="overflow-y-auto max-h-[calc(80vh-140px)]">
+      <div className="overflow-y-auto max-h-[calc(80vh-200px)] pb-4">
 
         {/* Filter Content */}
         <div className="p-4 space-y-6">
