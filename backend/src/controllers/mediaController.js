@@ -47,9 +47,13 @@ class MediaController {
         logger.info('Creating folder hierarchy', { folder_path, base_folder_id: folder_id });
         targetFolderId = await this.createFolderHierarchy(folder_id, folder_path, userId);
 
-        // Use the folder_path directly for S3 path generation
-        s3FolderPath = folder_path;
-        logger.info('Folder hierarchy created', { targetFolderId, s3FolderPath });
+        // Get the actual S3 path from the created/found folder
+        const Folder = require('../models/Folder');
+        const targetFolder = await Folder.findById(targetFolderId);
+        if (targetFolder) {
+          s3FolderPath = targetFolder.s3_path;
+          logger.info('Folder hierarchy created', { targetFolderId, s3FolderPath });
+        }
       }
 
       const mediaFile = await mediaService.uploadMedia(

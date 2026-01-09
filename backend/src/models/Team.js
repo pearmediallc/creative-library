@@ -44,9 +44,9 @@ class Team extends BaseModel {
       FROM ${this.tableName} t
       LEFT JOIN users u ON u.id = t.owner_id
       LEFT JOIN team_members tm ON tm.team_id = t.id
-      WHERE t.owner_id = $1 OR t.id IN (
+      WHERE (t.owner_id = $1 OR t.id IN (
         SELECT team_id FROM team_members WHERE user_id = $1 AND is_active = TRUE
-      )
+      ))
       AND t.is_active = TRUE
       GROUP BY t.id, u.name
       ORDER BY t.created_at DESC
