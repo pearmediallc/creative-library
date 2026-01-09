@@ -526,6 +526,81 @@ class MetadataService {
   }
 
   /**
+   * Extract all metadata from video using FFmpeg
+   * @param {Buffer} buffer - Video file buffer
+   * @returns {Promise<Object>} Extracted metadata
+   */
+  async extractVideoMetadata(buffer) {
+    return new Promise((resolve, reject) => {
+      const tempInputPath = path.join(os.tmpdir(), `input-${Date.now()}-${Math.random().toString(36).substring(7)}.mp4`);
+
+      try {
+        // Write buffer to temp file
+        fs.writeFileSync(tempInputPath, buffer);
+
+        // Use ffprobe to extract metadata
+        ffmpeg.ffprobe(tempInputPath, (err, metadata) => {
+          // Cleanup temp file
+          try {
+            if (fs.existsSync(tempInputPath)) fs.unlinkSync(tempInputPath);
+          } catch (cleanupError) {
+            logger.warn(`Error cleaning up temp file: ${cleanupError.message}`);
+          }
+
+          if (err) {
+            logger.error(`FFprobe error: ${err.message}`);
+            reject(new Error(`Video metadata extraction error: ${err.message}`));
+            return;
+          }
+
+          // Extract useful metadata
+          const videoMetadata = {
+            format: metadata.format?.format_name || 'unknown',
+            duration: metadata.format?.duration || 0,
+            size: metadata.format?.size || 0,
+            bitrate: metadata.format?.bit_rate || 0,
+            tags: metadata.format?.tags || {}
+          };
+
+          // Extract video stream info
+          const videoStream = metadata.streams?.find(s => s.codec_type === 'video');
+          if (videoStream) {
+            videoMetadata.width = videoStream.width;
+            videoMetadata.height = videoStream.height;
+            videoMetadata.codec = videoStream.codec_name;
+            videoMetadata.fps = eval(videoStream.r_frame_rate || '0/1');
+          }
+
+          // Extract audio stream info
+          const audioStream = metadata.streams?.find(s => s.codec_type === 'audio');
+          if (audioStream) {
+            videoMetadata.audio_codec = audioStream.codec_name;
+            videoMetadata.audio_sample_rate = audioStream.sample_rate;
+            videoMetadata.audio_channels = audioStream.channels;
+          }
+
+          logger.info(`Extracted video metadata: ${videoMetadata.duration}s, ${videoMetadata.width}x${videoMetadata.height}`);
+          resolve(videoMetadata);
+        });
+
+      } catch (error) {
+        // Cleanup on error
+        try {
+          if (fs.existsSync(tempInputPath)) fs.unlinkSync(tempInputPath);
+        } catch (cleanupError) {
+          logger.warn(`Error cleaning up temp file: ${cleanupError.message}`);
+        }
+
+        if (error.message && error.message.includes('ffmpeg')) {
+          reject(new Error('FFmpeg not installed. Please install FFmpeg to process videos.'));
+        } else {
+          reject(new Error(`Error extracting video metadata: ${error.message}`));
+        }
+      }
+    });
+  }
+
+  /**
    * Check if FFmpeg is available
    */
   async checkFFmpeg() {
