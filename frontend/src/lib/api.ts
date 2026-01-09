@@ -474,6 +474,53 @@ export const savedSearchApi = {
   toggleFavorite: (id: string) => api.post(`/saved-searches/${id}/favorite`),
 };
 
+// Metadata endpoints
+export const metadataApi = {
+  // Add metadata to file (embed creator info)
+  addMetadata: (
+    file: File,
+    creatorId: string,
+    options?: {
+      description?: string;
+      title?: string;
+      keywords?: string;
+      custom_fields?: Record<string, any>;
+    }
+  ) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('creator_id', creatorId);
+    if (options?.description) formData.append('description', options.description);
+    if (options?.title) formData.append('title', options.title);
+    if (options?.keywords) formData.append('keywords', options.keywords);
+    if (options?.custom_fields) formData.append('custom_fields', JSON.stringify(options.custom_fields));
+
+    return api.post('/metadata/add', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+
+  // Remove metadata from file (strip EXIF/GPS)
+  removeMetadata: (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    return api.post('/metadata/remove', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+
+  // Extract metadata from file (read-only)
+  extractMetadata: (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    return api.post('/metadata/extract', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+};
+
 // File Request endpoints
 export const fileRequestApi = {
   // Create new file request
