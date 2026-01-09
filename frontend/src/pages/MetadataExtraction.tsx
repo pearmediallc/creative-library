@@ -66,9 +66,24 @@ export function MetadataExtraction() {
       }
 
       const response = await mediaApi.getAll(params);
-      setFiles(response.data.data || []);
+
+      // 🔧 FIX: Backend returns { success: true, data: { files: [...], total: N } }
+      // So we need to access response.data.data.files, not response.data.data
+      const filesData = response.data.data;
+      if (Array.isArray(filesData)) {
+        // Old format: data is already the array
+        setFiles(filesData);
+      } else if (filesData && Array.isArray(filesData.files)) {
+        // New format: data is an object with files property
+        setFiles(filesData.files);
+      } else {
+        // Fallback: empty array
+        console.warn('Unexpected API response format:', filesData);
+        setFiles([]);
+      }
     } catch (error) {
       console.error('Failed to fetch files:', error);
+      setFiles([]); // Always set to array on error
     } finally {
       setLoading(false);
     }
