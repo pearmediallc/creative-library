@@ -23,13 +23,21 @@ const upload = multer({
       'video/mp4',
       'video/quicktime',
       'video/x-msvideo',
-      'video/webm'
+      'video/webm',
+      'application/octet-stream' // Allow generic binary for folder uploads
     ];
 
+    // Check MIME type
     if (allowedMimeTypes.includes(file.mimetype.toLowerCase())) {
       cb(null, true);
     } else {
-      cb(new Error(`Unsupported file type: ${file.mimetype}`));
+      // Check file extension as fallback for octet-stream files
+      const ext = file.originalname.toLowerCase().match(/\.(jpg|jpeg|png|gif|webp|mp4|mov|avi|webm)$/);
+      if (ext) {
+        cb(null, true);
+      } else {
+        cb(new Error(`Unsupported file type: ${file.mimetype}`));
+      }
     }
   }
 });
