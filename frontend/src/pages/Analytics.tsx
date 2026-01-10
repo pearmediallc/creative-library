@@ -146,11 +146,11 @@ export function AnalyticsPage() {
 
     try {
       console.log('📊 Fetching unified analytics (Facebook + RedTrack)...');
-      const response = await analyticsApi.getUnified(
-        fbAdAccount,
-        syncDateFrom || undefined,
-        syncDateTo || undefined
-      );
+      const response = await analyticsApi.getUnifiedAnalytics({
+        ad_account_id: fbAdAccount,
+        date_from: syncDateFrom || undefined,
+        date_to: syncDateTo || undefined
+      });
 
       setUnifiedData(response.data.data);
       console.log('✅ Unified analytics fetched successfully');
@@ -326,7 +326,11 @@ export function AnalyticsPage() {
 
     try {
       console.log(`📅 Syncing ads from ${syncDateFrom} to ${syncDateTo}`);
-      const response = await analyticsApi.sync(fbAdAccount, syncDateFrom, syncDateTo);
+      const response = await analyticsApi.syncAds({
+        ad_account_id: fbAdAccount,
+        date_from: syncDateFrom,
+        date_to: syncDateTo
+      });
       await fetchAnalytics();
 
       // If in unified mode, also fetch unified data

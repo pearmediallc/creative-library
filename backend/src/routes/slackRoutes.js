@@ -5,21 +5,21 @@
 const express = require('express');
 const router = express.Router();
 const slackController = require('../controllers/slackController');
-const authMiddleware = require('../middleware/authMiddleware');
+const { authenticateToken } = require('../middleware/auth');
 
 // OAuth routes
-router.get('/oauth/initiate', authMiddleware, slackController.initiateOAuth);
+router.get('/oauth/initiate', authenticateToken, slackController.initiateOAuth);
 router.get('/oauth/callback', slackController.handleOAuthCallback);
 
 // Connection management
-router.get('/status', authMiddleware, slackController.getConnectionStatus);
-router.post('/disconnect', authMiddleware, slackController.disconnect);
+router.get('/status', authenticateToken, slackController.getConnectionStatus);
+router.post('/disconnect', authenticateToken, slackController.disconnect);
 
 // Notification preferences
-router.get('/preferences', authMiddleware, slackController.getNotificationPreferences);
-router.put('/preferences', authMiddleware, slackController.updateNotificationPreferences);
+router.get('/preferences', authenticateToken, slackController.getNotificationPreferences);
+router.put('/preferences', authenticateToken, slackController.updateNotificationPreferences);
 
 // Testing
-router.post('/test', authMiddleware, slackController.testNotification);
+router.post('/test', authenticateToken, slackController.testNotification);
 
 module.exports = router;
