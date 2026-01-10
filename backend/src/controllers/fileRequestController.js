@@ -107,12 +107,12 @@ class FileRequestController {
         console.log('Verifying editor_id:', editor_id);
         try {
           const editorResult = await query(
-            'SELECT id, name FROM users WHERE id = $1 AND role IN ($2, $3)',
-            [editor_id, 'creative', 'admin']
+            'SELECT id, name, display_name FROM editors WHERE id = $1 AND is_active = TRUE',
+            [editor_id]
           );
           console.log('Editor query result:', editorResult.rows);
           if (editorResult.rows.length === 0) {
-            console.log('ERROR: Editor not found in users table');
+            console.log('ERROR: Editor not found in editors table');
             return res.status(404).json({
               success: false,
               error: 'Editor not found'
@@ -130,12 +130,12 @@ class FileRequestController {
         for (const edId of editor_ids) {
           try {
             const editorResult = await query(
-              'SELECT id, name FROM users WHERE id = $1 AND role IN ($2, $3)',
-              [edId, 'creative', 'admin']
+              'SELECT id, name, display_name FROM editors WHERE id = $1 AND is_active = TRUE',
+              [edId]
             );
             console.log(`Editor ${edId} query result:`, editorResult.rows);
             if (editorResult.rows.length === 0) {
-              console.log(`ERROR: Editor ${edId} not found in users table`);
+              console.log(`ERROR: Editor ${edId} not found in editors table`);
               return res.status(404).json({
                 success: false,
                 error: `Editor with ID ${edId} not found`
