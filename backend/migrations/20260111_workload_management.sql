@@ -274,8 +274,8 @@ SELECT
   ec.max_concurrent_requests,
   ec.avg_completion_time_hours,
   ec.is_available,
-  COUNT(DISTINCT CASE WHEN fr.status IN ('pending', 'assigned', 'in_progress') THEN fre.request_id END) AS active_requests,
-  COUNT(DISTINCT CASE WHEN fr.status = 'completed' THEN fre.request_id END) AS completed_requests,
+  COUNT(DISTINCT CASE WHEN fre.status IN ('pending', 'assigned', 'in_progress') AND fr.is_active = TRUE AND fr.completed_at IS NULL THEN fre.request_id END) AS active_requests,
+  COUNT(DISTINCT CASE WHEN fre.status = 'completed' OR fr.completed_at IS NOT NULL THEN fre.request_id END) AS completed_requests,
   COUNT(DISTINCT fre.request_id) AS total_requests
 FROM editors e
 LEFT JOIN editor_capacity ec ON e.id = ec.editor_id
