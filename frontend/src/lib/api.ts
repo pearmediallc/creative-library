@@ -710,4 +710,37 @@ export const metadataTagApi = {
     api.post(`/media/${mediaId}/tags/bulk`, { tag_ids: tagIds }),
 };
 
+// Workload Management endpoints
+export const workloadApi = {
+  // Get workload overview for all editors
+  getOverview: () => api.get('/workload/overview'),
+
+  // Get detailed workload for a specific editor
+  getEditorWorkload: (editorId: string) => api.get(`/workload/editor/${editorId}`),
+
+  // Update editor capacity settings
+  updateCapacity: (editorId: string, data: {
+    maxConcurrentRequests?: number;
+    maxHoursPerWeek?: number;
+    isAvailable?: boolean;
+    unavailableUntil?: string;
+    unavailableReason?: string;
+  }) => api.put(`/workload/capacity/${editorId}`, data),
+
+  // Update file request time estimate
+  updateEstimate: (requestId: string, data: {
+    estimatedHours?: number;
+    complexity?: string;
+    priority?: number;
+  }) => api.put(`/workload/request/${requestId}/estimate`, data),
+
+  // Get workload analytics
+  getAnalytics: (params?: { startDate?: string; endDate?: string }) =>
+    api.get('/workload/analytics', { params }),
+
+  // Get workload recommendations
+  getRecommendations: (requestId?: string) =>
+    api.get('/workload/recommendations', { params: requestId ? { requestId } : {} }),
+};
+
 export default api;

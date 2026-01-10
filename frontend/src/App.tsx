@@ -22,6 +22,7 @@ import { FileRequestsPage } from './pages/FileRequestsPage';
 import { PublicFileRequestPage } from './pages/PublicFileRequestPage';
 import { UserSettingsPage } from './pages/UserSettings';
 import { ActivityLogExportPage } from './pages/ActivityLogExport';
+import { WorkloadDashboardPage } from './pages/WorkloadDashboardPage';
 
 function PrivateRoute({ children }: { children: React.ReactElement }) {
   const { user, loading } = useAuth();
@@ -189,6 +190,14 @@ function AppRoutes() {
         element={
           <AdminRoute>
             <ActivityLogExportPage />
+          </AdminRoute>
+        }
+      />
+      <Route
+        path="/workload"
+        element={
+          <AdminRoute>
+            <WorkloadDashboardPage />
           </AdminRoute>
         }
       />

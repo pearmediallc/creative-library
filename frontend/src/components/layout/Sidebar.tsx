@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Image, Star, Clock, Trash2, TrendingUp, Users, Settings, LogOut, FileText, Tags, Share2, UserCheck, Layers, ChevronRight, Inbox, User, Download } from 'lucide-react';
+import { LayoutDashboard, Image, Star, Clock, Trash2, TrendingUp, Users, Settings, LogOut, FileText, Tags, Share2, UserCheck, Layers, ChevronRight, Inbox, User, Download, BarChart3 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { cn } from '../../lib/utils';
 import { savedSearchApi } from '../../lib/api';
@@ -23,6 +23,7 @@ const baseNavigation = [
 const adminOnlyNavigation = [
   { name: 'Analytics', href: '/analytics', icon: TrendingUp },
   { name: 'Editors', href: '/editors', icon: Users },
+  { name: 'Workload', href: '/workload', icon: BarChart3 },
   { name: 'Metadata Extraction', href: '/metadata', icon: Tags },
 ];
 

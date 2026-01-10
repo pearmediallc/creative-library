@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { X, UserPlus, AlertCircle } from 'lucide-react';
+import { X, UserPlus, AlertCircle, TrendingUp } from 'lucide-react';
 import { Button } from './ui/Button';
-import { fileRequestApi, adminApi } from '../lib/api';
+import { fileRequestApi, adminApi, workloadApi } from '../lib/api';
 
 interface ReassignFileRequestModalProps {
   requestId: string;
@@ -18,6 +18,15 @@ interface User {
   role: string;
 }
 
+interface EditorWorkload {
+  editorId: string;
+  editorName: string;
+  activeRequests: number;
+  loadPercentage: number;
+  maxConcurrentRequests: number;
+  isAvailable: boolean;
+}
+
 export function ReassignFileRequestModal({
   requestId,
   requestTitle,
@@ -32,9 +41,11 @@ export function ReassignFileRequestModal({
   const [reassignReason, setReassignReason] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [workloadData, setWorkloadData] = useState<Map<string, EditorWorkload>>(new Map());
 
   useEffect(() => {
     fetchUsers();
+    fetchWorkloadData();
   }, []);
 
   const fetchUsers = async () => {
@@ -45,6 +56,28 @@ export function ReassignFileRequestModal({
     } catch (err: any) {
       console.error('Failed to fetch users:', err);
       setError('Failed to load users');
+    }
+  };
+
+  const fetchWorkloadData = async () => {
+    try {
+      const response = await workloadApi.getOverview();
+      const workloads = response.data.data || [];
+      const workloadMap = new Map<string, EditorWorkload>();
+      workloads.forEach((w: any) => {
+        workloadMap.set(w.editorId, {
+          editorId: w.editorId,
+          editorName: w.editorName,
+          activeRequests: w.activeRequests,
+          loadPercentage: w.loadPercentage,
+          maxConcurrentRequests: w.maxConcurrentRequests,
+          isAvailable: w.isAvailable,
+        });
+      });
+      setWorkloadData(workloadMap);
+    } catch (err: any) {
+      console.error('Failed to fetch workload data:', err);
+      // Don't set error - workload is optional info
     }
   };
 
@@ -86,6 +119,25 @@ export function ReassignFileRequestModal({
         ? prev.filter(id => id !== editorId)
         : [...prev, editorId]
     );
+  };
+
+  const getLoadColor = (load: number) => {
+    if (load < 50) return 'text-green-600';
+    if (load < 80) return 'text-yellow-600';
+    return 'text-red-600';
+  };
+
+  const getLoadBgColor = (load: number) => {
+    if (load < 50) return 'bg-green-100 dark:bg-green-900/20';
+    if (load < 80) return 'bg-yellow-100 dark:bg-yellow-900/20';
+    return 'bg-red-100 dark:bg-red-900/20';
+  };
+
+  const getStatusBadge = (load: number, isAvailable: boolean) => {
+    if (!isAvailable) return { label: 'Unavailable', color: 'bg-gray-500' };
+    if (load < 50) return { label: 'Available', color: 'bg-green-500' };
+    if (load < 80) return { label: 'Busy', color: 'bg-yellow-500' };
+    return { label: 'Overloaded', color: 'bg-red-500' };
   };
 
   // Filter users who are editors or creatives
@@ -148,30 +200,55 @@ export function ReassignFileRequestModal({
               <div className="max-h-60 overflow-y-auto border border-gray-300 dark:border-gray-600 rounded-lg">
                 {editors.length > 0 ? (
                   <div className="divide-y divide-gray-200 dark:divide-gray-700">
-                    {editors.map(user => (
-                      <label
-                        key={user.id}
-                        className="flex items-center gap-3 p-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={selectedEditorIds.includes(user.id)}
-                          onChange={() => toggleEditor(user.id)}
-                          className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                        />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-gray-900 dark:text-white">
-                            {user.name}
-                          </p>
-                          <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                            {user.email}
-                          </p>
-                        </div>
-                        <span className="text-xs text-gray-500 dark:text-gray-400 capitalize">
-                          {user.role}
-                        </span>
-                      </label>
-                    ))}
+                    {editors.map(user => {
+                      const workload = workloadData.get(user.id);
+                      const status = workload ? getStatusBadge(workload.loadPercentage, workload.isAvailable) : null;
+
+                      return (
+                        <label
+                          key={user.id}
+                          className="flex items-center gap-3 p-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedEditorIds.includes(user.id)}
+                            onChange={() => toggleEditor(user.id)}
+                            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <p className="text-sm font-medium text-gray-900 dark:text-white">
+                                {user.name}
+                              </p>
+                              {status && (
+                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium text-white ${status.color}`}>
+                                  {status.label}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                              {user.email}
+                            </p>
+                            {workload && (
+                              <div className="flex items-center gap-2 mt-1">
+                                <div className="flex items-center gap-1">
+                                  <TrendingUp className="w-3 h-3 text-gray-400" />
+                                  <span className={`text-xs font-medium ${getLoadColor(workload.loadPercentage)}`}>
+                                    {workload.loadPercentage.toFixed(0)}%
+                                  </span>
+                                </div>
+                                <span className="text-xs text-gray-500 dark:text-gray-400">
+                                  {workload.activeRequests}/{workload.maxConcurrentRequests} requests
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                          <span className="text-xs text-gray-500 dark:text-gray-400 capitalize">
+                            {user.role}
+                          </span>
+                        </label>
+                      );
+                    })}
                   </div>
                 ) : (
                   <div className="p-4 text-center text-sm text-gray-500 dark:text-gray-400">
