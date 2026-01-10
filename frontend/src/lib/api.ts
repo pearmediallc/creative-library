@@ -502,6 +502,8 @@ export const fileRequestApi = {
     description?: string;
     concept_notes?: string;
     num_creatives?: number;
+    platform?: string;
+    vertical?: string;
     folder_id?: string;
     deadline?: string;
     allow_multiple_uploads?: boolean;

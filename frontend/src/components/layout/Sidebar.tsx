@@ -37,9 +37,13 @@ export function Sidebar() {
   const [favoriteCollections, setFavoriteCollections] = useState<any[]>([]);
 
   // Build navigation based on user role
-  const navigation = user?.role === 'admin'
-    ? [...baseNavigation, ...adminOnlyNavigation]
-    : baseNavigation;
+  const navigation = (() => {
+    if (user?.role === 'admin') {
+      return [...baseNavigation, ...adminOnlyNavigation];
+    }
+    // All other roles (creative, buyer) get base navigation
+    return baseNavigation;
+  })();
 
   const isActive = (href: string) => {
     if (href === '/') return location.pathname === '/';

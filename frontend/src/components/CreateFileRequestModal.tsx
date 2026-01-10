@@ -3,6 +3,9 @@ import { X, Inbox } from 'lucide-react';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { fileRequestApi, folderApi, editorApi, adminApi } from '../lib/api';
+import { FILE_REQUEST_TYPES } from '../constants/fileRequestTypes';
+import { PLATFORMS } from '../constants/platforms';
+import { VERTICALS } from '../constants/verticals';
 
 interface CreateFileRequestModalProps {
   onClose: () => void;
@@ -27,14 +30,17 @@ interface Buyer {
 }
 
 export function CreateFileRequestModal({ onClose, onSuccess }: CreateFileRequestModalProps) {
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
+  const [requestType, setRequestType] = useState('');
+  const [platform, setPlatform] = useState('');
+  const [vertical, setVertical] = useState('');
+  const [conceptNotes, setConceptNotes] = useState('');
+  const [numCreatives, setNumCreatives] = useState<number>(1);
   const [folderId, setFolderId] = useState<string>('');
   const [deadline, setDeadline] = useState('');
   const [allowMultipleUploads, setAllowMultipleUploads] = useState(true);
   const [requireEmail, setRequireEmail] = useState(false);
   const [customMessage, setCustomMessage] = useState('');
-  const [editorId, setEditorId] = useState<string>('');
+  const [selectedEditorIds, setSelectedEditorIds] = useState<string[]>([]);
   const [assignedBuyerId, setAssignedBuyerId] = useState<string>('');
   const [folders, setFolders] = useState<Folder[]>([]);
   const [editors, setEditors] = useState<Editor[]>([]);
@@ -101,8 +107,23 @@ export function CreateFileRequestModal({ onClose, onSuccess }: CreateFileRequest
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!title.trim()) {
-      setError('Title is required');
+    if (!requestType) {
+      setError('Request Type is required');
+      return;
+    }
+
+    if (!platform) {
+      setError('Platform is required');
+      return;
+    }
+
+    if (!vertical) {
+      setError('Vertical is required');
+      return;
+    }
+
+    if (numCreatives < 1) {
+      setError('Number of Creatives must be at least 1');
       return;
     }
 
@@ -118,17 +139,28 @@ export function CreateFileRequestModal({ onClose, onSuccess }: CreateFileRequest
     setError('');
 
     try {
-      await fileRequestApi.create({
-        title: title.trim(),
-        description: description.trim() || undefined,
+      const response = await fileRequestApi.create({
+        title: requestType,
+        description: conceptNotes.trim() || undefined,
         folder_id: folderId || undefined,
         deadline: deadline || undefined,
         allow_multiple_uploads: allowMultipleUploads,
         require_email: requireEmail,
         custom_message: customMessage.trim() || undefined,
-        editor_id: editorId || undefined,
+        editor_id: selectedEditorIds[0] || undefined,
         assigned_buyer_id: assignedBuyerId || undefined,
+        request_type: requestType,
+        platform: platform,
+        vertical: vertical,
+        concept_notes: conceptNotes.trim() || undefined,
+        num_creatives: numCreatives,
       });
+
+      // Assign to multiple editors if selected
+      if (selectedEditorIds.length > 0 && response.data?.data?.id) {
+        const requestId = response.data.data.id;
+        await fileRequestApi.assignEditors(requestId, selectedEditorIds);
+      }
 
       onSuccess();
     } catch (error: any) {
@@ -160,32 +192,92 @@ export function CreateFileRequestModal({ onClose, onSuccess }: CreateFileRequest
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          {/* Title */}
+          {/* Request Type */}
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Title *
+              Request Type *
             </label>
-            <Input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g., Submit Your Product Photos"
-              autoFocus
+            <select
+              value={requestType}
+              onChange={(e) => setRequestType(e.target.value)}
               disabled={creating}
-            />
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+            >
+              <option value="">Select Request Type</option>
+              {FILE_REQUEST_TYPES.map((type) => (
+                <option key={type} value={type}>
+                  {type}
+                </option>
+              ))}
+            </select>
           </div>
 
-          {/* Description */}
+          {/* Platform */}
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Description
+              Platform *
+            </label>
+            <select
+              value={platform}
+              onChange={(e) => setPlatform(e.target.value)}
+              disabled={creating}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+            >
+              <option value="">Select Platform</option>
+              {PLATFORMS.map((plat) => (
+                <option key={plat} value={plat}>
+                  {plat}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Vertical */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Vertical *
+            </label>
+            <select
+              value={vertical}
+              onChange={(e) => setVertical(e.target.value)}
+              disabled={creating}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+            >
+              <option value="">Select Vertical</option>
+              {VERTICALS.map((vert) => (
+                <option key={vert} value={vert}>
+                  {vert}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Concept Notes */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Concept Notes
             </label>
             <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Describe what files you need..."
+              value={conceptNotes}
+              onChange={(e) => setConceptNotes(e.target.value)}
+              placeholder="Describe the concept and details for this request..."
               rows={3}
               disabled={creating}
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+            />
+          </div>
+
+          {/* Number of Creatives */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Number of Creatives *
+            </label>
+            <Input
+              type="number"
+              value={numCreatives}
+              onChange={(e) => setNumCreatives(parseInt(e.target.value) || 1)}
+              min={1}
+              disabled={creating}
             />
           </div>
 
@@ -215,15 +307,19 @@ export function CreateFileRequestModal({ onClose, onSuccess }: CreateFileRequest
           {/* Editor Assignment */}
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Assign to Editor (optional)
+              Assign to Editors (optional)
             </label>
             <select
-              value={editorId}
-              onChange={(e) => setEditorId(e.target.value)}
+              multiple
+              value={selectedEditorIds}
+              onChange={(e) => {
+                const selected = Array.from(e.target.selectedOptions, option => option.value);
+                setSelectedEditorIds(selected);
+              }}
               disabled={creating}
+              size={5}
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
             >
-              <option value="">No editor assignment</option>
               {editors.map((editor) => (
                 <option key={editor.id} value={editor.id}>
                   {editor.display_name || editor.name}
@@ -231,7 +327,7 @@ export function CreateFileRequestModal({ onClose, onSuccess }: CreateFileRequest
               ))}
             </select>
             <p className="text-xs text-muted-foreground mt-1">
-              Uploaded files will be automatically assigned to this editor
+              Hold Ctrl (Windows) or Cmd (Mac) to select multiple editors
             </p>
           </div>
 
@@ -337,7 +433,7 @@ export function CreateFileRequestModal({ onClose, onSuccess }: CreateFileRequest
             </Button>
             <Button
               type="submit"
-              disabled={creating || !title.trim()}
+              disabled={creating || !requestType || !platform || !vertical}
             >
               {creating ? 'Creating...' : 'Create Request'}
             </Button>

@@ -6,6 +6,7 @@ import { Input } from '../components/ui/Input';
 import { adminApi } from '../lib/api';
 import { User } from '../types';
 import { Shield, Plus, Edit2, Check, X, Key, Copy } from 'lucide-react';
+import { SlackSettingsPanel } from '../components/SlackSettingsPanel';
 
 export function AdminPage() {
   const [users, setUsers] = useState<User[]>([]);
@@ -179,6 +180,9 @@ export function AdminPage() {
             </Card>
           </div>
         )}
+
+        {/* Slack Integration */}
+        <SlackSettingsPanel />
 
         {/* Add User Form */}
         {showAddForm && (

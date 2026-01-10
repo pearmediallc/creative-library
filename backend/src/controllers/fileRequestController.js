@@ -25,6 +25,8 @@ class FileRequestController {
         request_type,
         concept_notes,
         num_creatives = 1,
+        platform,
+        vertical,
         folder_id,
         deadline,
         allow_multiple_uploads = true,
@@ -111,9 +113,9 @@ class FileRequestController {
       // Create file request
       const result = await query(
         `INSERT INTO file_requests
-        (title, description, request_type, concept_notes, num_creatives, created_by, folder_id, request_token, deadline,
+        (title, description, request_type, concept_notes, num_creatives, platform, vertical, created_by, folder_id, request_token, deadline,
          allow_multiple_uploads, require_email, custom_message, assigned_buyer_id, assigned_at)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
         RETURNING *`,
         [
           requestTitle.trim(),
@@ -121,6 +123,8 @@ class FileRequestController {
           request_type || requestTitle.trim(),
           concept_notes || description || null,
           num_creatives,
+          platform || null,
+          vertical || null,
           userId,
           folder_id || null,
           requestToken,
