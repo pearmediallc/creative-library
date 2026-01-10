@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { X, Copy, Download, Link as LinkIcon, Calendar, Folder, Mail, CheckCircle } from 'lucide-react';
+import { X, Copy, Download, Calendar, Folder, Mail, CheckCircle, Clock } from 'lucide-react';
 import { Button } from './ui/Button';
 import { fileRequestApi } from '../lib/api';
 import { formatDate, formatBytes } from '../lib/utils';
@@ -36,6 +36,9 @@ interface FileRequestDetails {
   custom_message?: string;
   upload_count: number;
   created_at: string;
+  picked_up_at?: string;
+  completed_at?: string;
+  delivery_note?: string;
   uploads: FileUpload[];
 }
 
@@ -80,6 +83,25 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  const formatDuration = (startDate: string, endDate: string) => {
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const diffMs = end.getTime() - start.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
+
+    if (diffDays > 0) {
+      const remainingHours = diffHours % 24;
+      return `${diffDays}d ${remainingHours}h`;
+    } else if (diffHours > 0) {
+      const remainingMins = diffMins % 60;
+      return `${diffHours}h ${remainingMins}m`;
+    } else {
+      return `${diffMins}m`;
+    }
   };
 
   if (loading) {
@@ -137,6 +159,15 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
               </div>
             )}
 
+            {request.delivery_note && (
+              <div>
+                <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Delivery Note
+                </h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400">{request.delivery_note}</p>
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-4 pt-2">
               {request.folder_name && (
                 <div className="flex items-center gap-2 text-sm">
@@ -167,6 +198,33 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
                   {request.allow_multiple_uploads ? 'Multiple uploads allowed' : 'Single upload only'}
                 </span>
               </div>
+
+              {request.picked_up_at && (
+                <div className="flex items-center gap-2 text-sm">
+                  <Clock className="w-4 h-4 text-muted-foreground" />
+                  <span className="text-gray-700 dark:text-gray-300">
+                    Picked up: {formatDate(request.picked_up_at)}
+                  </span>
+                </div>
+              )}
+
+              {request.completed_at && (
+                <div className="flex items-center gap-2 text-sm">
+                  <Clock className="w-4 h-4 text-muted-foreground" />
+                  <span className="text-gray-700 dark:text-gray-300">
+                    Completed: {formatDate(request.completed_at)}
+                  </span>
+                </div>
+              )}
+
+              {request.picked_up_at && request.completed_at && (
+                <div className="flex items-center gap-2 text-sm">
+                  <Clock className="w-4 h-4 text-blue-500" />
+                  <span className="text-gray-700 dark:text-gray-300 font-medium">
+                    Duration: {formatDuration(request.picked_up_at, request.completed_at)}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
 

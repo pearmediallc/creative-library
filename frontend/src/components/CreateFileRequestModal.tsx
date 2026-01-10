@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Inbox } from 'lucide-react';
+import { X, Inbox, FolderPlus } from 'lucide-react';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { fileRequestApi, folderApi, editorApi, adminApi } from '../lib/api';
@@ -47,6 +47,9 @@ export function CreateFileRequestModal({ onClose, onSuccess }: CreateFileRequest
   const [buyers, setBuyers] = useState<Buyer[]>([]);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState('');
+  const [showCreateFolder, setShowCreateFolder] = useState(false);
+  const [newFolderName, setNewFolderName] = useState('');
+  const [creatingFolder, setCreatingFolder] = useState(false);
 
   useEffect(() => {
     fetchFolders();
@@ -101,6 +104,33 @@ export function CreateFileRequestModal({ onClose, onSuccess }: CreateFileRequest
       })));
     } catch (error: any) {
       console.error('Failed to fetch buyers:', error);
+    }
+  };
+
+  const handleCreateFolder = async () => {
+    if (!newFolderName.trim()) {
+      setError('Folder name is required');
+      return;
+    }
+
+    setCreatingFolder(true);
+    setError('');
+
+    try {
+      const response = await folderApi.create({
+        name: newFolderName.trim(),
+        parent_folder_id: folderId || undefined
+      });
+
+      await fetchFolders();
+      setFolderId(response.data.data.id);
+      setNewFolderName('');
+      setShowCreateFolder(false);
+    } catch (error: any) {
+      console.error('Failed to create folder:', error);
+      setError(error.response?.data?.error || 'Failed to create folder');
+    } finally {
+      setCreatingFolder(false);
     }
   };
 
@@ -286,19 +316,70 @@ export function CreateFileRequestModal({ onClose, onSuccess }: CreateFileRequest
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Destination Folder
             </label>
-            <select
-              value={folderId}
-              onChange={(e) => setFolderId(e.target.value)}
-              disabled={creating}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-            >
-              <option value="">Root / No folder</option>
-              {folders.map((folder) => (
-                <option key={folder.id} value={folder.id}>
-                  {folder.name}
-                </option>
-              ))}
-            </select>
+            <div className="flex gap-2">
+              <select
+                value={folderId}
+                onChange={(e) => setFolderId(e.target.value)}
+                disabled={creating}
+                className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+              >
+                <option value="">Root / No folder</option>
+                {folders.map((folder) => (
+                  <option key={folder.id} value={folder.id}>
+                    {folder.name}
+                  </option>
+                ))}
+              </select>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowCreateFolder(!showCreateFolder)}
+                disabled={creating}
+                className="flex-shrink-0"
+              >
+                <FolderPlus className="w-4 h-4" />
+              </Button>
+            </div>
+
+            {/* Inline folder creation */}
+            {showCreateFolder && (
+              <div className="mt-2 flex gap-2">
+                <Input
+                  type="text"
+                  value={newFolderName}
+                  onChange={(e) => setNewFolderName(e.target.value)}
+                  placeholder="New folder name"
+                  disabled={creatingFolder}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleCreateFolder();
+                    }
+                  }}
+                />
+                <Button
+                  type="button"
+                  onClick={handleCreateFolder}
+                  disabled={creatingFolder || !newFolderName.trim()}
+                  size="sm"
+                >
+                  {creatingFolder ? 'Creating...' : 'Create'}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setShowCreateFolder(false);
+                    setNewFolderName('');
+                  }}
+                  disabled={creatingFolder}
+                  size="sm"
+                >
+                  Cancel
+                </Button>
+              </div>
+            )}
+
             <p className="text-xs text-muted-foreground mt-1">
               Uploaded files will be saved to this folder
             </p>
