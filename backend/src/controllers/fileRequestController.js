@@ -755,7 +755,17 @@ class FileRequestController {
       const { editor_ids } = req.body;
       const userId = req.user.id;
 
+      logger.info('assignEditors called', {
+        requestId: id,
+        editor_ids,
+        editor_ids_type: typeof editor_ids,
+        editor_ids_isArray: Array.isArray(editor_ids),
+        userId,
+        body: req.body
+      });
+
       if (!Array.isArray(editor_ids) || editor_ids.length === 0) {
+        logger.error('Invalid editor_ids', { editor_ids, type: typeof editor_ids });
         return res.status(400).json({
           success: false,
           error: 'editor_ids must be a non-empty array'
@@ -767,6 +777,12 @@ class FileRequestController {
         'SELECT * FROM file_requests WHERE id = $1 AND created_by = $2',
         [id, userId]
       );
+
+      logger.info('File request query result', {
+        found: requestResult.rows.length,
+        requestId: id,
+        userId
+      });
 
       if (requestResult.rows.length === 0) {
         return res.status(404).json({
@@ -781,10 +797,21 @@ class FileRequestController {
         [editor_ids]
       );
 
+      logger.info('Editors verification', {
+        requestedCount: editor_ids.length,
+        foundCount: editorsResult.rows.length,
+        requestedIds: editor_ids,
+        foundIds: editorsResult.rows.map(r => r.id)
+      });
+
       if (editorsResult.rows.length !== editor_ids.length) {
         return res.status(400).json({
           success: false,
-          error: 'One or more editors not found or inactive'
+          error: 'One or more editors not found or inactive',
+          details: {
+            requested: editor_ids,
+            found: editorsResult.rows.map(r => r.id)
+          }
         });
       }
 
