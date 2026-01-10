@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, UserPlus, AlertCircle, TrendingUp } from 'lucide-react';
 import { Button } from './ui/Button';
-import { fileRequestApi, adminApi, workloadApi } from '../lib/api';
+import { fileRequestApi, editorApi, workloadApi } from '../lib/api';
 
 interface ReassignFileRequestModalProps {
   requestId: string;
@@ -11,11 +11,11 @@ interface ReassignFileRequestModalProps {
   onSuccess: () => void;
 }
 
-interface User {
+interface Editor {
   id: string;
   name: string;
-  email: string;
-  role: string;
+  display_name: string;
+  is_active: boolean;
 }
 
 interface EditorWorkload {
@@ -34,7 +34,7 @@ export function ReassignFileRequestModal({
   onClose,
   onSuccess
 }: ReassignFileRequestModalProps) {
-  const [allUsers, setAllUsers] = useState<User[]>([]);
+  const [allEditors, setAllEditors] = useState<Editor[]>([]);
   const [selectedEditorIds, setSelectedEditorIds] = useState<string[]>(
     currentEditors.map(e => e.id)
   );
@@ -44,18 +44,18 @@ export function ReassignFileRequestModal({
   const [workloadData, setWorkloadData] = useState<Map<string, EditorWorkload>>(new Map());
 
   useEffect(() => {
-    fetchUsers();
+    fetchEditors();
     fetchWorkloadData();
   }, []);
 
-  const fetchUsers = async () => {
+  const fetchEditors = async () => {
     try {
-      const response = await adminApi.getUsers();
-      const users = response.data.data || [];
-      setAllUsers(users);
+      const response = await editorApi.getAll();
+      const editors = response.data.data || [];
+      setAllEditors(editors.filter((e: Editor) => e.is_active));
     } catch (err: any) {
-      console.error('Failed to fetch users:', err);
-      setError('Failed to load users');
+      console.error('Failed to fetch editors:', err);
+      setError('Failed to load editors');
     }
   };
 
@@ -140,9 +140,6 @@ export function ReassignFileRequestModal({
     return { label: 'Overloaded', color: 'bg-red-500' };
   };
 
-  // Filter users who are editors or creatives
-  const editors = allUsers.filter(u => u.role === 'creative' || u.role === 'admin');
-
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] flex flex-col">
@@ -198,27 +195,27 @@ export function ReassignFileRequestModal({
                 Select Editors <span className="text-red-500">*</span>
               </label>
               <div className="max-h-60 overflow-y-auto border border-gray-300 dark:border-gray-600 rounded-lg">
-                {editors.length > 0 ? (
+                {allEditors.length > 0 ? (
                   <div className="divide-y divide-gray-200 dark:divide-gray-700">
-                    {editors.map(user => {
-                      const workload = workloadData.get(user.id);
+                    {allEditors.map(editor => {
+                      const workload = workloadData.get(editor.id);
                       const status = workload ? getStatusBadge(workload.loadPercentage, workload.isAvailable) : null;
 
                       return (
                         <label
-                          key={user.id}
+                          key={editor.id}
                           className="flex items-center gap-3 p-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer"
                         >
                           <input
                             type="checkbox"
-                            checked={selectedEditorIds.includes(user.id)}
-                            onChange={() => toggleEditor(user.id)}
+                            checked={selectedEditorIds.includes(editor.id)}
+                            onChange={() => toggleEditor(editor.id)}
                             className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                           />
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2">
                               <p className="text-sm font-medium text-gray-900 dark:text-white">
-                                {user.name}
+                                {editor.display_name || editor.name}
                               </p>
                               {status && (
                                 <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium text-white ${status.color}`}>
@@ -227,7 +224,7 @@ export function ReassignFileRequestModal({
                               )}
                             </div>
                             <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                              {user.email}
+                              {editor.name}
                             </p>
                             {workload && (
                               <div className="flex items-center gap-2 mt-1">
@@ -243,8 +240,8 @@ export function ReassignFileRequestModal({
                               </div>
                             )}
                           </div>
-                          <span className="text-xs text-gray-500 dark:text-gray-400 capitalize">
-                            {user.role}
+                          <span className="text-xs text-gray-500 dark:text-gray-400">
+                            Editor
                           </span>
                         </label>
                       );
