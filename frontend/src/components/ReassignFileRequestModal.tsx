@@ -62,12 +62,12 @@ export function ReassignFileRequestModal({
   const fetchWorkloadData = async () => {
     try {
       const response = await workloadApi.getOverview();
-      const workloads = response.data.data || [];
+      const workloads = response.data.data?.editors || [];
       const workloadMap = new Map<string, EditorWorkload>();
       workloads.forEach((w: any) => {
-        workloadMap.set(w.editorId, {
-          editorId: w.editorId,
-          editorName: w.editorName,
+        workloadMap.set(w.id, {
+          editorId: w.id,
+          editorName: w.name,
           activeRequests: w.activeRequests,
           loadPercentage: w.loadPercentage,
           maxConcurrentRequests: w.maxConcurrentRequests,
