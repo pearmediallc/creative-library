@@ -4,9 +4,11 @@ import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { fileRequestApi } from '../lib/api';
 import { formatDate } from '../lib/utils';
-import { Inbox, Plus, Link as LinkIcon, Copy, Edit2, XCircle, Trash2, CheckCircle } from 'lucide-react';
+import { Inbox, Plus, Link as LinkIcon, Copy, Edit2, XCircle, Trash2, CheckCircle, UserPlus } from 'lucide-react';
 import { CreateFileRequestModal } from '../components/CreateFileRequestModal';
 import { FileRequestDetailsModal } from '../components/FileRequestDetailsModal';
+import { ReassignFileRequestModal } from '../components/ReassignFileRequestModal';
+import { useAuth } from '../contexts/AuthContext';
 
 interface FileRequest {
   id: string;
@@ -22,12 +24,15 @@ interface FileRequest {
 }
 
 export function FileRequestsPage() {
+  const { user } = useAuth();
   const [requests, setRequests] = useState<FileRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'active' | 'closed'>('all');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<FileRequest | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [showReassignModal, setShowReassignModal] = useState(false);
+  const [requestToReassign, setRequestToReassign] = useState<FileRequest | null>(null);
 
   useEffect(() => {
     fetchRequests();
@@ -88,6 +93,11 @@ export function FileRequestsPage() {
   const handleViewDetails = (request: FileRequest) => {
     setSelectedRequest(request);
     setShowDetailsModal(true);
+  };
+
+  const handleReassign = (request: FileRequest) => {
+    setRequestToReassign(request);
+    setShowReassignModal(true);
   };
 
   return (
@@ -197,6 +207,16 @@ export function FileRequestsPage() {
                       <LinkIcon className="w-3 h-3 mr-1" />
                       Details
                     </Button>
+                    {user?.role === 'admin' && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleReassign(request)}
+                      >
+                        <UserPlus className="w-3 h-3 mr-1" />
+                        Reassign
+                      </Button>
+                    )}
                     {request.is_active && (
                       <Button
                         variant="outline"
@@ -256,6 +276,23 @@ export function FileRequestsPage() {
             setSelectedRequest(null);
           }}
           onUpdate={() => {
+            fetchRequests();
+          }}
+        />
+      )}
+
+      {showReassignModal && requestToReassign && (
+        <ReassignFileRequestModal
+          requestId={requestToReassign.id}
+          requestTitle={requestToReassign.title}
+          currentEditors={[]}
+          onClose={() => {
+            setShowReassignModal(false);
+            setRequestToReassign(null);
+          }}
+          onSuccess={() => {
+            setShowReassignModal(false);
+            setRequestToReassign(null);
             fetchRequests();
           }}
         />

@@ -20,6 +20,8 @@ import { SmartCollectionsPage } from './pages/SmartCollectionsPage';
 import { PublicLinkPage } from './pages/PublicLinkPage';
 import { FileRequestsPage } from './pages/FileRequestsPage';
 import { PublicFileRequestPage } from './pages/PublicFileRequestPage';
+import { UserSettingsPage } from './pages/UserSettings';
+import { ActivityLogExportPage } from './pages/ActivityLogExport';
 
 function PrivateRoute({ children }: { children: React.ReactElement }) {
   const { user, loading } = useAuth();
@@ -183,6 +185,14 @@ function AppRoutes() {
         }
       />
       <Route
+        path="/activity-log-export"
+        element={
+          <AdminRoute>
+            <ActivityLogExportPage />
+          </AdminRoute>
+        }
+      />
+      <Route
         path="/metadata"
         element={
           <AdminRoute>
@@ -211,6 +221,14 @@ function AppRoutes() {
         element={
           <PrivateRoute>
             <FileRequestsPage />
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/settings"
+        element={
+          <PrivateRoute>
+            <UserSettingsPage />
           </PrivateRoute>
         }
       />

@@ -594,6 +594,14 @@ export const slackApi = {
 
   // Send test notification
   sendTest: () => api.post('/slack/test'),
+
+  // Send custom notification
+  notify: (data: {
+    userId: string;
+    message: string;
+    resourceType?: string;
+    resourceId?: string;
+  }) => api.post('/slack/notify', data),
 };
 
 // Activity Log Export endpoints (admin only)
@@ -613,6 +621,10 @@ export const activityLogExportApi = {
 
   // Get export job status
   getJobStatus: () => api.get('/activity-logs/exports/job/status'),
+
+  // Request new export
+  requestExport: (data: { start_date: string; end_date: string }) =>
+    api.post('/activity-logs/exports/request', data),
 };
 
 // Enhanced Analytics endpoints

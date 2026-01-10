@@ -171,10 +171,29 @@ export function ShareDialog({
         )
       );
 
-      setSuccess(`Shared successfully with ${shareType === 'user' ? 'user' : 'team'}!`);
+      // Send Slack notification if requested
+      if (notifyViaSlack && shareType === 'user') {
+        try {
+          const grantedUser = allUsers.find(u => u.id === selectedId);
+          if (grantedUser) {
+            await slackApi.notify({
+              userId: selectedId,
+              message: `${resourceName} has been shared with you`,
+              resourceType,
+              resourceId
+            });
+          }
+        } catch (slackErr) {
+          console.error('Failed to send Slack notification:', slackErr);
+          // Don't fail the whole operation if Slack notification fails
+        }
+      }
+
+      setSuccess(`Shared successfully with ${shareType === 'user' ? 'user' : 'team'}!${notifyViaSlack ? ' Slack notification sent.' : ''}`);
       setSelectedId('');
       setSelectedPermissions(new Set(['view' as const]));
       setExpiresAt('');
+      setNotifyViaSlack(false);
       await fetchPermissions();
 
       setTimeout(() => setSuccess(''), 3000);
