@@ -52,9 +52,9 @@ CREATE TABLE IF NOT EXISTS editor_capacity (
   UNIQUE(editor_id)
 );
 
-CREATE INDEX idx_editor_capacity_editor ON editor_capacity(editor_id);
-CREATE INDEX idx_editor_capacity_status ON editor_capacity(status);
-CREATE INDEX idx_editor_capacity_available ON editor_capacity(is_available) WHERE is_available = TRUE;
+CREATE INDEX IF NOT EXISTS idx_editor_capacity_editor ON editor_capacity(editor_id);
+CREATE INDEX IF NOT EXISTS idx_editor_capacity_status ON editor_capacity(status);
+CREATE INDEX IF NOT EXISTS idx_editor_capacity_available ON editor_capacity(is_available) WHERE is_available = TRUE;
 
 COMMENT ON TABLE editor_capacity IS 'Track editor availability and capacity for workload management';
 
@@ -90,9 +90,9 @@ CREATE TABLE IF NOT EXISTS file_request_time_tracking (
   UNIQUE(request_id)
 );
 
-CREATE INDEX idx_time_tracking_request ON file_request_time_tracking(request_id);
-CREATE INDEX idx_time_tracking_editor ON file_request_time_tracking(editor_id);
-CREATE INDEX idx_time_tracking_status ON file_request_time_tracking(status);
+CREATE INDEX IF NOT EXISTS idx_time_tracking_request ON file_request_time_tracking(request_id);
+CREATE INDEX IF NOT EXISTS idx_time_tracking_editor ON file_request_time_tracking(editor_id);
+CREATE INDEX IF NOT EXISTS idx_time_tracking_status ON file_request_time_tracking(status);
 
 COMMENT ON TABLE file_request_time_tracking IS 'Track time estimates and actuals for file requests';
 
@@ -128,9 +128,9 @@ CREATE TABLE IF NOT EXISTS editor_workload_stats (
   UNIQUE(editor_id, stat_date)
 );
 
-CREATE INDEX idx_workload_stats_editor ON editor_workload_stats(editor_id);
-CREATE INDEX idx_workload_stats_date ON editor_workload_stats(stat_date DESC);
-CREATE INDEX idx_workload_stats_load ON editor_workload_stats(load_percentage);
+CREATE INDEX IF NOT EXISTS idx_workload_stats_editor ON editor_workload_stats(editor_id);
+CREATE INDEX IF NOT EXISTS idx_workload_stats_date ON editor_workload_stats(stat_date DESC);
+CREATE INDEX IF NOT EXISTS idx_workload_stats_load ON editor_workload_stats(load_percentage);
 
 COMMENT ON TABLE editor_workload_stats IS 'Daily aggregated workload statistics per editor';
 
@@ -161,9 +161,9 @@ CREATE TABLE IF NOT EXISTS workload_alerts (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_workload_alerts_editor ON workload_alerts(editor_id);
-CREATE INDEX idx_workload_alerts_type ON workload_alerts(alert_type);
-CREATE INDEX idx_workload_alerts_unresolved ON workload_alerts(is_resolved) WHERE is_resolved = FALSE;
+CREATE INDEX IF NOT EXISTS idx_workload_alerts_editor ON workload_alerts(editor_id);
+CREATE INDEX IF NOT EXISTS idx_workload_alerts_type ON workload_alerts(alert_type);
+CREATE INDEX IF NOT EXISTS idx_workload_alerts_unresolved ON workload_alerts(is_resolved) WHERE is_resolved = FALSE;
 
 COMMENT ON TABLE workload_alerts IS 'Alerts for workload management issues';
 
