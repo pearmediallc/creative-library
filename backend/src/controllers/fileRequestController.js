@@ -18,6 +18,10 @@ class FileRequestController {
    */
   async create(req, res, next) {
     try {
+      console.log('=== FILE REQUEST CREATE START ===');
+      console.log('Request body:', JSON.stringify(req.body, null, 2));
+      console.log('User:', req.user);
+
       const userId = req.user.id;
       const {
         title,
@@ -37,9 +41,20 @@ class FileRequestController {
         assigned_buyer_id
       } = req.body;
 
+      console.log('Parsed values:', {
+        userId,
+        title,
+        request_type,
+        folder_id,
+        editor_id,
+        editor_ids,
+        assigned_buyer_id
+      });
+
       // Validation - either title OR request_type is required
       const requestTitle = request_type || title;
       if (!requestTitle || requestTitle.trim() === '') {
+        console.log('ERROR: Missing title/request_type');
         return res.status(400).json({
           success: false,
           error: 'Title or request_type is required'
@@ -81,15 +96,47 @@ class FileRequestController {
 
       // Verify editor exists if provided
       if (editor_id) {
-        const editorResult = await query(
-          'SELECT id FROM editors WHERE id = $1 AND is_active = TRUE',
-          [editor_id]
-        );
-        if (editorResult.rows.length === 0) {
-          return res.status(404).json({
-            success: false,
-            error: 'Editor not found'
-          });
+        console.log('Verifying editor_id:', editor_id);
+        try {
+          const editorResult = await query(
+            'SELECT id, name FROM users WHERE id = $1 AND role IN ($2, $3)',
+            [editor_id, 'creative', 'admin']
+          );
+          console.log('Editor query result:', editorResult.rows);
+          if (editorResult.rows.length === 0) {
+            console.log('ERROR: Editor not found in users table');
+            return res.status(404).json({
+              success: false,
+              error: 'Editor not found'
+            });
+          }
+        } catch (editorError) {
+          console.error('Editor verification error:', editorError);
+          throw editorError;
+        }
+      }
+
+      // Verify all editors in editor_ids array
+      if (editor_ids && Array.isArray(editor_ids) && editor_ids.length > 0) {
+        console.log('Verifying editor_ids array:', editor_ids);
+        for (const edId of editor_ids) {
+          try {
+            const editorResult = await query(
+              'SELECT id, name FROM users WHERE id = $1 AND role IN ($2, $3)',
+              [edId, 'creative', 'admin']
+            );
+            console.log(`Editor ${edId} query result:`, editorResult.rows);
+            if (editorResult.rows.length === 0) {
+              console.log(`ERROR: Editor ${edId} not found in users table`);
+              return res.status(404).json({
+                success: false,
+                error: `Editor with ID ${edId} not found`
+              });
+            }
+          } catch (editorError) {
+            console.error(`Editor ${edId} verification error:`, editorError);
+            throw editorError;
+          }
         }
       }
 
@@ -109,33 +156,68 @@ class FileRequestController {
 
       // Generate unique token
       const requestToken = this.generateToken();
+      console.log('Generated request token:', requestToken);
 
       // Create file request
-      const result = await query(
-        `INSERT INTO file_requests
-        (title, description, request_type, concept_notes, num_creatives, platform, vertical, created_by, folder_id, request_token, deadline,
-         allow_multiple_uploads, require_email, custom_message, assigned_buyer_id, assigned_at)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
-        RETURNING *`,
-        [
-          requestTitle.trim(),
-          description || concept_notes || null,
-          request_type || requestTitle.trim(),
-          concept_notes || description || null,
-          num_creatives,
-          platform || null,
-          vertical || null,
-          userId,
-          folder_id || null,
-          requestToken,
-          deadline || null,
-          allow_multiple_uploads,
-          require_email,
-          custom_message || null,
-          assigned_buyer_id || null,
-          (editor_id || (editor_ids && editor_ids.length > 0)) ? new Date() : null
-        ]
-      );
+      console.log('About to insert file request with values:', {
+        title: requestTitle.trim(),
+        description: description || concept_notes || null,
+        request_type: request_type || requestTitle.trim(),
+        concept_notes: concept_notes || description || null,
+        num_creatives,
+        platform: platform || null,
+        vertical: vertical || null,
+        created_by: userId,
+        folder_id: folder_id || null,
+        request_token: requestToken,
+        deadline: deadline || null,
+        allow_multiple_uploads,
+        require_email,
+        custom_message: custom_message || null,
+        assigned_buyer_id: assigned_buyer_id || null,
+        assigned_at: (editor_id || (editor_ids && editor_ids.length > 0)) ? new Date() : null
+      });
+
+      let result;
+      try {
+        result = await query(
+          `INSERT INTO file_requests
+          (title, description, request_type, concept_notes, num_creatives, platform, vertical, created_by, folder_id, request_token, deadline,
+           allow_multiple_uploads, require_email, custom_message, assigned_buyer_id, assigned_at)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+          RETURNING *`,
+          [
+            requestTitle.trim(),
+            description || concept_notes || null,
+            request_type || requestTitle.trim(),
+            concept_notes || description || null,
+            num_creatives,
+            platform || null,
+            vertical || null,
+            userId,
+            folder_id || null,
+            requestToken,
+            deadline || null,
+            allow_multiple_uploads,
+            require_email,
+            custom_message || null,
+            assigned_buyer_id || null,
+            (editor_id || (editor_ids && editor_ids.length > 0)) ? new Date() : null
+          ]
+        );
+        console.log('Insert successful, returned:', result.rows[0]);
+      } catch (insertError) {
+        console.error('INSERT ERROR:', insertError);
+        console.error('Error details:', {
+          message: insertError.message,
+          code: insertError.code,
+          detail: insertError.detail,
+          hint: insertError.hint,
+          table: insertError.table,
+          column: insertError.column
+        });
+        throw insertError;
+      }
 
       const fileRequest = result.rows[0];
 
@@ -179,7 +261,16 @@ class FileRequestController {
         data: fileRequest
       });
     } catch (error) {
-      logger.error('Create file request error', { error: error.message });
+      console.error('=== FILE REQUEST CREATE ERROR ===');
+      console.error('Error:', error);
+      console.error('Error message:', error.message);
+      console.error('Error stack:', error.stack);
+      logger.error('Create file request error', {
+        error: error.message,
+        stack: error.stack,
+        code: error.code,
+        detail: error.detail
+      });
       next(error);
     }
   }
