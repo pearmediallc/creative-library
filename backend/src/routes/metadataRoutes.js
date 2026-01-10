@@ -1,10 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const metadataController = require('../controllers/metadataController');
-const { authenticate } = require('../middleware/auth');
+const { authenticateToken } = require('../middleware/auth');
 
 // All metadata routes require authentication
-router.use(authenticate);
+router.use(authenticateToken);
 
 /**
  * Add metadata to file (embed creator info)

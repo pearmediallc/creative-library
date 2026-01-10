@@ -179,34 +179,6 @@ export const facebookApi = {
   disconnect: () => api.delete('/facebook/disconnect'),
 };
 
-// Analytics endpoints
-export const analyticsApi = {
-  sync: (adAccountId: string, dateFrom?: string, dateTo?: string) =>
-    api.post('/analytics/sync', {
-      ad_account_id: adAccountId,
-      date_from: dateFrom || undefined,
-      date_to: dateTo || undefined
-    }),
-  stopSync: () => api.post('/analytics/sync/stop'),
-  getEditorPerformance: (params?: {
-    editor_id?: string;
-    date_from?: string;
-    date_to?: string;
-  }) => api.get('/analytics/editor-performance', { params }),
-  getAdsWithoutEditor: () => api.get('/analytics/ads-without-editor'),
-  getAdNameChanges: (params?: { editor_changed?: boolean; date_from?: string }) =>
-    api.get('/analytics/ad-name-changes', { params }),
-  getUnified: (adAccountId: string, dateFrom?: string, dateTo?: string, bulkFetch?: boolean) =>
-    api.get('/analytics/unified', {
-      params: {
-        ad_account_id: adAccountId,
-        date_from: dateFrom || undefined,
-        date_to: dateTo || undefined,
-        bulk_fetch: bulkFetch !== undefined ? bulkFetch : undefined
-      }
-    }),
-};
-
 // Admin endpoints
 export const adminApi = {
   getUsers: () => api.get('/admin/users'),
