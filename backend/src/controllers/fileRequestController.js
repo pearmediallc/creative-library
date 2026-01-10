@@ -82,15 +82,23 @@ class FileRequestController {
 
       // Verify folder exists if provided
       if (folder_id) {
-        const folderResult = await query(
-          'SELECT id, created_by FROM folders WHERE id = $1 AND is_deleted = FALSE',
-          [folder_id]
-        );
-        if (folderResult.rows.length === 0) {
-          return res.status(404).json({
-            success: false,
-            error: 'Folder not found'
-          });
+        console.log('Verifying folder_id:', folder_id);
+        try {
+          const folderResult = await query(
+            'SELECT id, owner_id, name FROM folders WHERE id = $1 AND is_deleted = FALSE',
+            [folder_id]
+          );
+          console.log('Folder query result:', folderResult.rows);
+          if (folderResult.rows.length === 0) {
+            console.log('ERROR: Folder not found');
+            return res.status(404).json({
+              success: false,
+              error: 'Folder not found'
+            });
+          }
+        } catch (folderError) {
+          console.error('Folder verification error:', folderError);
+          throw folderError;
         }
       }
 
