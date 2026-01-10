@@ -49,6 +49,42 @@ router.delete('/:id',
   fileRequestController.delete.bind(fileRequestController)
 );
 
+// Assign multiple editors to file request
+router.post('/:id/assign-editors',
+  authenticateToken,
+  fileRequestController.assignEditors.bind(fileRequestController)
+);
+
+// Create folder for file request
+router.post('/:id/folders',
+  authenticateToken,
+  fileRequestController.createRequestFolder.bind(fileRequestController)
+);
+
+// Get folders for file request
+router.get('/:id/folders',
+  authenticateToken,
+  fileRequestController.getRequestFolders.bind(fileRequestController)
+);
+
+// Get assigned editors for file request
+router.get('/:id/editors',
+  authenticateToken,
+  fileRequestController.getAssignedEditors.bind(fileRequestController)
+);
+
+// Complete file request
+router.post('/:id/complete',
+  authenticateToken,
+  fileRequestController.completeRequest.bind(fileRequestController)
+);
+
+// Reassign file request (admin only)
+router.post('/:id/reassign',
+  authenticateToken,
+  fileRequestController.reassignRequest.bind(fileRequestController)
+);
+
 // ============================================
 // PUBLIC ROUTES (No Authentication Required)
 // ============================================

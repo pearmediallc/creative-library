@@ -29,6 +29,12 @@ router.get('/editor-performance',
   analyticsController.getEditorPerformance.bind(analyticsController)
 );
 
+// Get editor media uploads with filtering (Admin and Editor roles)
+router.get('/editor-media',
+  authenticateToken,
+  analyticsController.getEditorMedia.bind(analyticsController)
+);
+
 // Get ads without editor assignment (Admin only)
 router.get('/ads-without-editor',
   authenticateToken,

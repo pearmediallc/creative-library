@@ -76,14 +76,15 @@ class AnalyticsController {
   /**
    * Get editor performance analytics
    * GET /api/analytics/editor-performance
-   * Query: editor_id, date_from, date_to
+   * Query: editor_id, date_from, date_to, media_type (image/video)
    */
   async getEditorPerformance(req, res, next) {
     try {
       const filters = {
         editor_id: req.query.editor_id,
         date_from: req.query.date_from,
-        date_to: req.query.date_to
+        date_to: req.query.date_to,
+        media_type: req.query.media_type // image or video
       };
 
       const data = await analyticsService.getEditorPerformance(filters);
@@ -94,6 +95,94 @@ class AnalyticsController {
       });
     } catch (error) {
       logger.error('Get editor performance controller error', { error: error.message });
+      next(error);
+    }
+  }
+
+  /**
+   * Get editor media uploads with filtering
+   * GET /api/analytics/editor-media
+   * Query: editor_id, date_from, date_to, media_type (image/video)
+   */
+  async getEditorMedia(req, res, next) {
+    try {
+      const { editor_id, date_from, date_to, media_type } = req.query;
+
+      // Build query filters
+      let whereConditions = ['mf.is_deleted = FALSE'];
+      const params = [];
+      let paramIndex = 1;
+
+      if (editor_id) {
+        whereConditions.push(`mf.editor_id = $${paramIndex}`);
+        params.push(editor_id);
+        paramIndex++;
+      }
+
+      if (date_from) {
+        whereConditions.push(`mf.created_at >= $${paramIndex}`);
+        params.push(date_from);
+        paramIndex++;
+      }
+
+      if (date_to) {
+        whereConditions.push(`mf.created_at <= $${paramIndex}`);
+        params.push(date_to);
+        paramIndex++;
+      }
+
+      if (media_type) {
+        if (media_type.toLowerCase() === 'image') {
+          whereConditions.push(`mf.file_type IN ('image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp')`);
+        } else if (media_type.toLowerCase() === 'video') {
+          whereConditions.push(`mf.file_type IN ('video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/webm')`);
+        }
+      }
+
+      const whereClause = whereConditions.join(' AND ');
+
+      const pool = require('../config/database');
+      const result = await pool.query(
+        `SELECT
+           mf.id,
+           mf.original_filename,
+           mf.file_type,
+           mf.file_size,
+           mf.created_at,
+           mf.editor_id,
+           e.name as editor_name,
+           e.display_name as editor_display_name,
+           u.full_name as uploaded_by_name,
+           COUNT(DISTINCT s.id) as share_count
+         FROM media_files mf
+         LEFT JOIN editors e ON mf.editor_id = e.id
+         LEFT JOIN users u ON mf.created_by = u.id
+         LEFT JOIN shares s ON mf.id = s.file_id
+         WHERE ${whereClause}
+         GROUP BY mf.id, e.name, e.display_name, u.full_name
+         ORDER BY mf.created_at DESC
+         LIMIT 1000`,
+        params
+      );
+
+      // Calculate statistics
+      const stats = {
+        total_files: result.rows.length,
+        total_size: result.rows.reduce((sum, row) => sum + (parseInt(row.file_size) || 0), 0),
+        images: result.rows.filter(row => row.file_type?.startsWith('image')).length,
+        videos: result.rows.filter(row => row.file_type?.startsWith('video')).length
+      };
+
+      res.json({
+        success: true,
+        data: {
+          files: result.rows,
+          stats,
+          filters: { editor_id, date_from, date_to, media_type }
+        }
+      });
+    } catch (error) {
+      logger.error('Get editor media controller error', { error: error.message });
       next(error);
     }
   }

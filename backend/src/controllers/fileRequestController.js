@@ -22,20 +22,33 @@ class FileRequestController {
       const {
         title,
         description,
+        request_type,
+        concept_notes,
+        num_creatives = 1,
         folder_id,
         deadline,
         allow_multiple_uploads = true,
         require_email = false,
         custom_message,
         editor_id,
+        editor_ids,
         assigned_buyer_id
       } = req.body;
 
-      // Validation
-      if (!title || title.trim() === '') {
+      // Validation - either title OR request_type is required
+      const requestTitle = request_type || title;
+      if (!requestTitle || requestTitle.trim() === '') {
         return res.status(400).json({
           success: false,
-          error: 'Title is required'
+          error: 'Title or request_type is required'
+        });
+      }
+
+      // Validate num_creatives
+      if (num_creatives && (num_creatives < 1 || !Number.isInteger(num_creatives))) {
+        return res.status(400).json({
+          success: false,
+          error: 'num_creatives must be a positive integer'
         });
       }
 
@@ -98,13 +111,16 @@ class FileRequestController {
       // Create file request
       const result = await query(
         `INSERT INTO file_requests
-        (title, description, created_by, folder_id, request_token, deadline,
-         allow_multiple_uploads, require_email, custom_message, editor_id, assigned_buyer_id)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        (title, description, request_type, concept_notes, num_creatives, created_by, folder_id, request_token, deadline,
+         allow_multiple_uploads, require_email, custom_message, assigned_buyer_id, assigned_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
         RETURNING *`,
         [
-          title.trim(),
-          description || null,
+          requestTitle.trim(),
+          description || concept_notes || null,
+          request_type || requestTitle.trim(),
+          concept_notes || description || null,
+          num_creatives,
           userId,
           folder_id || null,
           requestToken,
@@ -112,12 +128,25 @@ class FileRequestController {
           allow_multiple_uploads,
           require_email,
           custom_message || null,
-          editor_id || null,
-          assigned_buyer_id || null
+          assigned_buyer_id || null,
+          (editor_id || (editor_ids && editor_ids.length > 0)) ? new Date() : null
         ]
       );
 
       const fileRequest = result.rows[0];
+
+      // Handle multi-editor assignment
+      const editorsToAssign = editor_ids || (editor_id ? [editor_id] : []);
+      if (editorsToAssign.length > 0) {
+        for (const edId of editorsToAssign) {
+          await query(
+            `INSERT INTO file_request_editors (request_id, editor_id, status)
+             VALUES ($1, $2, 'pending')
+             ON CONFLICT (request_id, editor_id) DO NOTHING`,
+            [fileRequest.id, edId]
+          );
+        }
+      }
 
       // Log activity
       await logActivity({
@@ -609,6 +638,343 @@ class FileRequestController {
       });
     } catch (error) {
       logger.error('Public upload error', { error: error.message });
+      next(error);
+    }
+  }
+
+  /**
+   * Assign multiple editors to a file request
+   * POST /api/file-requests/:id/assign-editors
+   */
+  async assignEditors(req, res, next) {
+    try {
+      const { id } = req.params;
+      const { editor_ids } = req.body;
+      const userId = req.user.id;
+
+      if (!Array.isArray(editor_ids) || editor_ids.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'editor_ids must be a non-empty array'
+        });
+      }
+
+      // Verify file request exists and user owns it
+      const requestResult = await query(
+        'SELECT * FROM file_requests WHERE id = $1 AND created_by = $2',
+        [id, userId]
+      );
+
+      if (requestResult.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          error: 'File request not found'
+        });
+      }
+
+      // Verify all editors exist
+      const editorsResult = await query(
+        'SELECT id FROM editors WHERE id = ANY($1) AND is_active = TRUE',
+        [editor_ids]
+      );
+
+      if (editorsResult.rows.length !== editor_ids.length) {
+        return res.status(400).json({
+          success: false,
+          error: 'One or more editors not found or inactive'
+        });
+      }
+
+      // Insert editor assignments (ON CONFLICT DO NOTHING for idempotency)
+      for (const editorId of editor_ids) {
+        await query(
+          `INSERT INTO file_request_editors (request_id, editor_id, status)
+           VALUES ($1, $2, 'pending')
+           ON CONFLICT (request_id, editor_id) DO NOTHING`,
+          [id, editorId]
+        );
+      }
+
+      // Update assigned_at timestamp
+      await query(
+        'UPDATE file_requests SET assigned_at = CURRENT_TIMESTAMP WHERE id = $1',
+        [id]
+      );
+
+      logger.info('Editors assigned to file request', {
+        requestId: id,
+        editorIds: editor_ids,
+        userId
+      });
+
+      res.json({
+        success: true,
+        message: 'Editors assigned successfully',
+        assigned_count: editor_ids.length
+      });
+    } catch (error) {
+      logger.error('Assign editors error', { error: error.message });
+      next(error);
+    }
+  }
+
+  /**
+   * Create folder for file request (editor use)
+   * POST /api/file-requests/:id/folders
+   */
+  async createRequestFolder(req, res, next) {
+    try {
+      const { id } = req.params;
+      const { folder_name, description } = req.body;
+      const userId = req.user.id;
+
+      if (!folder_name || folder_name.trim() === '') {
+        return res.status(400).json({
+          success: false,
+          error: 'folder_name is required'
+        });
+      }
+
+      // Verify file request exists
+      const requestResult = await query(
+        'SELECT * FROM file_requests WHERE id = $1',
+        [id]
+      );
+
+      if (requestResult.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          error: 'File request not found'
+        });
+      }
+
+      // Create folder
+      const result = await query(
+        `INSERT INTO file_request_folders (request_id, folder_name, description, created_by)
+         VALUES ($1, $2, $3, $4)
+         RETURNING *`,
+        [id, folder_name.trim(), description || null, userId]
+      );
+
+      const folder = result.rows[0];
+
+      logger.info('File request folder created', {
+        folderId: folder.id,
+        requestId: id,
+        userId
+      });
+
+      res.status(201).json({
+        success: true,
+        message: 'Folder created successfully',
+        data: folder
+      });
+    } catch (error) {
+      logger.error('Create request folder error', { error: error.message });
+      next(error);
+    }
+  }
+
+  /**
+   * Complete a file request (mark as completed with optional delivery note)
+   * POST /api/file-requests/:id/complete
+   */
+  async completeRequest(req, res, next) {
+    try {
+      const { id } = req.params;
+      const { delivery_note } = req.body;
+      const userId = req.user.id;
+
+      // Get file request with assignment details
+      const requestResult = await query(
+        `SELECT fr.*, fre.accepted_at, fre.editor_id
+         FROM file_requests fr
+         LEFT JOIN file_request_editors fre ON fr.id = fre.request_id AND fre.user_id = $1
+         WHERE fr.id = $2`,
+        [userId, id]
+      );
+
+      if (requestResult.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          error: 'File request not found'
+        });
+      }
+
+      const fileRequest = requestResult.rows[0];
+
+      // Calculate time to complete
+      let timeToComplete = null;
+      if (fileRequest.assigned_at) {
+        const now = new Date();
+        const assigned = new Date(fileRequest.assigned_at);
+        timeToComplete = Math.floor((now - assigned) / (1000 * 60)); // minutes
+      }
+
+      // Update file request
+      await query(
+        `UPDATE file_requests
+         SET
+           delivery_note = $1,
+           completed_at = CURRENT_TIMESTAMP,
+           time_to_complete_minutes = $2
+         WHERE id = $3`,
+        [delivery_note || null, timeToComplete, id]
+      );
+
+      logger.info('File request completed', {
+        requestId: id,
+        userId,
+        timeToComplete
+      });
+
+      res.json({
+        success: true,
+        message: 'File request completed successfully',
+        time_to_complete_minutes: timeToComplete
+      });
+    } catch (error) {
+      logger.error('Complete request error', { error: error.message });
+      next(error);
+    }
+  }
+
+  /**
+   * Reassign file request to different editors (admin only)
+   * POST /api/file-requests/:id/reassign
+   */
+  async reassignRequest(req, res, next) {
+    try {
+      const { id } = req.params;
+      const { new_editor_ids, reason } = req.body;
+      const userId = req.user.id;
+
+      if (!Array.isArray(new_editor_ids) || new_editor_ids.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'new_editor_ids must be a non-empty array'
+        });
+      }
+
+      // Verify file request exists
+      const requestResult = await query(
+        'SELECT * FROM file_requests WHERE id = $1',
+        [id]
+      );
+
+      if (requestResult.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          error: 'File request not found'
+        });
+      }
+
+      // Remove old editor assignments
+      await query(
+        'DELETE FROM file_request_editors WHERE request_id = $1',
+        [id]
+      );
+
+      // Add new editor assignments
+      for (const editorId of new_editor_ids) {
+        await query(
+          `INSERT INTO file_request_editors (request_id, editor_id, status)
+           VALUES ($1, $2, 'pending')`,
+          [id, editorId]
+        );
+      }
+
+      // Log activity
+      await logActivity({
+        req,
+        actionType: 'file_request_reassigned',
+        resourceType: 'file_request',
+        resourceId: id,
+        details: {
+          new_editor_ids,
+          reason
+        },
+        status: 'success'
+      });
+
+      logger.info('File request reassigned', {
+        requestId: id,
+        newEditorIds: new_editor_ids,
+        userId
+      });
+
+      res.json({
+        success: true,
+        message: 'File request reassigned successfully',
+        assigned_count: new_editor_ids.length
+      });
+    } catch (error) {
+      logger.error('Reassign request error', { error: error.message });
+      next(error);
+    }
+  }
+
+  /**
+   * Get folders for a file request
+   * GET /api/file-requests/:id/folders
+   */
+  async getRequestFolders(req, res, next) {
+    try {
+      const { id } = req.params;
+
+      const result = await query(
+        `SELECT
+           frf.*,
+           u.full_name as created_by_name,
+           COUNT(fru.id) as file_count
+         FROM file_request_folders frf
+         LEFT JOIN users u ON frf.created_by = u.id
+         LEFT JOIN file_request_uploads fru ON fru.folder_id = frf.id
+         WHERE frf.request_id = $1
+         GROUP BY frf.id, u.full_name
+         ORDER BY frf.created_at ASC`,
+        [id]
+      );
+
+      res.json({
+        success: true,
+        data: result.rows
+      });
+    } catch (error) {
+      logger.error('Get request folders error', { error: error.message });
+      next(error);
+    }
+  }
+
+  /**
+   * Get assigned editors for a file request
+   * GET /api/file-requests/:id/editors
+   */
+  async getAssignedEditors(req, res, next) {
+    try {
+      const { id } = req.params;
+
+      const result = await query(
+        `SELECT
+           fre.*,
+           e.name as editor_name,
+           e.display_name as editor_display_name,
+           u.full_name as user_name,
+           u.email as user_email
+         FROM file_request_editors fre
+         LEFT JOIN editors e ON fre.editor_id = e.id
+         LEFT JOIN users u ON fre.user_id = u.id
+         WHERE fre.request_id = $1
+         ORDER BY fre.created_at ASC`,
+        [id]
+      );
+
+      res.json({
+        success: true,
+        data: result.rows
+      });
+    } catch (error) {
+      logger.error('Get assigned editors error', { error: error.message });
       next(error);
     }
   }

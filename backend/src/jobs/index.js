@@ -4,6 +4,7 @@
 
 const cron = require('node-cron');
 const logger = require('../utils/logger');
+const activityLogExportService = require('../services/activityLogExportService');
 
 function initializeCronJobs() {
   // Ad name change detection (every 6 hours)
@@ -20,6 +21,9 @@ function initializeCronJobs() {
   });
 
   logger.info(`📅 Cron job scheduled: Ad name check (${adNameCheckSchedule})`);
+
+  // Activity log export (daily at 2 AM)
+  activityLogExportService.scheduleDailyExports();
 }
 
 module.exports = {

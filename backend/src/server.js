@@ -29,6 +29,7 @@ const savedSearchRoutes = require('./routes/savedSearches');
 const fileRequestRoutes = require('./routes/fileRequests');
 const metadataTagRoutes = require('./routes/metadataTags');
 const metadataRoutes = require('./routes/metadataRoutes');
+const slackRoutes = require('./routes/slackRoutes');
 
 // Import error handler
 const errorHandler = require('./middleware/errorHandler');
@@ -136,9 +137,10 @@ app.use('/api/saved-searches', savedSearchRoutes);
 app.use('/api/file-requests', fileRequestRoutes);
 app.use('/api/metadata-tags', metadataTagRoutes);
 app.use('/api/metadata', metadataRoutes);
+app.use('/api/slack', slackRoutes);
 
 // Log registered routes
-logger.info('API routes registered: /api/auth, /api/media, /api/editors, /api/analytics, /api/admin, /api/facebook, /api/activity-logs, /api/folders, /api/teams, /api/permissions, /api/starred, /api/comments, /api/saved-searches, /api/file-requests, /api/metadata-tags');
+logger.info('API routes registered: /api/auth, /api/media, /api/editors, /api/analytics, /api/admin, /api/facebook, /api/activity-logs, /api/folders, /api/teams, /api/permissions, /api/starred, /api/comments, /api/saved-searches, /api/file-requests, /api/metadata-tags, /api/slack');
 
 // 404 handler
 app.use((req, res) => {

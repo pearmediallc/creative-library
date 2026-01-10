@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { X, Share2, Users, Link as LinkIcon, Copy, Check, Mail, Calendar, Eye, Download, Edit, Trash2, User as UserIcon, Lock, Clock, BarChart } from 'lucide-react';
+import { X, Share2, Users, Link as LinkIcon, Copy, Check, Mail, Calendar, Eye, Download, Edit, Trash2, User as UserIcon, Lock, Clock, BarChart, MessageSquare } from 'lucide-react';
 import { Button } from './ui/Button';
-import { permissionApi, teamApi, adminApi, publicLinkApi } from '../lib/api';
+import { permissionApi, teamApi, adminApi, publicLinkApi, slackApi } from '../lib/api';
 
 interface ShareDialogProps {
   isOpen: boolean;
@@ -57,6 +57,8 @@ export function ShareDialog({
   const [selectedId, setSelectedId] = useState('');
   const [selectedPermissions, setSelectedPermissions] = useState<Set<'view' | 'download' | 'edit' | 'delete'>>(new Set(['view' as const]));
   const [expiresAt, setExpiresAt] = useState('');
+  const [notifyViaSlack, setNotifyViaSlack] = useState(false);
+  const [slackConnected, setSlackConnected] = useState(false);
 
   // Link sharing state
   const [publicLink, setPublicLink] = useState<any>(null);
@@ -120,12 +122,22 @@ export function ShareDialog({
     }
   }, []);
 
+  const checkSlackStatus = useCallback(async () => {
+    try {
+      const response = await slackApi.getStatus();
+      setSlackConnected(response.data.connected || false);
+    } catch (err) {
+      setSlackConnected(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (isOpen) {
       fetchPermissions();
       fetchUsersAndTeams();
+      checkSlackStatus();
     }
-  }, [isOpen, fetchPermissions, fetchUsersAndTeams]);
+  }, [isOpen, fetchPermissions, fetchUsersAndTeams, checkSlackStatus]);
 
   const handleShare = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -581,6 +593,24 @@ export function ShareDialog({
                       className="w-full h-9 px-3 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-xs text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
+
+                  {/* Slack Notification Option */}
+                  {slackConnected && shareType === 'user' && (
+                    <div className="flex items-center gap-2 p-3 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-md">
+                      <input
+                        type="checkbox"
+                        id="notifySlack"
+                        checked={notifyViaSlack}
+                        onChange={(e) => setNotifyViaSlack(e.target.checked)}
+                        disabled={sharing}
+                        className="w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                      />
+                      <label htmlFor="notifySlack" className="flex items-center gap-2 text-sm text-purple-900 dark:text-purple-100 cursor-pointer">
+                        <MessageSquare className="w-4 h-4" />
+                        Send Slack notification
+                      </label>
+                    </div>
+                  )}
                 </div>
               </form>
 

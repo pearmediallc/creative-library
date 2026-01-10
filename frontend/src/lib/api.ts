@@ -525,14 +525,18 @@ export const metadataApi = {
 export const fileRequestApi = {
   // Create new file request
   create: (data: {
-    title: string;
+    title?: string;
+    request_type?: string;
     description?: string;
+    concept_notes?: string;
+    num_creatives?: number;
     folder_id?: string;
     deadline?: string;
     allow_multiple_uploads?: boolean;
     require_email?: boolean;
     custom_message?: string;
     editor_id?: string;
+    editor_ids?: string[];
     assigned_buyer_id?: string;
   }) => api.post('/file-requests', data),
 
@@ -572,6 +576,110 @@ export const fileRequestApi = {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   },
+
+  // Assign multiple editors to file request
+  assignEditors: (id: string, editor_ids: string[]) =>
+    api.post(`/file-requests/${id}/assign-editors`, { editor_ids }),
+
+  // Create folder for file request
+  createFolder: (id: string, data: { folder_name: string; description?: string }) =>
+    api.post(`/file-requests/${id}/folders`, data),
+
+  // Get folders for file request
+  getFolders: (id: string) => api.get(`/file-requests/${id}/folders`),
+
+  // Get assigned editors for file request
+  getAssignedEditors: (id: string) => api.get(`/file-requests/${id}/editors`),
+
+  // Complete file request
+  complete: (id: string, data?: { delivery_note?: string }) =>
+    api.post(`/file-requests/${id}/complete`, data),
+
+  // Reassign file request (admin only)
+  reassign: (id: string, data: { new_editor_ids: string[]; reason?: string }) =>
+    api.post(`/file-requests/${id}/reassign`, data),
+};
+
+// Slack Integration endpoints
+export const slackApi = {
+  // Initiate OAuth flow
+  initiateOAuth: () => api.get('/slack/oauth/initiate'),
+
+  // Get connection status
+  getStatus: () => api.get('/slack/status'),
+
+  // Disconnect Slack
+  disconnect: () => api.post('/slack/disconnect'),
+
+  // Get notification preferences
+  getPreferences: () => api.get('/slack/preferences'),
+
+  // Update notification preferences
+  updatePreferences: (data: { enabled?: boolean; preferences?: Record<string, boolean> }) =>
+    api.put('/slack/preferences', data),
+
+  // Send test notification
+  sendTest: () => api.post('/slack/test'),
+};
+
+// Activity Log Export endpoints (admin only)
+export const activityLogExportApi = {
+  // Get export history
+  getHistory: () => api.get('/activity-logs/exports'),
+
+  // Get specific export
+  getExport: (exportId: string) => api.get(`/activity-logs/exports/${exportId}`),
+
+  // Get download URL for export
+  getDownloadUrl: (exportId: string) => api.get(`/activity-logs/exports/${exportId}/download`),
+
+  // Trigger manual export
+  manualExport: (targetDate: string) =>
+    api.post('/activity-logs/exports/manual', { targetDate }),
+
+  // Get export job status
+  getJobStatus: () => api.get('/activity-logs/exports/job/status'),
+};
+
+// Enhanced Analytics endpoints
+export const analyticsApi = {
+  // Sync Facebook ads
+  syncAds: (data: { ad_account_id: string; date_from?: string; date_to?: string }) =>
+    api.post('/analytics/sync', data),
+
+  // Stop ongoing sync
+  stopSync: () => api.post('/analytics/sync/stop'),
+
+  // Get editor performance with filtering
+  getEditorPerformance: (params?: {
+    editor_id?: string;
+    date_from?: string;
+    date_to?: string;
+    media_type?: 'image' | 'video';
+  }) => api.get('/analytics/editor-performance', { params }),
+
+  // Get editor media uploads with filtering
+  getEditorMedia: (params?: {
+    editor_id?: string;
+    date_from?: string;
+    date_to?: string;
+    media_type?: 'image' | 'video';
+  }) => api.get('/analytics/editor-media', { params }),
+
+  // Get ads without editor
+  getAdsWithoutEditor: () => api.get('/analytics/ads-without-editor'),
+
+  // Get ad name changes
+  getAdNameChanges: (params?: { editor_changed?: boolean; date_from?: string }) =>
+    api.get('/analytics/ad-name-changes', { params }),
+
+  // Get unified analytics
+  getUnifiedAnalytics: (params: {
+    ad_account_id: string;
+    date_from?: string;
+    date_to?: string;
+    bulk_fetch?: boolean;
+  }) => api.get('/analytics/unified', { params }),
 };
 
 // Metadata Tags endpoints
