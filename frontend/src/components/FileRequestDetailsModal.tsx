@@ -23,10 +23,20 @@ interface FileUpload {
   created_at: string;
 }
 
+interface AssignedEditor {
+  id: string;
+  name: string;
+  display_name: string;
+  assigned_at: string;
+  status: string;
+  assigned_by_name?: string;
+}
+
 interface FileRequestDetails {
   id: string;
   title: string;
   description?: string;
+  request_type?: string;
   request_token: string;
   is_active: boolean;
   deadline?: string;
@@ -35,11 +45,14 @@ interface FileRequestDetails {
   require_email: boolean;
   custom_message?: string;
   upload_count: number;
+  num_creatives_requested?: number;
   created_at: string;
+  assigned_at?: string;
   picked_up_at?: string;
   completed_at?: string;
   delivery_note?: string;
   uploads: FileUpload[];
+  assigned_editors?: AssignedEditor[];
 }
 
 export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRequestDetailsModalProps) {
@@ -159,6 +172,35 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
               </div>
             )}
 
+            {request.assigned_editors && request.assigned_editors.length > 0 && (
+              <div>
+                <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Assigned Creatives ({request.num_creatives_requested || request.assigned_editors.length})
+                </h3>
+                <div className="space-y-2">
+                  {request.assigned_editors.map((editor, index) => (
+                    <div key={editor.id} className="flex items-center justify-between text-sm bg-white dark:bg-gray-800 rounded p-2 border border-gray-200 dark:border-gray-700">
+                      <div>
+                        <span className="font-medium text-gray-900 dark:text-white">
+                          {editor.display_name || editor.name}
+                        </span>
+                        {index === 0 && request.assigned_editors && request.assigned_editors.length > 1 && (
+                          <span className="ml-2 text-xs text-blue-600 dark:text-blue-400">(Initial)</span>
+                        )}
+                        {index > 0 && (
+                          <span className="ml-2 text-xs text-orange-600 dark:text-orange-400">(Reassigned)</span>
+                        )}
+                      </div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                        {formatDate(editor.assigned_at)}
+                        {editor.assigned_by_name && ` by ${editor.assigned_by_name}`}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {request.delivery_note && (
               <div>
                 <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -169,6 +211,21 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
             )}
 
             <div className="grid grid-cols-2 gap-4 pt-2">
+              <div className="flex items-center gap-2 text-sm">
+                <Clock className="w-4 h-4 text-muted-foreground" />
+                <span className="text-gray-700 dark:text-gray-300">
+                  Created: {formatDate(request.created_at)}
+                </span>
+              </div>
+
+              {request.request_type && (
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="text-gray-700 dark:text-gray-300">
+                    Type: <span className="font-medium capitalize">{request.request_type}</span>
+                  </span>
+                </div>
+              )}
+
               {request.folder_name && (
                 <div className="flex items-center gap-2 text-sm">
                   <Folder className="w-4 h-4 text-muted-foreground" />

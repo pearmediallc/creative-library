@@ -378,8 +378,29 @@ class FileRequestController {
 
       logger.info('File request uploads fetched', { count: uploadsResult.rows.length });
 
+      // Get assigned editors with assignment history
+      const editorsResult = await query(
+        `SELECT
+          e.id,
+          e.name,
+          e.display_name,
+          fre.assigned_at,
+          fre.status,
+          u.name as assigned_by_name
+        FROM file_request_editors fre
+        JOIN editors e ON fre.editor_id = e.id
+        LEFT JOIN users u ON fre.assigned_by = u.id
+        WHERE fre.request_id = $1
+        ORDER BY fre.assigned_at ASC`,
+        [id]
+      );
+
+      logger.info('Assigned editors fetched', { count: editorsResult.rows.length });
+
       const fileRequest = result.rows[0];
       fileRequest.uploads = uploadsResult.rows;
+      fileRequest.assigned_editors = editorsResult.rows;
+      fileRequest.num_creatives_requested = editorsResult.rows.length;
 
       res.json({
         success: true,
