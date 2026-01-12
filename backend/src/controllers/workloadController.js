@@ -135,7 +135,7 @@ class WorkloadController {
           fr.title,
           fr.description,
           fr.request_type,
-          fr.status,
+          fre.status,
           fr.priority,
           fr.complexity,
           fr.estimated_hours,
@@ -152,7 +152,7 @@ class WorkloadController {
         LEFT JOIN folders f ON fr.folder_id = f.id
         WHERE fre.editor_id = $1
         ORDER BY
-          CASE fr.status
+          CASE fre.status
             WHEN 'in_progress' THEN 1
             WHEN 'assigned' THEN 2
             WHEN 'pending' THEN 3
