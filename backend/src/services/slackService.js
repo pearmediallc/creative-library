@@ -85,6 +85,12 @@ async function getSlackUserId(userId) {
     [userId]
   );
 
+  console.log('🔍 Slack user ID query result:', {
+    userId,
+    found: result.rows.length > 0,
+    slackUserId: result.rows[0]?.slack_user_id
+  });
+
   return result.rows.length > 0 ? result.rows[0].slack_user_id : null;
 }
 
@@ -120,13 +126,30 @@ async function isUserSlackEnabled(userId, notificationType) {
     [userId]
   );
 
+  console.log('🔍 User notification preferences query result:', {
+    userId,
+    found: result.rows.length > 0,
+    data: result.rows[0]
+  });
+
   if (result.rows.length === 0) return false;
 
   const user = result.rows[0];
-  if (!user.slack_notifications_enabled) return false;
+  if (!user.slack_notifications_enabled) {
+    console.log('⚠️ Slack notifications disabled for user:', userId);
+    return false;
+  }
 
   const prefs = user.slack_notification_preferences || {};
-  return prefs[notificationType] !== false; // Default to true if not specified
+  const isTypeEnabled = prefs[notificationType] !== false;
+
+  console.log('🔍 Notification type check:', {
+    notificationType,
+    preferences: prefs,
+    enabled: isTypeEnabled
+  });
+
+  return isTypeEnabled; // Default to true if not specified
 }
 
 /**
@@ -407,11 +430,22 @@ async function notifyPublicLinkCreated(userId, fileName, publicUrl, expiresAt) {
   try {
     const notificationType = 'public_link_created';
 
-    if (!await isUserSlackEnabled(userId, notificationType)) {
+    console.log('📬 Checking Slack notification eligibility:', {
+      userId,
+      notificationType,
+      fileName
+    });
+
+    const isEnabled = await isUserSlackEnabled(userId, notificationType);
+    console.log('📬 User Slack enabled check:', isEnabled);
+
+    if (!isEnabled) {
       return { success: false, reason: 'notifications_disabled' };
     }
 
     const slackUserId = await getSlackUserId(userId);
+    console.log('📬 Slack user ID lookup:', slackUserId);
+
     if (!slackUserId) {
       return { success: false, reason: 'no_slack_connection' };
     }

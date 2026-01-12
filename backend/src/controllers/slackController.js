@@ -233,6 +233,12 @@ async function testNotification(req, res) {
     const userId = req.user.id;
     const { type = 'test' } = req.body;
 
+    console.log('🧪 Test notification request:', {
+      userId,
+      type,
+      frontendUrl: process.env.FRONTEND_URL
+    });
+
     const result = await slackService.notifyPublicLinkCreated(
       userId,
       'Test File.mp4',
@@ -240,18 +246,29 @@ async function testNotification(req, res) {
       null
     );
 
+    console.log('🧪 Test notification result:', result);
+
     if (result.success) {
       res.json({ success: true, message: 'Test notification sent' });
     } else {
+      console.warn('⚠️ Test notification failed:', {
+        userId,
+        reason: result.reason,
+        error: result.error
+      });
       res.status(400).json({
         success: false,
         message: 'Failed to send notification',
-        reason: result.reason
+        reason: result.reason,
+        error: result.error
       });
     }
   } catch (error) {
-    console.error('Test notification error:', error);
-    res.status(500).json({ error: 'Failed to send test notification' });
+    console.error('❌ Test notification error:', error);
+    res.status(500).json({
+      error: 'Failed to send test notification',
+      details: error.message
+    });
   }
 }
 
