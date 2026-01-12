@@ -226,6 +226,114 @@ async function getNotificationPreferences(req, res) {
 }
 
 /**
+ * Get all Slack-connected users
+ */
+async function getConnectedUsers(req, res) {
+  try {
+    console.log('📋 Fetching all Slack-connected users...');
+
+    const result = await pool.query(
+      `SELECT
+        u.id,
+        u.name,
+        u.email,
+        u.role,
+        usc.slack_username,
+        usc.slack_email,
+        usc.created_at as connected_at
+       FROM user_slack_connections usc
+       JOIN users u ON usc.user_id = u.id
+       WHERE usc.is_active = TRUE
+       ORDER BY u.name ASC`
+    );
+
+    console.log(`📋 Found ${result.rows.length} Slack-connected users`);
+
+    res.json({
+      success: true,
+      data: result.rows.map(row => ({
+        id: row.id,
+        name: row.name,
+        email: row.email,
+        role: row.role,
+        slackUsername: row.slack_username,
+        slackEmail: row.slack_email,
+        connectedAt: row.connected_at
+      }))
+    });
+  } catch (error) {
+    console.error('❌ Get connected users error:', error);
+    res.status(500).json({ error: 'Failed to get connected users' });
+  }
+}
+
+/**
+ * Send manual Slack notification to selected users
+ */
+async function sendManualNotification(req, res) {
+  try {
+    const senderId = req.user.id;
+    const { userIds, fileName, fileUrl, message } = req.body;
+
+    console.log('📬 Manual Slack notification request:', {
+      senderId,
+      userIds,
+      fileName,
+      fileUrl,
+      hasCustomMessage: !!message
+    });
+
+    if (!userIds || !Array.isArray(userIds) || userIds.length === 0) {
+      return res.status(400).json({ error: 'Please select at least one user' });
+    }
+
+    if (!fileName) {
+      return res.status(400).json({ error: 'File name is required' });
+    }
+
+    // Get sender info
+    const senderResult = await pool.query(
+      'SELECT name FROM users WHERE id = $1',
+      [senderId]
+    );
+    const senderName = senderResult.rows[0]?.name || 'Someone';
+
+    const results = await Promise.allSettled(
+      userIds.map(userId =>
+        slackService.notifyFileShared(
+          userId,
+          fileName,
+          senderName,
+          fileUrl,
+          message
+        )
+      )
+    );
+
+    const successful = results.filter(r => r.status === 'fulfilled' && r.value.success).length;
+    const failed = results.length - successful;
+
+    console.log('📬 Manual notification results:', { successful, failed, total: results.length });
+
+    res.json({
+      success: true,
+      message: `Sent ${successful} notification${successful !== 1 ? 's' : ''}${failed > 0 ? `, ${failed} failed` : ''}`,
+      details: {
+        successful,
+        failed,
+        total: results.length
+      }
+    });
+  } catch (error) {
+    console.error('❌ Send manual notification error:', error);
+    res.status(500).json({
+      error: 'Failed to send notifications',
+      details: error.message
+    });
+  }
+}
+
+/**
  * Test Slack notification
  */
 async function testNotification(req, res) {
@@ -279,5 +387,7 @@ module.exports = {
   disconnect,
   updateNotificationPreferences,
   getNotificationPreferences,
+  getConnectedUsers,
+  sendManualNotification,
   testNotification
 };

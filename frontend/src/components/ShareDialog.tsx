@@ -43,7 +43,7 @@ export function ShareDialog({
   resourceId,
   resourceName
 }: ShareDialogProps) {
-  const [activeTab, setActiveTab] = useState<'people' | 'link'>('people');
+  const [activeTab, setActiveTab] = useState<'people' | 'link' | 'slack'>('people');
   const [permissions, setPermissions] = useState<Permission[]>([]);
   const [allUsers, setAllUsers] = useState<User[]>([]);
   const [allTeams, setAllTeams] = useState<Team[]>([]);
@@ -59,6 +59,10 @@ export function ShareDialog({
   const [expiresAt, setExpiresAt] = useState('');
   const [notifyViaSlack, setNotifyViaSlack] = useState(false);
   const [slackConnected, setSlackConnected] = useState(false);
+  const [slackConnectedUsers, setSlackConnectedUsers] = useState<any[]>([]);
+  const [selectedSlackUsers, setSelectedSlackUsers] = useState<Set<string>>(new Set());
+  const [showSlackSelector, setShowSlackSelector] = useState(false);
+  const [sendingSlackNotifications, setSendingSlackNotifications] = useState(false);
 
   // Link sharing state
   const [publicLink, setPublicLink] = useState<any>(null);
@@ -136,13 +140,26 @@ export function ShareDialog({
     }
   }, []);
 
+  const fetchSlackConnectedUsers = useCallback(async () => {
+    try {
+      console.log('📋 ShareDialog: Fetching Slack-connected users...');
+      const response = await slackApi.getConnectedUsers();
+      console.log('📋 ShareDialog: Slack-connected users:', response.data.data);
+      setSlackConnectedUsers(response.data.data || []);
+    } catch (err) {
+      console.error('❌ ShareDialog: Failed to fetch Slack users:', err);
+      setSlackConnectedUsers([]);
+    }
+  }, []);
+
   useEffect(() => {
     if (isOpen) {
       fetchPermissions();
       fetchUsersAndTeams();
       checkSlackStatus();
+      fetchSlackConnectedUsers();
     }
-  }, [isOpen, fetchPermissions, fetchUsersAndTeams, checkSlackStatus]);
+  }, [isOpen, fetchPermissions, fetchUsersAndTeams, checkSlackStatus, fetchSlackConnectedUsers]);
 
   const handleShare = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -224,6 +241,58 @@ export function ShareDialog({
       console.error('Failed to revoke permission:', err);
       setError(err.response?.data?.error || 'Failed to remove access');
     }
+  };
+
+  const handleSendSlackNotifications = async () => {
+    if (selectedSlackUsers.size === 0) {
+      setError('Please select at least one person to notify');
+      return;
+    }
+
+    try {
+      setSendingSlackNotifications(true);
+      setError('');
+
+      const fileUrl = resourceType === 'file'
+        ? `${window.location.origin}/media/${resourceId}`
+        : `${window.location.origin}/folders/${resourceId}`;
+
+      console.log('📬 ShareDialog: Sending Slack notifications...', {
+        userIds: Array.from(selectedSlackUsers),
+        fileName: resourceName,
+        fileUrl
+      });
+
+      const response = await slackApi.sendManualNotification({
+        userIds: Array.from(selectedSlackUsers),
+        fileName: resourceName,
+        fileUrl
+      });
+
+      console.log('📬 ShareDialog: Slack notification response:', response.data);
+
+      setSuccess(response.data.message || 'Slack notifications sent!');
+      setSelectedSlackUsers(new Set());
+      setShowSlackSelector(false);
+      setTimeout(() => setSuccess(''), 3000);
+    } catch (err: any) {
+      console.error('❌ ShareDialog: Failed to send Slack notifications:', err);
+      setError(err.response?.data?.error || 'Failed to send Slack notifications');
+    } finally {
+      setSendingSlackNotifications(false);
+    }
+  };
+
+  const toggleSlackUser = (userId: string) => {
+    setSelectedSlackUsers(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(userId)) {
+        newSet.delete(userId);
+      } else {
+        newSet.add(userId);
+      }
+      return newSet;
+    });
   };
 
   const handleGenerateLink = async () => {
@@ -424,6 +493,19 @@ export function ShareDialog({
             <LinkIcon className="w-4 h-4 inline-block mr-2" />
             Get link
           </button>
+          {slackConnectedUsers.length > 0 && (
+            <button
+              onClick={() => setActiveTab('slack')}
+              className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === 'slack'
+                  ? 'border-purple-500 text-purple-600 dark:text-purple-400'
+                  : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+              }`}
+            >
+              <MessageSquare className="w-4 h-4 inline-block mr-2" />
+              Notify via Slack
+            </button>
+          )}
         </div>
 
         {/* Content */}
@@ -965,6 +1047,110 @@ export function ShareDialog({
                   </div>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Slack Tab */}
+          {activeTab === 'slack' && (
+            <div className="space-y-4">
+              <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <MessageSquare className="w-5 h-5 text-purple-600" />
+                  <div>
+                    <h3 className="text-sm font-semibold text-purple-900 dark:text-purple-100">
+                      Send Slack Notification
+                    </h3>
+                    <p className="text-xs text-purple-700 dark:text-purple-300 mt-1">
+                      Notify team members who have connected their Slack accounts
+                    </p>
+                  </div>
+                </div>
+
+                {slackConnectedUsers.length === 0 ? (
+                  <div className="text-center py-8">
+                    <MessageSquare className="w-12 h-12 mx-auto text-purple-400 mb-3" />
+                    <p className="text-sm text-purple-700 dark:text-purple-300">
+                      No Slack-connected users found
+                    </p>
+                    <p className="text-xs text-purple-600 dark:text-purple-400 mt-1">
+                      Users need to connect their Slack accounts in Settings
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <p className="text-xs text-purple-700 dark:text-purple-300">
+                      Select people to notify ({slackConnectedUsers.length} available):
+                    </p>
+
+                    <div className="max-h-64 overflow-y-auto space-y-2 border border-purple-200 dark:border-purple-700 rounded-md p-2">
+                      {slackConnectedUsers.map(user => (
+                        <label
+                          key={user.id}
+                          className="flex items-center gap-3 p-2 hover:bg-purple-100 dark:hover:bg-purple-900/30 rounded cursor-pointer"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedSlackUsers.has(user.id)}
+                            onChange={() => toggleSlackUser(user.id)}
+                            className="w-4 h-4 text-purple-600 bg-gray-100 border-gray-300 rounded focus:ring-purple-500"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-medium text-gray-900 dark:text-white">
+                                {user.name}
+                              </span>
+                              {user.slackUsername && (
+                                <span className="text-xs text-purple-600 dark:text-purple-400">
+                                  @{user.slackUsername}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-gray-600 dark:text-gray-400 truncate">
+                              {user.email}
+                            </p>
+                          </div>
+                        </label>
+                      ))}
+                    </div>
+
+                    {selectedSlackUsers.size > 0 && (
+                      <div className="flex items-center justify-between p-2 bg-purple-100 dark:bg-purple-900/30 rounded">
+                        <span className="text-xs text-purple-700 dark:text-purple-300">
+                          {selectedSlackUsers.size} {selectedSlackUsers.size === 1 ? 'person' : 'people'} selected
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedSlackUsers(new Set())}
+                          className="text-xs text-purple-600 dark:text-purple-400 hover:underline"
+                        >
+                          Clear all
+                        </button>
+                      </div>
+                    )}
+
+                    <div className="flex gap-2 pt-2">
+                      <button
+                        type="button"
+                        onClick={handleSendSlackNotifications}
+                        disabled={selectedSlackUsers.size === 0 || sendingSlackNotifications}
+                        className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                      >
+                        {sendingSlackNotifications ? (
+                          <>
+                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                            Sending...
+                          </>
+                        ) : (
+                          <>
+                            <MessageSquare className="w-4 h-4" />
+                            Send Notifications
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>

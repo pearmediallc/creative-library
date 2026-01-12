@@ -592,16 +592,19 @@ export const slackApi = {
   updatePreferences: (data: { enabled?: boolean; preferences?: Record<string, boolean> }) =>
     api.put('/slack/preferences', data),
 
+  // Get all Slack-connected users
+  getConnectedUsers: () => api.get('/slack/connected-users'),
+
+  // Send manual notification to selected users
+  sendManualNotification: (data: {
+    userIds: string[];
+    fileName: string;
+    fileUrl?: string;
+    message?: string;
+  }) => api.post('/slack/notify', data),
+
   // Send test notification
   sendTest: () => api.post('/slack/test'),
-
-  // Send custom notification
-  notify: (data: {
-    userId: string;
-    message: string;
-    resourceType?: string;
-    resourceId?: string;
-  }) => api.post('/slack/notify', data),
 };
 
 // Activity Log Export endpoints (admin only)

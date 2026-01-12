@@ -19,6 +19,12 @@ router.post('/disconnect', authenticateToken, slackController.disconnect);
 router.get('/preferences', authenticateToken, slackController.getNotificationPreferences);
 router.put('/preferences', authenticateToken, slackController.updateNotificationPreferences);
 
+// Connected users
+router.get('/connected-users', authenticateToken, slackController.getConnectedUsers);
+
+// Manual notifications
+router.post('/notify', authenticateToken, slackController.sendManualNotification);
+
 // Testing
 router.post('/test', authenticateToken, slackController.testNotification);
 
