@@ -55,14 +55,21 @@ function decryptToken(encryptedToken) {
 
 /**
  * Get workspace bot token
+ * First tries environment variable, then falls back to database
  */
 async function getWorkspaceToken() {
+  // Use bot token from environment variable if available
+  if (process.env.SLACK_BOT_TOKEN) {
+    return process.env.SLACK_BOT_TOKEN;
+  }
+
+  // Fallback to database-stored token
   const result = await pool.query(
     'SELECT access_token FROM slack_workspaces WHERE is_active = TRUE LIMIT 1'
   );
 
   if (result.rows.length === 0) {
-    throw new Error('No active Slack workspace connected');
+    throw new Error('No active Slack workspace connected. Please set SLACK_BOT_TOKEN in environment variables or connect a workspace.');
   }
 
   return decryptToken(result.rows[0].access_token);

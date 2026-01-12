@@ -4,6 +4,8 @@ const Folder = require('../models/Folder');
 const logger = require('../utils/logger');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
+const slackService = require('../services/slackService');
+const { query } = require('../config/database');
 
 class PermissionController {
   /**
@@ -46,6 +48,26 @@ class PermissionController {
       });
 
       logger.info('Permission granted', { permissionId: permission.id, grantedBy: userId });
+
+      // Send Slack notification if sharing with a user
+      if (grantee_type === 'user' && resource_type === 'file') {
+        try {
+          const file = await MediaFile.findById(resource_id);
+          const granterResult = await query('SELECT name FROM users WHERE id = $1', [userId]);
+          const granterName = granterResult.rows[0]?.name || 'Someone';
+          const fileUrl = `${process.env.FRONTEND_URL}/media/${resource_id}`;
+
+          await slackService.notifyFileShared(
+            grantee_id,
+            file.original_filename,
+            granterName,
+            fileUrl
+          );
+        } catch (slackError) {
+          // Don't fail the request if Slack notification fails
+          logger.warn('Slack notification failed for file share', { error: slackError.message });
+        }
+      }
 
       res.status(201).json({
         success: true,
