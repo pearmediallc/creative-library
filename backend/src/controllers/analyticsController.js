@@ -1,6 +1,7 @@
 const analyticsService = require('../services/analyticsService');
 const logger = require('../utils/logger');
 const { logActivity } = require('../middleware/activityLogger');
+const { query } = require('../config/database');
 
 class AnalyticsController {
   /**
