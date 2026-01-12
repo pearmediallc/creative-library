@@ -400,8 +400,8 @@ class WorkloadController {
           e.id,
           e.name,
           COUNT(DISTINCT fr.id) AS total_requests,
-          COUNT(DISTINCT CASE WHEN fr.status = 'completed' THEN fr.id END) AS completed_requests,
-          AVG(CASE WHEN fr.status = 'completed' THEN fr.actual_hours END) AS avg_actual_hours,
+          COUNT(DISTINCT CASE WHEN fre.status = 'completed' OR fr.completed_at IS NOT NULL THEN fr.id END) AS completed_requests,
+          AVG(CASE WHEN fre.status = 'completed' OR fr.completed_at IS NOT NULL THEN fr.actual_hours END) AS avg_actual_hours,
           AVG(ec.current_load_percentage) AS avg_load
         FROM editors e
         LEFT JOIN file_request_editors fre ON e.id = fre.editor_id
@@ -465,8 +465,9 @@ class WorkloadController {
         FROM editors e
         LEFT JOIN editor_capacity ec ON e.id = ec.editor_id
         LEFT JOIN file_request_editors fre ON e.id = fre.editor_id
+          AND fre.status IN ('pending', 'assigned', 'in_progress')
           AND fre.request_id IN (
-            SELECT id FROM file_requests WHERE status IN ('pending', 'assigned', 'in_progress')
+            SELECT fr.id FROM file_requests fr WHERE fr.is_active = TRUE AND fr.completed_at IS NULL
           )
         WHERE e.is_active = TRUE
           AND ec.is_available = TRUE
@@ -487,7 +488,9 @@ class WorkloadController {
         JOIN file_request_editors fre ON e.id = fre.editor_id
         JOIN file_requests fr ON fre.request_id = fr.id
         WHERE ec.current_load_percentage >= 80
-          AND fr.status IN ('pending', 'assigned', 'in_progress')
+          AND fre.status IN ('pending', 'assigned', 'in_progress')
+          AND fr.is_active = TRUE
+          AND fr.completed_at IS NULL
         GROUP BY e.id, e.name, ec.current_load_percentage
         ORDER BY ec.current_load_percentage DESC
       `);
