@@ -207,6 +207,28 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
                   <p className="text-blue-900 dark:text-blue-100 font-semibold">{request.time_to_complete_hours} hours</p>
                 </div>
               )}
+
+              {/* Assigned To (Editors) */}
+              {request.assigned_editors && request.assigned_editors.length > 0 && (
+                <div className="col-span-2">
+                  <span className="text-blue-700 dark:text-blue-300 font-medium">Assigned To:</span>
+                  <div className="flex flex-wrap gap-2 mt-1">
+                    {request.assigned_editors.map((editor, index) => (
+                      <div key={editor.id} className="inline-flex items-center gap-1 bg-blue-100 dark:bg-blue-800 px-2 py-1 rounded">
+                        <span className="text-sm text-blue-900 dark:text-blue-100">
+                          {editor.display_name || editor.name}
+                        </span>
+                        {index === 0 && request.assigned_editors && request.assigned_editors.length > 1 && (
+                          <span className="text-xs text-blue-600 dark:text-blue-400">(Initial)</span>
+                        )}
+                        {index > 0 && (
+                          <span className="text-xs text-orange-600 dark:text-orange-400">(Reassigned)</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
