@@ -386,19 +386,28 @@ class FileRequestController {
             e.id,
             e.name,
             e.display_name,
-            fre.assigned_at,
             fre.status,
-            u.name as assigned_by_name
+            fre.created_at,
+            fre.accepted_at,
+            fre.started_at,
+            fre.completed_at
           FROM file_request_editors fre
           JOIN editors e ON fre.editor_id = e.id
-          LEFT JOIN users u ON fre.assigned_by = u.id
           WHERE fre.request_id = $1
-          ORDER BY fre.assigned_at ASC`,
+          ORDER BY fre.created_at ASC`,
           [id]
         );
-        logger.info('Assigned editors fetched', { count: editorsResult.rows.length });
+        logger.info('Assigned editors fetched', {
+          requestId: id,
+          count: editorsResult.rows.length,
+          editors: editorsResult.rows.map(r => ({ id: r.id, name: r.name, status: r.status }))
+        });
       } catch (editorError) {
-        logger.warn('Failed to fetch assigned editors (table may not exist)', { error: editorError.message });
+        logger.error('Failed to fetch assigned editors', {
+          requestId: id,
+          error: editorError.message,
+          stack: editorError.stack
+        });
         // Continue without assigned editors data
       }
 
