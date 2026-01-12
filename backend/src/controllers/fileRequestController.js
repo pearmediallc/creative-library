@@ -405,7 +405,17 @@ class FileRequestController {
       const fileRequest = result.rows[0];
       fileRequest.uploads = uploadsResult.rows;
       fileRequest.assigned_editors = editorsResult.rows;
-      fileRequest.num_creatives_requested = editorsResult.rows.length;
+
+      // Calculate num_creatives_requested (use from DB if available, fallback to editors count)
+      fileRequest.num_creatives_requested = fileRequest.num_creatives || editorsResult.rows.length || 0;
+
+      // Calculate total time to complete (in hours)
+      if (fileRequest.created_at && fileRequest.completed_at) {
+        const createdDate = new Date(fileRequest.created_at);
+        const completedDate = new Date(fileRequest.completed_at);
+        const diffMs = completedDate.getTime() - createdDate.getTime();
+        fileRequest.time_to_complete_hours = (diffMs / (1000 * 60 * 60)).toFixed(2);
+      }
 
       res.json({
         success: true,

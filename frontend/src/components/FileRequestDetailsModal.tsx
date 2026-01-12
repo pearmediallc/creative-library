@@ -46,11 +46,14 @@ interface FileRequestDetails {
   custom_message?: string;
   upload_count: number;
   num_creatives_requested?: number;
+  creator_name?: string;
+  creator_email?: string;
   created_at: string;
   assigned_at?: string;
   picked_up_at?: string;
   completed_at?: string;
   delivery_note?: string;
+  time_to_complete_hours?: string;
   uploads: FileUpload[];
   assigned_editors?: AssignedEditor[];
 }
@@ -152,6 +155,61 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
+          {/* Request Summary - Key Information */}
+          <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+            <h3 className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-3">Request Summary</h3>
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              {/* Media Buyer */}
+              {request.creator_name && (
+                <div>
+                  <span className="text-blue-700 dark:text-blue-300 font-medium">Requested By:</span>
+                  <p className="text-blue-900 dark:text-blue-100">{request.creator_name}</p>
+                  {request.creator_email && (
+                    <p className="text-xs text-blue-600 dark:text-blue-400">{request.creator_email}</p>
+                  )}
+                </div>
+              )}
+
+              {/* Number of Creatives */}
+              {request.num_creatives_requested !== undefined && request.num_creatives_requested > 0 && (
+                <div>
+                  <span className="text-blue-700 dark:text-blue-300 font-medium">Creatives Requested:</span>
+                  <p className="text-blue-900 dark:text-blue-100">{request.num_creatives_requested}</p>
+                </div>
+              )}
+
+              {/* Request Type */}
+              {request.request_type && (
+                <div>
+                  <span className="text-blue-700 dark:text-blue-300 font-medium">Type:</span>
+                  <p className="text-blue-900 dark:text-blue-100 capitalize">{request.request_type}</p>
+                </div>
+              )}
+
+              {/* Created Date */}
+              <div>
+                <span className="text-blue-700 dark:text-blue-300 font-medium">Created:</span>
+                <p className="text-blue-900 dark:text-blue-100">{formatDate(request.created_at)}</p>
+              </div>
+
+              {/* Completed Date */}
+              {request.completed_at && (
+                <div>
+                  <span className="text-blue-700 dark:text-blue-300 font-medium">Completed:</span>
+                  <p className="text-blue-900 dark:text-blue-100">{formatDate(request.completed_at)}</p>
+                </div>
+              )}
+
+              {/* Total Time to Complete */}
+              {request.time_to_complete_hours && (
+                <div>
+                  <span className="text-blue-700 dark:text-blue-300 font-medium">Time to Complete:</span>
+                  <p className="text-blue-900 dark:text-blue-100 font-semibold">{request.time_to_complete_hours} hours</p>
+                </div>
+              )}
+            </div>
+          </div>
+
           {/* Request Info */}
           <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 space-y-3">
             {request.description && (
