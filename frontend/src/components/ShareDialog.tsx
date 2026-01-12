@@ -124,9 +124,14 @@ export function ShareDialog({
 
   const checkSlackStatus = useCallback(async () => {
     try {
+      console.log('🔍 ShareDialog: Checking Slack connection status...');
       const response = await slackApi.getStatus();
-      setSlackConnected(response.data.connected || false);
+      console.log('🔍 ShareDialog: Slack status response:', response.data);
+      const isConnected = response.data.connected || false;
+      console.log('🔍 ShareDialog: Setting slackConnected to:', isConnected);
+      setSlackConnected(isConnected);
     } catch (err) {
+      console.error('❌ ShareDialog: Failed to check Slack status:', err);
       setSlackConnected(false);
     }
   }, []);
@@ -614,22 +619,30 @@ export function ShareDialog({
                   </div>
 
                   {/* Slack Notification Option */}
-                  {slackConnected && shareType === 'user' && (
-                    <div className="flex items-center gap-2 p-3 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-md">
-                      <input
-                        type="checkbox"
-                        id="notifySlack"
-                        checked={notifyViaSlack}
-                        onChange={(e) => setNotifyViaSlack(e.target.checked)}
-                        disabled={sharing}
-                        className="w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
-                      />
-                      <label htmlFor="notifySlack" className="flex items-center gap-2 text-sm text-purple-900 dark:text-purple-100 cursor-pointer">
-                        <MessageSquare className="w-4 h-4" />
-                        Send Slack notification
-                      </label>
-                    </div>
-                  )}
+                  {(() => {
+                    const shouldShow = slackConnected && shareType === 'user';
+                    console.log('🔍 ShareDialog: Slack checkbox visibility check:', {
+                      slackConnected,
+                      shareType,
+                      shouldShow
+                    });
+                    return shouldShow && (
+                      <div className="flex items-center gap-2 p-3 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-md">
+                        <input
+                          type="checkbox"
+                          id="notifySlack"
+                          checked={notifyViaSlack}
+                          onChange={(e) => setNotifyViaSlack(e.target.checked)}
+                          disabled={sharing}
+                          className="w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500"
+                        />
+                        <label htmlFor="notifySlack" className="flex items-center gap-2 text-sm text-purple-900 dark:text-purple-100 cursor-pointer">
+                          <MessageSquare className="w-4 h-4" />
+                          Send Slack notification
+                        </label>
+                      </div>
+                    );
+                  })()}
                 </div>
               </form>
 
