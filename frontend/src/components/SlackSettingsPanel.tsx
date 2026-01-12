@@ -47,20 +47,20 @@ export function SlackSettingsPanel() {
       setLoading(true);
       const [statusResponse, prefsResponse] = await Promise.all([
         slackApi.getStatus(),
-        slackApi.getPreferences().catch(() => ({ data: { data: null } })),
+        slackApi.getPreferences().catch(() => ({ data: null })),
       ]);
 
-      setConnection(statusResponse.data.data);
+      setConnection(statusResponse.data);
 
-      if (prefsResponse.data.data) {
+      if (prefsResponse.data) {
         setPreferences({
-          enabled: prefsResponse.data.data.enabled ?? true,
-          file_shared: prefsResponse.data.data.preferences?.file_shared ?? true,
-          file_request_created: prefsResponse.data.data.preferences?.file_request_created ?? true,
-          file_request_completed: prefsResponse.data.data.preferences?.file_request_completed ?? true,
-          file_uploaded: prefsResponse.data.data.preferences?.file_uploaded ?? true,
-          comment_mention: prefsResponse.data.data.preferences?.comment_mention ?? true,
-          public_link_created: prefsResponse.data.data.preferences?.public_link_created ?? true,
+          enabled: prefsResponse.data.enabled ?? true,
+          file_shared: prefsResponse.data.preferences?.file_shared ?? true,
+          file_request_created: prefsResponse.data.preferences?.file_request_created ?? true,
+          file_request_completed: prefsResponse.data.preferences?.file_request_completed ?? true,
+          file_uploaded: prefsResponse.data.preferences?.file_uploaded ?? true,
+          comment_mention: prefsResponse.data.preferences?.comment_mention ?? true,
+          public_link_created: prefsResponse.data.preferences?.public_link_created ?? true,
         });
       }
     } catch (error: any) {
@@ -75,7 +75,7 @@ export function SlackSettingsPanel() {
     try {
       setConnecting(true);
       const response = await slackApi.initiateOAuth();
-      const authUrl = response.data.data.authUrl;
+      const authUrl = response.data.authUrl;
 
       // Open OAuth URL in new window
       const width = 600;

@@ -13,6 +13,14 @@ const pool = require('../config/database');
 async function initiateOAuth(req, res) {
   try {
     const clientId = process.env.SLACK_CLIENT_ID;
+
+    if (!clientId) {
+      console.error('SLACK_CLIENT_ID not configured');
+      return res.status(500).json({
+        error: 'Slack OAuth not configured. Please contact administrator.'
+      });
+    }
+
     const redirectUri = `${process.env.BACKEND_URL || 'http://localhost:3001'}/api/slack/oauth/callback`;
 
     const scopes = [
@@ -26,10 +34,12 @@ async function initiateOAuth(req, res) {
 
     const authUrl = `https://slack.com/oauth/v2/authorize?client_id=${clientId}&scope=${scopes}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${state}`;
 
+    console.log('Slack OAuth initiated', { clientId: clientId.substring(0, 10) + '...', redirectUri });
+
     res.json({ authUrl });
   } catch (error) {
     console.error('Slack OAuth initiate error:', error);
-    res.status(500).json({ error: 'Failed to initiate Slack OAuth' });
+    res.status(500).json({ error: 'Failed to initiate Slack OAuth', details: error.message });
   }
 }
 
