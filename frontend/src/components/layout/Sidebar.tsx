@@ -27,6 +27,11 @@ const adminOnlyNavigation = [
   { name: 'Metadata Extraction', href: '/metadata', icon: Tags },
 ];
 
+// Editor (creative) specific navigation items
+const editorNavigation = [
+  { name: 'Analytics', href: '/analytics', icon: TrendingUp },
+];
+
 const adminNavigation = [
   { name: 'Admin Panel', href: '/admin', icon: Settings },
   { name: 'Activity Logs', href: '/activity-logs', icon: FileText },
@@ -43,8 +48,11 @@ export function Sidebar() {
   const navigation = (() => {
     if (user?.role === 'admin') {
       return [...baseNavigation, ...adminOnlyNavigation];
+    } else if (user?.role === 'creative') {
+      // Editors get base navigation + their specific items (Analytics)
+      return [...baseNavigation, ...editorNavigation];
     }
-    // All other roles (creative, buyer) get base navigation
+    // Other roles (buyer) get base navigation only
     return baseNavigation;
   })();
 

@@ -290,35 +290,99 @@ class FileRequestController {
   async getAll(req, res, next) {
     try {
       const userId = req.user.id;
+      const userRole = req.user.role;
       const { status } = req.query; // active, closed, all
 
-      let whereClause = 'WHERE created_by = $1';
-      const params = [userId];
+      // Check if user is an editor (creative role)
+      const isEditor = userRole === 'creative';
 
-      if (status === 'active') {
-        whereClause += ' AND is_active = TRUE';
-      } else if (status === 'closed') {
-        whereClause += ' AND is_active = FALSE';
+      let whereClause;
+      let params;
+
+      if (isEditor) {
+        // For editors: Find their editor_id and show requests assigned to them
+        const editorResult = await query(
+          'SELECT id FROM editors WHERE user_id = $1 AND is_active = TRUE',
+          [userId]
+        );
+
+        if (editorResult.rows.length === 0) {
+          // Editor profile doesn't exist, return empty array
+          logger.warn('Editor profile not found for user', { userId });
+          return res.json({
+            success: true,
+            data: []
+          });
+        }
+
+        const editorId = editorResult.rows[0].id;
+        whereClause = `WHERE fre.editor_id = $1`;
+        params = [editorId];
+
+        if (status === 'active') {
+          whereClause += ' AND fr.is_active = TRUE';
+        } else if (status === 'closed') {
+          whereClause += ' AND fr.is_active = FALSE';
+        }
+
+        // Query for editor: show requests assigned to them via file_request_editors
+        const result = await query(
+          `SELECT
+            fr.*,
+            f.name as folder_name,
+            COUNT(DISTINCT fru.id) as upload_count,
+            fre.status as my_assignment_status,
+            fre.created_at as assigned_at
+          FROM file_request_editors fre
+          JOIN file_requests fr ON fre.request_id = fr.id
+          LEFT JOIN folders f ON fr.folder_id = f.id
+          LEFT JOIN file_request_uploads fru ON fr.id = fru.file_request_id
+          ${whereClause}
+          GROUP BY fr.id, f.name, fre.status, fre.created_at
+          ORDER BY fre.created_at DESC`,
+          params
+        );
+
+        logger.info('Editor file requests fetched', {
+          userId,
+          editorId,
+          requestCount: result.rows.length
+        });
+
+        return res.json({
+          success: true,
+          data: result.rows
+        });
+      } else {
+        // For non-editors (admin, buyer): show requests they created
+        whereClause = 'WHERE created_by = $1';
+        params = [userId];
+
+        if (status === 'active') {
+          whereClause += ' AND is_active = TRUE';
+        } else if (status === 'closed') {
+          whereClause += ' AND is_active = FALSE';
+        }
+
+        const result = await query(
+          `SELECT
+            fr.*,
+            f.name as folder_name,
+            COUNT(DISTINCT fru.id) as upload_count
+          FROM file_requests fr
+          LEFT JOIN folders f ON fr.folder_id = f.id
+          LEFT JOIN file_request_uploads fru ON fr.id = fru.file_request_id
+          ${whereClause}
+          GROUP BY fr.id, f.name
+          ORDER BY fr.created_at DESC`,
+          params
+        );
+
+        return res.json({
+          success: true,
+          data: result.rows
+        });
       }
-
-      const result = await query(
-        `SELECT
-          fr.*,
-          f.name as folder_name,
-          COUNT(DISTINCT fru.id) as upload_count
-        FROM file_requests fr
-        LEFT JOIN folders f ON fr.folder_id = f.id
-        LEFT JOIN file_request_uploads fru ON fr.id = fru.file_request_id
-        ${whereClause}
-        GROUP BY fr.id, f.name
-        ORDER BY fr.created_at DESC`,
-        params
-      );
-
-      res.json({
-        success: true,
-        data: result.rows
-      });
     } catch (error) {
       logger.error('Get file requests error', { error: error.message });
       next(error);
@@ -332,28 +396,69 @@ class FileRequestController {
   async getOne(req, res, next) {
     try {
       const userId = req.user.id;
+      const userRole = req.user.role;
       const { id } = req.params;
 
-      const result = await query(
-        `SELECT
-          fr.*,
-          f.name as folder_name,
-          COUNT(DISTINCT fru.id) as upload_count,
-          u.name as creator_name,
-          u.email as creator_email
-        FROM file_requests fr
-        LEFT JOIN folders f ON fr.folder_id = f.id
-        LEFT JOIN file_request_uploads fru ON fr.id = fru.file_request_id
-        LEFT JOIN users u ON fr.created_by = u.id
-        WHERE fr.id = $1 AND fr.created_by = $2
-        GROUP BY fr.id, f.name, u.name, u.email`,
-        [id, userId]
-      );
+      // Check if user is an editor
+      const isEditor = userRole === 'creative';
+
+      let result;
+      if (isEditor) {
+        // For editors: check if they're assigned to this request
+        const editorResult = await query(
+          'SELECT id FROM editors WHERE user_id = $1 AND is_active = TRUE',
+          [userId]
+        );
+
+        if (editorResult.rows.length === 0) {
+          return res.status(404).json({
+            success: false,
+            error: 'Editor profile not found'
+          });
+        }
+
+        const editorId = editorResult.rows[0].id;
+
+        // Query with editor assignment check
+        result = await query(
+          `SELECT
+            fr.*,
+            f.name as folder_name,
+            COUNT(DISTINCT fru.id) as upload_count,
+            u.name as creator_name,
+            u.email as creator_email
+          FROM file_request_editors fre
+          JOIN file_requests fr ON fre.request_id = fr.id
+          LEFT JOIN folders f ON fr.folder_id = f.id
+          LEFT JOIN file_request_uploads fru ON fr.id = fru.file_request_id
+          LEFT JOIN users u ON fr.created_by = u.id
+          WHERE fr.id = $1 AND fre.editor_id = $2
+          GROUP BY fr.id, f.name, u.name, u.email`,
+          [id, editorId]
+        );
+      } else {
+        // For non-editors: check if they created the request
+        result = await query(
+          `SELECT
+            fr.*,
+            f.name as folder_name,
+            COUNT(DISTINCT fru.id) as upload_count,
+            u.name as creator_name,
+            u.email as creator_email
+          FROM file_requests fr
+          LEFT JOIN folders f ON fr.folder_id = f.id
+          LEFT JOIN file_request_uploads fru ON fr.id = fru.file_request_id
+          LEFT JOIN users u ON fr.created_by = u.id
+          WHERE fr.id = $1 AND fr.created_by = $2
+          GROUP BY fr.id, f.name, u.name, u.email`,
+          [id, userId]
+        );
+      }
 
       if (result.rows.length === 0) {
         return res.status(404).json({
           success: false,
-          error: 'File request not found'
+          error: 'File request not found or you do not have access'
         });
       }
 

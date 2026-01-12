@@ -80,12 +80,39 @@ class AnalyticsController {
    */
   async getEditorPerformance(req, res, next) {
     try {
+      const userRole = req.user.role;
+      const userId = req.user.id;
+
       const filters = {
         editor_id: req.query.editor_id,
         date_from: req.query.date_from,
         date_to: req.query.date_to,
         media_type: req.query.media_type // image or video
       };
+
+      // If user is a creative (editor), automatically filter to show only their own analytics
+      if (userRole === 'creative') {
+        // Find the editor_id for this user
+        const editorResult = await query(
+          'SELECT id FROM editors WHERE user_id = $1 AND is_active = TRUE',
+          [userId]
+        );
+
+        if (editorResult.rows.length === 0) {
+          logger.warn('Editor profile not found for user', { userId });
+          return res.json({
+            success: true,
+            data: []
+          });
+        }
+
+        // Override filter to only show this editor's data
+        filters.editor_id = editorResult.rows[0].id;
+        logger.info('Editor viewing their own analytics', {
+          userId,
+          editorId: filters.editor_id
+        });
+      }
 
       const data = await analyticsService.getEditorPerformance(filters);
 

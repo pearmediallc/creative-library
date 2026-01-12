@@ -22,10 +22,10 @@ router.post('/sync/stop',
   analyticsController.stopSync.bind(analyticsController)
 );
 
-// Get editor performance data (Admin only)
+// Get editor performance data (Admin and Editor/Creative roles)
+// Editors will only see their own data; admins see all
 router.get('/editor-performance',
   authenticateToken,
-  requireAdmin,
   analyticsController.getEditorPerformance.bind(analyticsController)
 );
 
