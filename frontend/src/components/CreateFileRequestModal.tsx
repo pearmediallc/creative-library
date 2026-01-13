@@ -490,6 +490,23 @@ export function CreateFileRequestModal({ onClose, onSuccess }: CreateFileRequest
             </p>
           </div>
 
+          {/* Canvas Brief Section */}
+          <div className="bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-300 dark:border-blue-700 rounded-lg p-4">
+            <div className="flex items-start justify-between mb-2">
+              <div>
+                <label className="block text-sm font-semibold text-blue-900 dark:text-blue-100 mb-1">
+                  📋 Canvas Brief (Recommended)
+                </label>
+                <p className="text-xs text-blue-700 dark:text-blue-300">
+                  Add a detailed product brief with team members, requirements, attachments, and more.
+                </p>
+              </div>
+            </div>
+            <p className="text-xs text-blue-600 dark:text-blue-400 mb-3 italic">
+              Create the request first, then you can add a detailed canvas brief with attachments.
+            </p>
+          </div>
+
           {/* Custom Message */}
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
