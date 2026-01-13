@@ -1,5 +1,5 @@
 const Canvas = require('../models/Canvas');
-const FileRequest = require('../models/FileRequest');
+const { query } = require('../config/database');
 const mediaService = require('../services/mediaService');
 const logger = require('../utils/logger');
 
@@ -107,13 +107,19 @@ class CanvasController {
       const userId = req.user.id;
 
       // Verify request exists and user has access
-      const fileRequest = await FileRequest.findById(requestId);
-      if (!fileRequest) {
+      const fileRequestResult = await query(
+        'SELECT id, created_by AS creator_id, editor_id, folder_id FROM file_requests WHERE id = $1',
+        [requestId]
+      );
+
+      if (fileRequestResult.rows.length === 0) {
         return res.status(404).json({
           success: false,
           error: 'File request not found'
         });
       }
+
+      const fileRequest = fileRequestResult.rows[0];
 
       // Check if user is creator or assigned editor
       const hasAccess = fileRequest.creator_id === userId ||
@@ -170,13 +176,19 @@ class CanvasController {
       const userId = req.user.id;
 
       // Verify request exists and user is creator
-      const fileRequest = await FileRequest.findById(requestId);
-      if (!fileRequest) {
+      const fileRequestResult = await query(
+        'SELECT id, created_by AS creator_id FROM file_requests WHERE id = $1',
+        [requestId]
+      );
+
+      if (fileRequestResult.rows.length === 0) {
         return res.status(404).json({
           success: false,
           error: 'File request not found'
         });
       }
+
+      const fileRequest = fileRequestResult.rows[0];
 
       if (fileRequest.creator_id !== userId) {
         return res.status(403).json({
@@ -238,13 +250,19 @@ class CanvasController {
       }
 
       // Verify request exists and user is creator
-      const fileRequest = await FileRequest.findById(requestId);
-      if (!fileRequest) {
+      const fileRequestResult = await query(
+        'SELECT id, created_by AS creator_id, folder_id FROM file_requests WHERE id = $1',
+        [requestId]
+      );
+
+      if (fileRequestResult.rows.length === 0) {
         return res.status(404).json({
           success: false,
           error: 'File request not found'
         });
       }
+
+      const fileRequest = fileRequestResult.rows[0];
 
       if (fileRequest.creator_id !== userId) {
         return res.status(403).json({
@@ -320,13 +338,19 @@ class CanvasController {
       const userId = req.user.id;
 
       // Verify request exists and user is creator
-      const fileRequest = await FileRequest.findById(requestId);
-      if (!fileRequest) {
+      const fileRequestResult = await query(
+        'SELECT id, created_by AS creator_id FROM file_requests WHERE id = $1',
+        [requestId]
+      );
+
+      if (fileRequestResult.rows.length === 0) {
         return res.status(404).json({
           success: false,
           error: 'File request not found'
         });
       }
+
+      const fileRequest = fileRequestResult.rows[0];
 
       if (fileRequest.creator_id !== userId) {
         return res.status(403).json({
@@ -371,13 +395,19 @@ class CanvasController {
       const userId = req.user.id;
 
       // Verify request exists and user is creator
-      const fileRequest = await FileRequest.findById(requestId);
-      if (!fileRequest) {
+      const fileRequestResult = await query(
+        'SELECT id, created_by AS creator_id FROM file_requests WHERE id = $1',
+        [requestId]
+      );
+
+      if (fileRequestResult.rows.length === 0) {
         return res.status(404).json({
           success: false,
           error: 'File request not found'
         });
       }
+
+      const fileRequest = fileRequestResult.rows[0];
 
       if (fileRequest.creator_id !== userId) {
         return res.status(403).json({
