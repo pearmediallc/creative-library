@@ -18,16 +18,23 @@ export function CanvasRenderer({
   const renderBlock = (block: any, index: number) => {
     switch (block.type) {
       case 'heading':
-        const HeadingTag = `h${block.level}` as keyof JSX.IntrinsicElements;
+        if (block.level === 2) {
+          return (
+            <h2
+              key={index}
+              className="font-semibold text-xl mt-6 mb-3"
+            >
+              {block.content}
+            </h2>
+          );
+        }
         return (
-          <HeadingTag
+          <h3
             key={index}
-            className={`font-semibold ${
-              block.level === 2 ? 'text-xl mt-6 mb-3' : 'text-lg mt-4 mb-2'
-            }`}
+            className="font-semibold text-lg mt-4 mb-2"
           >
             {block.content}
-          </HeadingTag>
+          </h3>
         );
 
       case 'text':
