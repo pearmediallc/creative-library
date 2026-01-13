@@ -1,4 +1,5 @@
 const Canvas = require('../models/Canvas');
+const Notification = require('../models/Notification');
 const { query } = require('../config/database');
 const mediaService = require('../services/mediaService');
 const logger = require('../utils/logger');
@@ -97,6 +98,42 @@ const PRODUCT_BRIEF_TEMPLATE = {
 };
 
 class CanvasController {
+  /**
+   * Extract mentioned user IDs from canvas content
+   * Mentions format: @[User Name](user_id)
+   */
+  static extractMentions(content) {
+    const mentions = new Set();
+    const mentionRegex = /@\[([^\]]+)\]\(([a-f0-9-]+)\)/g;
+
+    // Extract from all text content in blocks
+    if (content && content.blocks) {
+      content.blocks.forEach(block => {
+        if (block.content) {
+          let match;
+          while ((match = mentionRegex.exec(block.content)) !== null) {
+            mentions.add(match[2]); // user_id is in capture group 2
+          }
+        }
+
+        // Check items array (for lists and checklists)
+        if (block.items && Array.isArray(block.items)) {
+          block.items.forEach(item => {
+            const text = typeof item === 'string' ? item : item.text;
+            if (text) {
+              let match;
+              while ((match = mentionRegex.exec(text)) !== null) {
+                mentions.add(match[2]);
+              }
+            }
+          });
+        }
+      });
+    }
+
+    return Array.from(mentions);
+  }
+
   /**
    * Get or create canvas for a file request
    * GET /api/file-requests/:id/canvas
@@ -212,11 +249,42 @@ class CanvasController {
       // Upsert canvas
       const canvas = await Canvas.upsertCanvas(requestId, content, attachments);
 
+      // Extract mentions and create notifications
+      const mentionedUserIds = this.extractMentions(content);
+
+      if (mentionedUserIds.length > 0) {
+        // Get current user's name
+        const userResult = await query('SELECT name FROM users WHERE id = $1', [userId]);
+        const userName = userResult.rows?.[0]?.name || 'Someone';
+
+        // Create notifications for mentioned users
+        try {
+          await Notification.createMentionNotifications(mentionedUserIds, userId, {
+            canvasId: canvas.id,
+            fileRequestId: requestId,
+            mentionedByName: userName
+          });
+
+          logger.info('Mention notifications created', {
+            canvasId: canvas.id,
+            requestId,
+            mentionedUsers: mentionedUserIds.length
+          });
+        } catch (notifError) {
+          // Don't fail the request if notifications fail
+          logger.error('Failed to create mention notifications', {
+            error: notifError.message,
+            canvasId: canvas.id
+          });
+        }
+      }
+
       logger.info('Canvas saved', {
         canvasId: canvas.id,
         requestId,
         userId,
-        blockCount: content.blocks.length
+        blockCount: content.blocks.length,
+        mentions: mentionedUserIds.length
       });
 
       res.json({
