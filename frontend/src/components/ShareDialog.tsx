@@ -196,15 +196,15 @@ export function ShareDialog({
       // Send Slack notification if requested
       if (notifyViaSlack && shareType === 'user') {
         try {
-          const grantedUser = allUsers.find(u => u.id === selectedId);
-          if (grantedUser) {
-            await slackApi.notify({
-              userId: selectedId,
-              message: `${resourceName} has been shared with you`,
-              resourceType,
-              resourceId
-            });
-          }
+          const fileUrl = resourceType === 'file'
+            ? `${window.location.origin}/media/${resourceId}`
+            : `${window.location.origin}/folders/${resourceId}`;
+
+          await slackApi.sendManualNotification({
+            userIds: [selectedId],
+            fileName: resourceName,
+            fileUrl
+          });
         } catch (slackErr) {
           console.error('Failed to send Slack notification:', slackErr);
           // Don't fail the whole operation if Slack notification fails
