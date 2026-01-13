@@ -38,7 +38,7 @@ export const MentionInput: React.FC<MentionInputProps> = ({
     const fetchUsers = async () => {
       try {
         const token = localStorage.getItem('token');
-        const response = await axios.get(`${process.env.REACT_APP_API_URL}/api/admin/users`, {
+        const response = await axios.get(`${process.env.REACT_APP_API_URL}/admin/users`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         setUsers(response.data.users || []);

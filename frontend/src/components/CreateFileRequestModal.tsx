@@ -541,6 +541,23 @@ export function CreateFileRequestModal({ onClose, onSuccess }: CreateFileRequest
             </div>
           )}
 
+          {/* Success message with Canvas button */}
+          {createdRequestId && (
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md p-4">
+              <p className="text-sm text-blue-800 dark:text-blue-200 mb-3">
+                ✓ Request created successfully! Now you can add a detailed Canvas brief with attachments.
+              </p>
+              <Button
+                type="button"
+                onClick={() => setShowCanvas(true)}
+                className="w-full"
+              >
+                <FileText className="w-4 h-4 mr-2" />
+                {hasCanvas ? 'Edit Canvas Brief' : 'Create Canvas Brief'}
+              </Button>
+            </div>
+          )}
+
           {/* Actions */}
           <div className="flex gap-2 justify-end pt-4 border-t border-gray-200 dark:border-gray-700">
             <Button

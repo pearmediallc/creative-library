@@ -27,6 +27,7 @@ import { PropertiesPanel } from '../components/PropertiesPanel';
 import { ActivityTimeline } from '../components/ActivityTimeline';
 import { CommentsPanel } from '../components/CommentsPanel';
 import { FileTagsManager } from '../components/FileTagsManager';
+import { MediaLightbox } from '../components/MediaLightbox';
 
 interface FolderNode {
   id: string;
@@ -154,6 +155,15 @@ export function MediaLibraryPage() {
     isOpen: false,
     fileId: '',
     fileName: ''
+  });
+
+  // Media lightbox state
+  const [lightbox, setLightbox] = useState<{
+    isOpen: boolean;
+    initialIndex: number;
+  }>({
+    isOpen: false,
+    initialIndex: 0
   });
 
   // Tags manager state
@@ -870,13 +880,37 @@ export function MediaLibraryPage() {
                             onDragStart={(e) => handleFileDragStart(e, file.id)}
                             onContextMenu={(e) => handleFileContextMenu(file, e)}
                           >
-                            <div className="aspect-video bg-muted relative">
+                            <div
+                              className="aspect-video bg-muted relative cursor-pointer hover:opacity-90 transition-opacity group"
+                              onClick={() => {
+                                const fileIndex = files.findIndex(f => f.id === file.id);
+                                setLightbox({ isOpen: true, initialIndex: fileIndex });
+                              }}
+                            >
                               {file.thumbnail_url ? (
-                                <img
-                                  src={file.thumbnail_url}
-                                  alt={file.original_filename}
-                                  className="w-full h-full object-cover"
-                                />
+                                <>
+                                  <img
+                                    src={file.thumbnail_url}
+                                    alt={file.original_filename}
+                                    className="w-full h-full object-cover"
+                                  />
+                                  {/* Play button overlay for videos */}
+                                  {file.file_type === 'video' && (
+                                    <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/30 transition-colors">
+                                      <div className="w-16 h-16 rounded-full bg-white/95 flex items-center justify-center group-hover:scale-110 transition-transform">
+                                        <div className="w-0 h-0 border-l-[20px] border-l-blue-600 border-y-[12px] border-y-transparent ml-1" />
+                                      </div>
+                                    </div>
+                                  )}
+                                  {/* View overlay for images */}
+                                  {file.file_type === 'image' && (
+                                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
+                                      <div className="text-white text-sm font-medium bg-black/50 px-3 py-1 rounded">
+                                        Click to view
+                                      </div>
+                                    </div>
+                                  )}
+                                </>
                               ) : (
                                 <div className="flex items-center justify-center h-full">
                                   {file.file_type === 'image' ? (
@@ -1365,6 +1399,46 @@ export function MediaLibraryPage() {
         fileName={tagsManager.fileName}
         onTagsUpdated={fetchData}
       />
+
+      {/* Media Lightbox */}
+      {lightbox.isOpen && files.length > 0 && (
+        <MediaLightbox
+          files={files}
+          initialIndex={lightbox.initialIndex}
+          onClose={() => setLightbox({ ...lightbox, isOpen: false })}
+          onDelete={canDelete ? async (fileId) => {
+            await handleDelete(fileId);
+          } : undefined}
+          onStar={async (fileId) => {
+            const file = files.find(f => f.id === fileId);
+            if (file) {
+              await starredApi.toggleStarred(fileId, file.is_starred || false);
+              fetchData();
+            }
+          }}
+          onShare={(file) => {
+            setShareDialogFile({
+              id: file.id,
+              name: file.original_filename,
+              type: 'file'
+            });
+          }}
+          onInfo={(file) => {
+            setPropertiesPanel({
+              isOpen: true,
+              resourceType: 'file',
+              resourceId: file.id
+            });
+          }}
+          onTags={(file) => {
+            setTagsManager({
+              isOpen: true,
+              mediaId: file.id,
+              fileName: file.original_filename
+            });
+          }}
+        />
+      )}
     </DashboardLayout>
   );
 }
