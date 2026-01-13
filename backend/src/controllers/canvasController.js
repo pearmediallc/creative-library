@@ -278,11 +278,17 @@ class CanvasController {
         await Canvas.upsertCanvas(requestId, PRODUCT_BRIEF_TEMPLATE, []);
       }
 
-      // Upload file using media service (no editor required for canvas attachments)
+      // Upload file using media service
+      // Use a special editor object for canvas attachments
+      const canvasEditor = {
+        id: null,
+        name: 'canvas-attachment'
+      };
+
       const mediaFile = await mediaService.uploadMedia(
         req.file,
         userId,
-        null, // No editor for canvas attachments
+        canvasEditor,
         {
           tags: ['canvas-attachment', `request-${requestId}`],
           description: `Canvas attachment for request ${requestId}`,
