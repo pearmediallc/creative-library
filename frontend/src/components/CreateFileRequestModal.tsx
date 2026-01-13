@@ -491,20 +491,28 @@ export function CreateFileRequestModal({ onClose, onSuccess }: CreateFileRequest
           </div>
 
           {/* Canvas Brief Section */}
-          <div className="bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-300 dark:border-blue-700 rounded-lg p-4">
-            <div className="flex items-start justify-between mb-2">
-              <div>
-                <label className="block text-sm font-semibold text-blue-900 dark:text-blue-100 mb-1">
-                  📋 Canvas Brief (Recommended)
-                </label>
-                <p className="text-xs text-blue-700 dark:text-blue-300">
-                  Add a detailed product brief with team members, requirements, attachments, and more.
-                </p>
-              </div>
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border-2 border-blue-400 dark:border-blue-600 rounded-lg p-4 shadow-sm">
+            <div className="flex items-center gap-2 mb-2">
+              <FileText className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+              <label className="block text-base font-bold text-blue-900 dark:text-blue-100">
+                Canvas Brief (Recommended)
+              </label>
             </div>
-            <p className="text-xs text-blue-600 dark:text-blue-400 mb-3 italic">
-              Create the request first, then you can add a detailed canvas brief with attachments.
+            <p className="text-sm text-blue-800 dark:text-blue-200 mb-3">
+              Create a detailed product brief with:
             </p>
+            <ul className="text-xs text-blue-700 dark:text-blue-300 space-y-1 mb-3 ml-4">
+              <li>• Team members (use @ mentions)</li>
+              <li>• Product description & requirements</li>
+              <li>• Key features & milestones</li>
+              <li>• File attachments (images, docs, videos)</li>
+              <li>• Success criteria & timelines</li>
+            </ul>
+            <div className="bg-blue-100 dark:bg-blue-800/30 border border-blue-300 dark:border-blue-700 rounded p-2 text-center">
+              <p className="text-xs font-semibold text-blue-900 dark:text-blue-100">
+                ⬇️ Click "Create Request" below, then add your Canvas brief
+              </p>
+            </div>
           </div>
 
           {/* Custom Message */}
@@ -560,17 +568,25 @@ export function CreateFileRequestModal({ onClose, onSuccess }: CreateFileRequest
 
           {/* Success message with Canvas button */}
           {createdRequestId && (
-            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md p-4">
-              <p className="text-sm text-blue-800 dark:text-blue-200 mb-3">
-                ✓ Request created successfully! Now you can add a detailed Canvas brief with attachments.
+            <div className="bg-gradient-to-r from-green-50 to-blue-50 dark:from-green-900/20 dark:to-blue-900/20 border-2 border-green-400 dark:border-green-600 rounded-lg p-5 shadow-md">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
+                  <span className="text-white text-lg font-bold">✓</span>
+                </div>
+                <p className="text-base font-bold text-green-900 dark:text-green-100">
+                  Request Created Successfully!
+                </p>
+              </div>
+              <p className="text-sm text-gray-700 dark:text-gray-300 mb-4">
+                Now add your Canvas brief with team members, requirements, and attachments.
               </p>
               <Button
                 type="button"
                 onClick={() => setShowCanvas(true)}
-                className="w-full"
+                className="w-full py-3 text-base font-semibold bg-blue-600 hover:bg-blue-700 text-white"
               >
-                <FileText className="w-4 h-4 mr-2" />
-                {hasCanvas ? 'Edit Canvas Brief' : 'Create Canvas Brief'}
+                <FileText className="w-5 h-5 mr-2" />
+                {hasCanvas ? '📝 Edit Canvas Brief' : '📋 Create Canvas Brief'}
               </Button>
             </div>
           )}
