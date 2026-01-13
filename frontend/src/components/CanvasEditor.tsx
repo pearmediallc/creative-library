@@ -3,6 +3,7 @@ import { FileText, X, Upload, Trash2, Save, AlertCircle } from 'lucide-react';
 import { fileRequestApi } from '../lib/api';
 import type { Canvas, CanvasContent, CanvasAttachment } from '../lib/canvasTemplates';
 import { PRODUCT_BRIEF_TEMPLATE } from '../lib/canvasTemplates';
+import { MentionInput } from './MentionInput';
 
 interface CanvasEditorProps {
   requestId: string;
@@ -166,11 +167,10 @@ export function CanvasEditor({ requestId, onClose, onSave }: CanvasEditorProps) 
     switch (block.type) {
       case 'heading':
         return (
-          <input
+          <MentionInput
             key={index}
-            type="text"
             value={block.content}
-            onChange={(e) => updateBlock(index, 'content', e.target.value)}
+            onChange={(value) => updateBlock(index, 'content', value)}
             className={`w-full bg-transparent border-none outline-none font-semibold ${
               block.level === 2 ? 'text-xl mt-6 mb-3' : 'text-lg mt-4 mb-2'
             } focus:ring-2 focus:ring-ring rounded px-2 py-1`}
@@ -179,12 +179,13 @@ export function CanvasEditor({ requestId, onClose, onSave }: CanvasEditorProps) 
 
       case 'text':
         return (
-          <textarea
+          <MentionInput
             key={index}
             value={block.content}
-            onChange={(e) => updateBlock(index, 'content', e.target.value)}
-            className="w-full bg-transparent border-none outline-none text-sm text-muted-foreground mb-2 focus:ring-2 focus:ring-ring rounded px-2 py-1 resize-none"
+            onChange={(value) => updateBlock(index, 'content', value)}
+            multiline={true}
             rows={2}
+            className="w-full bg-transparent border-none outline-none text-sm text-muted-foreground mb-2 focus:ring-2 focus:ring-ring rounded px-2 py-1 resize-none"
           />
         );
 
@@ -194,10 +195,9 @@ export function CanvasEditor({ requestId, onClose, onSave }: CanvasEditorProps) 
             {block.items?.map((item: string, i: number) => (
               <div key={i} className="flex items-center gap-2">
                 <span className="text-sm">•</span>
-                <input
-                  type="text"
+                <MentionInput
                   value={item}
-                  onChange={(e) => updateListItem(index, i, e.target.value)}
+                  onChange={(value) => updateListItem(index, i, value)}
                   className="flex-1 bg-transparent border-none outline-none text-sm focus:ring-2 focus:ring-ring rounded px-2 py-1"
                 />
               </div>
@@ -216,10 +216,9 @@ export function CanvasEditor({ requestId, onClose, onSave }: CanvasEditorProps) 
                   onChange={(e) => updateChecklistItem(index, i, 'checked', e.target.checked)}
                   className="rounded border-border"
                 />
-                <input
-                  type="text"
+                <MentionInput
                   value={item.text}
-                  onChange={(e) => updateChecklistItem(index, i, 'text', e.target.value)}
+                  onChange={(value) => updateChecklistItem(index, i, 'text', value)}
                   className="flex-1 bg-transparent border-none outline-none text-sm focus:ring-2 focus:ring-ring rounded px-2 py-1"
                 />
               </label>
