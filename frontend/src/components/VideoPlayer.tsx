@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { Play, Pause, Volume2, VolumeX, Maximize, SkipBack, SkipForward } from 'lucide-react';
+import { Play, Pause, Volume2, VolumeX, Maximize, Minimize, SkipBack, SkipForward, Settings } from 'lucide-react';
 
 interface VideoPlayerProps {
   src: string;
@@ -10,6 +10,7 @@ interface VideoPlayerProps {
 
 export function VideoPlayer({ src, poster, className = '', autoPlay = false }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -17,6 +18,11 @@ export function VideoPlayer({ src, poster, className = '', autoPlay = false }: V
   const [isMuted, setIsMuted] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [showControls, setShowControls] = useState(true);
+  const [isBuffering, setIsBuffering] = useState(false);
+
+  const playbackRates = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
 
   useEffect(() => {
     const video = videoRef.current;
@@ -24,25 +30,39 @@ export function VideoPlayer({ src, poster, className = '', autoPlay = false }: V
 
     const handleTimeUpdate = () => setCurrentTime(video.currentTime);
     const handleDurationChange = () => setDuration(video.duration);
+    const handleLoadedMetadata = () => setDuration(video.duration);
     const handlePlay = () => setIsPlaying(true);
     const handlePause = () => setIsPlaying(false);
     const handleVolumeChange = () => {
       setVolume(video.volume);
       setIsMuted(video.muted);
     };
+    const handleWaiting = () => setIsBuffering(true);
+    const handleCanPlay = () => setIsBuffering(false);
+    const handleFullscreenChange = () => {
+      setIsFullscreen(document.fullscreenElement === containerRef.current);
+    };
 
     video.addEventListener('timeupdate', handleTimeUpdate);
     video.addEventListener('durationchange', handleDurationChange);
+    video.addEventListener('loadedmetadata', handleLoadedMetadata);
     video.addEventListener('play', handlePlay);
     video.addEventListener('pause', handlePause);
     video.addEventListener('volumechange', handleVolumeChange);
+    video.addEventListener('waiting', handleWaiting);
+    video.addEventListener('canplay', handleCanPlay);
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
 
     return () => {
       video.removeEventListener('timeupdate', handleTimeUpdate);
       video.removeEventListener('durationchange', handleDurationChange);
+      video.removeEventListener('loadedmetadata', handleLoadedMetadata);
       video.removeEventListener('play', handlePlay);
       video.removeEventListener('pause', handlePause);
       video.removeEventListener('volumechange', handleVolumeChange);
+      video.removeEventListener('waiting', handleWaiting);
+      video.removeEventListener('canplay', handleCanPlay);
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
     };
   }, []);
 
@@ -84,16 +104,13 @@ export function VideoPlayer({ src, poster, className = '', autoPlay = false }: V
     setIsMuted(!isMuted);
   };
 
-  const changePlaybackRate = () => {
+  const handlePlaybackRateChange = (rate: number) => {
     const video = videoRef.current;
     if (!video) return;
 
-    const rates = [0.5, 0.75, 1, 1.25, 1.5, 2];
-    const currentIndex = rates.indexOf(playbackRate);
-    const nextRate = rates[(currentIndex + 1) % rates.length];
-
-    video.playbackRate = nextRate;
-    setPlaybackRate(nextRate);
+    video.playbackRate = rate;
+    setPlaybackRate(rate);
+    setShowSettings(false);
   };
 
   const skip = (seconds: number) => {
@@ -104,15 +121,17 @@ export function VideoPlayer({ src, poster, className = '', autoPlay = false }: V
   };
 
   const toggleFullscreen = async () => {
-    const video = videoRef.current;
-    if (!video) return;
+    const container = containerRef.current;
+    if (!container) return;
 
-    if (!document.fullscreenElement) {
-      await video.requestFullscreen();
-      setIsFullscreen(true);
-    } else {
-      await document.exitFullscreen();
-      setIsFullscreen(false);
+    try {
+      if (!isFullscreen) {
+        await container.requestFullscreen();
+      } else {
+        await document.exitFullscreen();
+      }
+    } catch (error) {
+      console.error('Fullscreen error:', error);
     }
   };
 
@@ -130,7 +149,12 @@ export function VideoPlayer({ src, poster, className = '', autoPlay = false }: V
   };
 
   return (
-    <div className={`relative bg-black rounded-lg overflow-hidden group ${className}`}>
+    <div
+      ref={containerRef}
+      className={`relative bg-black rounded-lg overflow-hidden group ${className}`}
+      onMouseEnter={() => setShowControls(true)}
+      onMouseLeave={() => setShowControls(false)}
+    >
       <video
         ref={videoRef}
         src={src}
@@ -138,10 +162,18 @@ export function VideoPlayer({ src, poster, className = '', autoPlay = false }: V
         className="w-full h-full"
         autoPlay={autoPlay}
         playsInline
+        onClick={togglePlay}
       />
 
+      {/* Buffering Spinner */}
+      {isBuffering && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+          <div className="w-12 h-12 border-4 border-white border-t-transparent rounded-full animate-spin" />
+        </div>
+      )}
+
       {/* Controls Overlay */}
-      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4 opacity-0 group-hover:opacity-100 transition-opacity">
+      <div className={`absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4 transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0'}`}>
         {/* Progress Bar */}
         <input
           type="range"
@@ -193,14 +225,37 @@ export function VideoPlayer({ src, poster, className = '', autoPlay = false }: V
 
           <div className="flex-1" />
 
-          {/* Playback Speed */}
-          <button
-            onClick={changePlaybackRate}
-            className="px-2 py-1 hover:bg-white/20 rounded text-white text-xs font-medium transition-colors"
-            aria-label="Change playback speed"
-          >
-            {playbackRate}x
-          </button>
+          {/* Playback Speed Settings */}
+          <div className="relative">
+            <button
+              onClick={() => setShowSettings(!showSettings)}
+              className="px-2 py-1 hover:bg-white/20 rounded text-white text-xs font-medium transition-colors flex items-center gap-1"
+              aria-label="Playback speed"
+            >
+              <Settings size={14} />
+              {playbackRate}x
+            </button>
+
+            {/* Settings Dropdown */}
+            {showSettings && (
+              <div className="absolute bottom-full right-0 mb-2 bg-gray-900 rounded-lg shadow-lg overflow-hidden min-w-[120px]">
+                <div className="p-2">
+                  <p className="text-xs text-gray-400 mb-2 px-2">Playback Speed</p>
+                  {playbackRates.map((rate) => (
+                    <button
+                      key={rate}
+                      onClick={() => handlePlaybackRateChange(rate)}
+                      className={`w-full text-left px-3 py-2 text-sm rounded hover:bg-gray-800 transition-colors ${
+                        playbackRate === rate ? 'text-blue-400 bg-gray-800' : 'text-white'
+                      }`}
+                    >
+                      {rate}x {rate === 1 && '(Normal)'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* Volume Controls */}
           <div className="flex items-center gap-2">
@@ -236,7 +291,11 @@ export function VideoPlayer({ src, poster, className = '', autoPlay = false }: V
             className="p-1 hover:bg-white/20 rounded transition-colors"
             aria-label="Toggle fullscreen"
           >
-            <Maximize size={18} className="text-white" />
+            {isFullscreen ? (
+              <Minimize size={18} className="text-white" />
+            ) : (
+              <Maximize size={18} className="text-white" />
+            )}
           </button>
         </div>
       </div>

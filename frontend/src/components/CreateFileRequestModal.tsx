@@ -199,9 +199,13 @@ export function CreateFileRequestModal({ onClose, onSuccess }: CreateFileRequest
         if (selectedEditorIds.length > 0) {
           await fileRequestApi.assignEditors(requestId, selectedEditorIds);
         }
-      }
 
-      onSuccess();
+        // Show success message and keep modal open for canvas creation
+        setError('');
+        // Don't call onSuccess() yet - let user add canvas or close manually
+      } else {
+        onSuccess();
+      }
     } catch (error: any) {
       console.error('Failed to create file request:', error);
       setError(error.response?.data?.error || 'Failed to create file request');
@@ -222,7 +226,12 @@ export function CreateFileRequestModal({ onClose, onSuccess }: CreateFileRequest
             </h2>
           </div>
           <button
-            onClick={onClose}
+            onClick={() => {
+              if (createdRequestId) {
+                onSuccess(); // Refresh list
+              }
+              onClose();
+            }}
             className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
           >
             <X className="w-5 h-5" />
@@ -293,9 +302,23 @@ export function CreateFileRequestModal({ onClose, onSuccess }: CreateFileRequest
 
           {/* Concept Notes with Canvas Button */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Concept Notes
-            </label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                Concept Notes
+              </label>
+              {createdRequestId && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowCanvas(true)}
+                  className="text-xs"
+                >
+                  <FileText className="w-3 h-3 mr-1" />
+                  {hasCanvas ? 'Edit Canvas Brief' : 'Create Canvas Brief'}
+                </Button>
+              )}
+            </div>
             <div className="space-y-2">
               <textarea
                 value={conceptNotes}
@@ -305,9 +328,11 @@ export function CreateFileRequestModal({ onClose, onSuccess }: CreateFileRequest
                 disabled={creating}
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
               />
-              <p className="text-xs text-muted-foreground">
-                You can add a detailed canvas brief after creating the request.
-              </p>
+              {!createdRequestId && (
+                <p className="text-xs text-muted-foreground">
+                  Create the request first, then you can add a detailed canvas brief with attachments.
+                </p>
+              )}
             </div>
           </div>
 
@@ -521,17 +546,24 @@ export function CreateFileRequestModal({ onClose, onSuccess }: CreateFileRequest
             <Button
               type="button"
               variant="outline"
-              onClick={onClose}
+              onClick={() => {
+                if (createdRequestId) {
+                  onSuccess(); // Refresh list
+                }
+                onClose();
+              }}
               disabled={creating}
             >
-              Cancel
+              {createdRequestId ? 'Done' : 'Cancel'}
             </Button>
-            <Button
-              type="submit"
-              disabled={creating || !requestType || !platform || !vertical}
-            >
-              {creating ? 'Creating...' : 'Create Request'}
-            </Button>
+            {!createdRequestId && (
+              <Button
+                type="submit"
+                disabled={creating || !requestType || !platform || !vertical}
+              >
+                {creating ? 'Creating...' : 'Create Request'}
+              </Button>
+            )}
           </div>
         </form>
       </div>
