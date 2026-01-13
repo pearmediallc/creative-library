@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { X, Inbox, FolderPlus } from 'lucide-react';
+import { X, Inbox, FolderPlus, FileText } from 'lucide-react';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { fileRequestApi, folderApi, editorApi, adminApi } from '../lib/api';
 import { FILE_REQUEST_TYPES } from '../constants/fileRequestTypes';
 import { PLATFORMS } from '../constants/platforms';
 import { VERTICALS } from '../constants/verticals';
+import { CanvasEditor } from './CanvasEditor';
 
 interface CreateFileRequestModalProps {
   onClose: () => void;
@@ -50,6 +51,9 @@ export function CreateFileRequestModal({ onClose, onSuccess }: CreateFileRequest
   const [showCreateFolder, setShowCreateFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
   const [creatingFolder, setCreatingFolder] = useState(false);
+  const [showCanvas, setShowCanvas] = useState(false);
+  const [hasCanvas, setHasCanvas] = useState(false);
+  const [createdRequestId, setCreatedRequestId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchFolders();
@@ -186,10 +190,15 @@ export function CreateFileRequestModal({ onClose, onSuccess }: CreateFileRequest
         num_creatives: numCreatives,
       });
 
-      // Assign to multiple editors if selected
-      if (selectedEditorIds.length > 0 && response.data?.data?.id) {
-        const requestId = response.data.data.id;
-        await fileRequestApi.assignEditors(requestId, selectedEditorIds);
+      // Store request ID for canvas
+      const requestId = response.data?.data?.id;
+      if (requestId) {
+        setCreatedRequestId(requestId);
+
+        // Assign to multiple editors if selected
+        if (selectedEditorIds.length > 0) {
+          await fileRequestApi.assignEditors(requestId, selectedEditorIds);
+        }
       }
 
       onSuccess();
@@ -282,19 +291,43 @@ export function CreateFileRequestModal({ onClose, onSuccess }: CreateFileRequest
             </select>
           </div>
 
-          {/* Concept Notes */}
+          {/* Concept Notes with Canvas Button */}
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Concept Notes
             </label>
-            <textarea
-              value={conceptNotes}
-              onChange={(e) => setConceptNotes(e.target.value)}
-              placeholder="Describe the concept and details for this request..."
-              rows={3}
-              disabled={creating}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-            />
+            <div className="space-y-2">
+              <textarea
+                value={conceptNotes}
+                onChange={(e) => setConceptNotes(e.target.value)}
+                placeholder="Quick notes..."
+                rows={3}
+                disabled={creating}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+              />
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    if (createdRequestId) {
+                      setShowCanvas(true);
+                    } else {
+                      alert('Please create the file request first to access Canvas');
+                    }
+                  }}
+                  disabled={creating}
+                >
+                  <FileText className="w-4 h-4 mr-2" />
+                  Open Canvas Brief
+                </Button>
+                {hasCanvas && (
+                  <span className="text-xs text-green-600 dark:text-green-400">
+                    ✓ Canvas brief attached
+                  </span>
+                )}
+              </div>
+            </div>
           </div>
 
           {/* Number of Creatives */}
@@ -521,6 +554,15 @@ export function CreateFileRequestModal({ onClose, onSuccess }: CreateFileRequest
           </div>
         </form>
       </div>
+
+      {/* Canvas Editor Modal */}
+      {showCanvas && createdRequestId && (
+        <CanvasEditor
+          requestId={createdRequestId}
+          onClose={() => setShowCanvas(false)}
+          onSave={() => setHasCanvas(true)}
+        />
+      )}
     </div>
   );
 }

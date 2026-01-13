@@ -6,6 +6,7 @@
 const express = require('express');
 const router = express.Router();
 const fileRequestController = require('../controllers/fileRequestController');
+const CanvasController = require('../controllers/canvasController');
 const { authenticateToken } = require('../middleware/auth');
 const { upload } = require('../middleware/upload');
 
@@ -83,6 +84,41 @@ router.post('/:id/complete',
 router.post('/:id/reassign',
   authenticateToken,
   fileRequestController.reassignRequest.bind(fileRequestController)
+);
+
+// ============================================
+// CANVAS ROUTES (Product Brief Feature)
+// ============================================
+
+// Get or create canvas for a file request
+router.get('/:id/canvas',
+  authenticateToken,
+  CanvasController.getCanvas
+);
+
+// Create or update canvas
+router.post('/:id/canvas',
+  authenticateToken,
+  CanvasController.upsertCanvas
+);
+
+// Upload attachment to canvas
+router.post('/:id/canvas/attach',
+  authenticateToken,
+  upload.single('file'),
+  CanvasController.uploadAttachment
+);
+
+// Remove attachment from canvas
+router.delete('/:id/canvas/attachments/:fileId',
+  authenticateToken,
+  CanvasController.removeAttachment
+);
+
+// Delete canvas
+router.delete('/:id/canvas',
+  authenticateToken,
+  CanvasController.deleteCanvas
 );
 
 // ============================================

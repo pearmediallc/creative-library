@@ -572,6 +572,34 @@ export const fileRequestApi = {
   // Reassign file request (admin only)
   reassign: (id: string, data: { new_editor_ids: string[]; reason?: string }) =>
     api.post(`/file-requests/${id}/reassign`, data),
+
+  // Canvas/Product Brief endpoints
+  canvas: {
+    // Get canvas for file request
+    get: (requestId: string) =>
+      api.get(`/file-requests/${requestId}/canvas`),
+
+    // Create or update canvas
+    upsert: (requestId: string, content: any) =>
+      api.post(`/file-requests/${requestId}/canvas`, { content }),
+
+    // Upload attachment to canvas
+    uploadAttachment: (requestId: string, file: File) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      return api.post(`/file-requests/${requestId}/canvas/attach`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+    },
+
+    // Remove attachment from canvas
+    removeAttachment: (requestId: string, fileId: string) =>
+      api.delete(`/file-requests/${requestId}/canvas/attachments/${fileId}`),
+
+    // Delete canvas
+    delete: (requestId: string) =>
+      api.delete(`/file-requests/${requestId}/canvas`),
+  },
 };
 
 // Slack Integration endpoints

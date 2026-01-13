@@ -1,10 +1,12 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { fileRequestApi } from '../lib/api';
-import { Upload, CheckCircle, AlertCircle, Calendar, Mail, User, X } from 'lucide-react';
+import { Upload, CheckCircle, AlertCircle, Calendar, Mail, User, X, FileText } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { formatDate } from '../lib/utils';
+import { CanvasRenderer } from '../components/CanvasRenderer';
+import type { Canvas } from '../lib/canvasTemplates';
 
 interface FileRequestInfo {
   id: string;
@@ -33,6 +35,9 @@ export function PublicFileRequestPage() {
   const [uploaderEmail, setUploaderEmail] = useState('');
   const [uploaderName, setUploaderName] = useState('');
   const [dragActive, setDragActive] = useState(false);
+  const [canvas, setCanvas] = useState<Canvas | null>(null);
+  const [showCanvas, setShowCanvas] = useState(false);
+  const [loadingCanvas, setLoadingCanvas] = useState(false);
 
   useEffect(() => {
     if (token) {
@@ -45,12 +50,33 @@ export function PublicFileRequestPage() {
       setLoading(true);
       setError('');
       const response = await fileRequestApi.getPublic(token!);
-      setRequest(response.data.data);
+      const requestData = response.data.data;
+      setRequest(requestData);
+
+      // Try to load canvas if request has ID
+      if (requestData.id) {
+        fetchCanvas(requestData.id);
+      }
     } catch (error: any) {
       console.error('Failed to fetch request info:', error);
       setError('File request not found or has been removed');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchCanvas = async (requestId: string) => {
+    try {
+      setLoadingCanvas(true);
+      const response = await fileRequestApi.canvas.get(requestId);
+      if (response.data.canvas && !response.data.isTemplate) {
+        setCanvas(response.data.canvas);
+      }
+    } catch (error: any) {
+      console.error('Failed to load canvas:', error);
+      // Canvas is optional, so don't show error to user
+    } finally {
+      setLoadingCanvas(false);
     }
   };
 
@@ -179,6 +205,20 @@ export function PublicFileRequestPage() {
           {request.description && (
             <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
               <p className="text-gray-700 dark:text-gray-300">{request.description}</p>
+            </div>
+          )}
+
+          {/* Canvas Brief Button */}
+          {canvas && (
+            <div className="mb-6">
+              <Button
+                variant="outline"
+                onClick={() => setShowCanvas(true)}
+                className="w-full sm:w-auto"
+              >
+                <FileText className="w-4 h-4 mr-2" />
+                View Canvas Brief
+              </Button>
             </div>
           )}
 
@@ -363,6 +403,16 @@ export function PublicFileRequestPage() {
           </p>
         </div>
       </div>
+
+      {/* Canvas Renderer Modal */}
+      {showCanvas && canvas && (
+        <CanvasRenderer
+          content={canvas.content}
+          attachments={canvas.attachments}
+          onClose={() => setShowCanvas(false)}
+          readOnly={true}
+        />
+      )}
     </div>
   );
 }
