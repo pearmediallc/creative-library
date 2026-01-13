@@ -26,7 +26,8 @@
   },
   "scripts": {
     "start": "react-scripts start",
-    "build": "react-scripts build",
+    "build": "npm run typecheck && react-scripts build",
+    "typecheck": "tsc --noEmit",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
   },
