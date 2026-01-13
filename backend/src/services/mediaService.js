@@ -50,13 +50,17 @@ class MediaService {
         throw new Error(sizeValidation.error);
       }
 
-      // Get editor details
-      const editor = await Editor.findById(editorId);
-      if (!editor) {
-        throw new Error('Editor not found');
+      // Get editor details (optional for public uploads)
+      let editor = null;
+      if (editorId) {
+        editor = await Editor.findById(editorId);
+        if (!editor) {
+          throw new Error('Editor not found');
+        }
+        console.log(`✅ Editor Found: ${editor.name} (ID: ${editorId})`);
+      } else {
+        console.log(`ℹ️ No editor specified (public upload)`);
       }
-
-      console.log(`✅ Editor Found: ${editor.name} (ID: ${editorId})`);
 
       // ✨ NEW: Handle folder path for organized storage
       let folderPath = null;
@@ -120,7 +124,7 @@ class MediaService {
         file.originalname,
         file.mimetype,
         'originals',
-        editor.name,  // ✨ NEW: Pass editor name for hybrid structure
+        editor?.name || 'public-upload',  // ✨ NEW: Pass editor name for hybrid structure (or 'public-upload' if no editor)
         mediaType,    // ✨ NEW: Pass media type for hybrid structure
         folderPath    // ✨ NEW: Pass folder path for organized storage
       );
@@ -149,7 +153,7 @@ class MediaService {
         const thumbnailResult = await s3Service.generateThumbnail(
           file.buffer,
           file.originalname,
-          editor.name,  // ✨ NEW: Pass editor name for hybrid structure
+          editor?.name || 'public-upload',  // ✨ NEW: Pass editor name for hybrid structure
           folderPath    // ✨ NEW: Pass folder path for organized storage
         );
         if (thumbnailResult) {
@@ -164,7 +168,7 @@ class MediaService {
         const thumbnailResult = await s3Service.generateVideoThumbnail(
           file.buffer,
           file.originalname,
-          editor.name,  // ✨ NEW: Pass editor name for hybrid structure
+          editor?.name || 'public-upload',  // ✨ NEW: Pass editor name for hybrid structure
           folderPath    // ✨ NEW: Pass folder path for organized storage
         );
         if (thumbnailResult) {
@@ -187,7 +191,7 @@ class MediaService {
       const mediaFile = await MediaFile.createMediaFile({
         uploaded_by: userId,
         editor_id: editorId,
-        editor_name: editor.name,
+        editor_name: editor?.name || null,
         filename: uploadResult.filename || file.originalname,
         original_filename: file.originalname,
         file_type: fileType,
@@ -207,7 +211,7 @@ class MediaService {
         // ✨ NEW: Metadata tracking fields
         metadata_stripped: metadataOps.removed || false,
         metadata_embedded: metadataOps.added ? {
-          creator_id: editor.name,
+          creator_id: editor?.name || 'public-upload',
           timestamp: new Date().toISOString(),
           tags: metadata.tags || [],
           description: metadata.description || null
@@ -218,13 +222,13 @@ class MediaService {
       console.log('✅ Database record created successfully');
       console.log(`  └─ Media File ID: ${mediaFile.id}`);
       console.log(`  └─ S3 Key: ${uploadResult.s3Key}`);
-      console.log(`  └─ Structure Type: ${(editor.name && mediaType) ? 'NEW HYBRID' : 'OLD FALLBACK'}`);
+      console.log(`  └─ Structure Type: ${(editor?.name && mediaType) ? 'NEW HYBRID' : 'OLD FALLBACK'}`);
 
       logger.info('Media file uploaded successfully', {
         mediaFileId: mediaFile.id,
         userId,
         editorId,
-        editorName: editor.name,
+        editorName: editor?.name || 'public-upload',
         s3Key: uploadResult.s3Key,
         structureType: 'NEW_HYBRID'
       });

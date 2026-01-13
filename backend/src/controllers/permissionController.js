@@ -368,7 +368,7 @@ class PermissionController {
             ELSE NULL
           END as s3_url,
           CASE
-            WHEN fp.resource_type = 'file' THEN mf.download_url
+            WHEN fp.resource_type = 'file' THEN mf.s3_url
             ELSE NULL
           END as download_url,
           CASE

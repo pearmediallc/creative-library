@@ -612,7 +612,7 @@ class FolderController {
           mf.id,
           mf.original_filename,
           mf.s3_url,
-          mf.download_url,
+          mf.s3_url as download_url,
           mf.file_size,
           COALESCE(ft.full_path, '') as folder_path
         FROM media_files mf
