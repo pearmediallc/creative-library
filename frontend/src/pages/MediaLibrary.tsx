@@ -870,13 +870,30 @@ export function MediaLibraryPage() {
                             onDragStart={(e) => handleFileDragStart(e, file.id)}
                             onContextMenu={(e) => handleFileContextMenu(file, e)}
                           >
-                            <div className="aspect-video bg-muted relative">
+                            <div
+                              className="aspect-video bg-muted relative cursor-pointer hover:opacity-90 transition-opacity"
+                              onClick={() => {
+                                const fileIndex = paginatedFiles.findIndex(f => f.id === file.id);
+                                setSelectedFileIndex(fileIndex);
+                                setSelectedFile(file);
+                                setShowLightbox(true);
+                              }}
+                            >
                               {file.thumbnail_url ? (
-                                <img
-                                  src={file.thumbnail_url}
-                                  alt={file.original_filename}
-                                  className="w-full h-full object-cover"
-                                />
+                                <>
+                                  <img
+                                    src={file.thumbnail_url}
+                                    alt={file.original_filename}
+                                    className="w-full h-full object-cover"
+                                  />
+                                  {file.file_type === 'video' && (
+                                    <div className="absolute inset-0 flex items-center justify-center bg-black/30 hover:bg-black/40 transition-colors">
+                                      <div className="w-16 h-16 rounded-full bg-white/90 flex items-center justify-center">
+                                        <div className="w-0 h-0 border-l-[20px] border-l-blue-600 border-y-[12px] border-y-transparent ml-1" />
+                                      </div>
+                                    </div>
+                                  )}
+                                </>
                               ) : (
                                 <div className="flex items-center justify-center h-full">
                                   {file.file_type === 'image' ? (
