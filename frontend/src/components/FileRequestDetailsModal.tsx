@@ -1,8 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { X, Copy, Download, Calendar, Folder, Mail, CheckCircle, Clock } from 'lucide-react';
+import { X, Copy, Download, Calendar, Folder, Mail, CheckCircle, Clock, FileText } from 'lucide-react';
 import { Button } from './ui/Button';
 import { fileRequestApi } from '../lib/api';
 import { formatDate, formatBytes } from '../lib/utils';
+import { CanvasEditor } from './CanvasEditor';
+import { CanvasRenderer } from './CanvasRenderer';
+import type { Canvas } from '../lib/canvasTemplates';
 
 interface FileRequestDetailsModalProps {
   requestId: string;
@@ -61,6 +64,9 @@ interface FileRequestDetails {
 export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRequestDetailsModalProps) {
   const [request, setRequest] = useState<FileRequestDetails | null>(null);
   const [loading, setLoading] = useState(true);
+  const [canvas, setCanvas] = useState<Canvas | null>(null);
+  const [showCanvas, setShowCanvas] = useState(false);
+  const [canvasMode, setCanvasMode] = useState<'view' | 'edit'>('view');
 
   useEffect(() => {
     fetchRequestDetails();
@@ -71,6 +77,17 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
       setLoading(true);
       const response = await fileRequestApi.getOne(requestId);
       setRequest(response.data.data);
+
+      // Try to load canvas
+      try {
+        const canvasResponse = await fileRequestApi.canvas.get(requestId);
+        if (canvasResponse.data.canvas && !canvasResponse.data.isTemplate) {
+          setCanvas(canvasResponse.data.canvas);
+        }
+      } catch (canvasError) {
+        // Canvas is optional, ignore error
+        console.log('No canvas found for this request');
+      }
     } catch (error: any) {
       console.error('Failed to fetch request details:', error);
       alert(error.response?.data?.error || 'Failed to fetch request details');
@@ -228,6 +245,54 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
                     ))}
                   </div>
                 </div>
+              )}
+            </div>
+          </div>
+
+          {/* Canvas Brief */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                Canvas Brief
+              </h3>
+            </div>
+            <div className="flex gap-2">
+              {canvas ? (
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setCanvasMode('view');
+                      setShowCanvas(true);
+                    }}
+                  >
+                    <FileText className="w-4 h-4 mr-2" />
+                    View Canvas
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setCanvasMode('edit');
+                      setShowCanvas(true);
+                    }}
+                  >
+                    Edit Canvas
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setCanvasMode('edit');
+                    setShowCanvas(true);
+                  }}
+                >
+                  <FileText className="w-4 h-4 mr-2" />
+                  Create Canvas Brief
+                </Button>
               )}
             </div>
           </div>
@@ -462,6 +527,31 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
           </Button>
         </div>
       </div>
+
+      {/* Canvas Modal */}
+      {showCanvas && (
+        canvasMode === 'edit' ? (
+          <CanvasEditor
+            requestId={requestId}
+            onClose={() => {
+              setShowCanvas(false);
+              fetchRequestDetails(); // Refresh to get updated canvas
+            }}
+            onSave={(savedCanvas) => {
+              setCanvas(savedCanvas);
+            }}
+          />
+        ) : (
+          canvas && (
+            <CanvasRenderer
+              content={canvas.content}
+              attachments={canvas.attachments}
+              onClose={() => setShowCanvas(false)}
+              readOnly={true}
+            />
+          )
+        )
+      )}
     </div>
   );
 }

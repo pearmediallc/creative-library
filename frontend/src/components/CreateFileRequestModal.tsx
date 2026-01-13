@@ -305,28 +305,9 @@ export function CreateFileRequestModal({ onClose, onSuccess }: CreateFileRequest
                 disabled={creating}
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
               />
-              <div className="flex items-center gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    if (createdRequestId) {
-                      setShowCanvas(true);
-                    } else {
-                      alert('Please create the file request first to access Canvas');
-                    }
-                  }}
-                  disabled={creating}
-                >
-                  <FileText className="w-4 h-4 mr-2" />
-                  Open Canvas Brief
-                </Button>
-                {hasCanvas && (
-                  <span className="text-xs text-green-600 dark:text-green-400">
-                    ✓ Canvas brief attached
-                  </span>
-                )}
-              </div>
+              <p className="text-xs text-muted-foreground">
+                You can add a detailed canvas brief after creating the request.
+              </p>
             </div>
           </div>
 
