@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Inbox, FolderPlus, FileText } from 'lucide-react';
+import { X, Inbox, FolderPlus, FileText, Maximize2, Minimize2 } from 'lucide-react';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { fileRequestApi, folderApi, editorApi, adminApi } from '../lib/api';
@@ -7,6 +7,7 @@ import { FILE_REQUEST_TYPES } from '../constants/fileRequestTypes';
 import { PLATFORMS } from '../constants/platforms';
 import { VERTICALS } from '../constants/verticals';
 import { CanvasEditor } from './CanvasEditor';
+import { MentionInput } from './MentionInput';
 
 interface CreateFileRequestModalProps {
   onClose: () => void;
@@ -54,6 +55,7 @@ export function CreateFileRequestModal({ onClose, onSuccess }: CreateFileRequest
   const [showCanvas, setShowCanvas] = useState(false);
   const [hasCanvas, setHasCanvas] = useState(false);
   const [createdRequestId, setCreatedRequestId] = useState<string | null>(null);
+  const [useCanvasMode, setUseCanvasMode] = useState(false);
 
   useEffect(() => {
     fetchFolders();
@@ -300,44 +302,76 @@ export function CreateFileRequestModal({ onClose, onSuccess }: CreateFileRequest
             </select>
           </div>
 
-          {/* Concept Notes with Canvas Button */}
+          {/* Concept Notes / Canvas Brief Toggle */}
           <div>
-            <div className="flex items-center justify-between mb-1">
+            <div className="flex items-center justify-between mb-2">
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                Concept Notes
+                {useCanvasMode ? 'Canvas Brief (Detailed)' : 'Concept Notes'}
               </label>
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={() => {
-                  if (createdRequestId) {
-                    setShowCanvas(true);
-                  } else {
-                    alert('Please fill out the form and click "Create Request" first. Then you can add your Canvas brief with team members, attachments, and detailed requirements.');
-                  }
-                }}
-                className="text-xs flex items-center gap-1 bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700 hover:bg-blue-100 dark:hover:bg-blue-900/30"
+                onClick={() => setUseCanvasMode(!useCanvasMode)}
+                disabled={creating}
+                className="text-xs flex items-center gap-1.5 bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700 hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-all"
               >
-                <FileText className="w-4 h-4" />
-                {createdRequestId ? (hasCanvas ? 'Edit Canvas Brief' : 'Open Canvas Brief') : 'Add Canvas Brief'}
+                {useCanvasMode ? (
+                  <>
+                    <Minimize2 className="w-4 h-4" />
+                    Simple Notes
+                  </>
+                ) : (
+                  <>
+                    <Maximize2 className="w-4 h-4" />
+                    Canvas Brief
+                  </>
+                )}
               </Button>
             </div>
-            <div className="space-y-2">
-              <textarea
-                value={conceptNotes}
-                onChange={(e) => setConceptNotes(e.target.value)}
-                placeholder="Quick notes..."
-                rows={3}
-                disabled={creating}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-              />
-              {!createdRequestId && (
-                <p className="text-xs text-blue-600 dark:text-blue-400 italic">
-                  💡 Tip: Create the request first, then click "Add Canvas Brief" button above for a detailed product brief with @mentions and attachments.
+
+            {!useCanvasMode ? (
+              /* Simple Mode - Basic Textarea */
+              <div className="space-y-2">
+                <textarea
+                  value={conceptNotes}
+                  onChange={(e) => setConceptNotes(e.target.value)}
+                  placeholder="Quick notes about this request..."
+                  rows={3}
+                  disabled={creating}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                />
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  💡 Tip: Need more detail? Click "Canvas Brief" above for @ mentions, formatting, and structured requirements.
                 </p>
-              )}
-            </div>
+              </div>
+            ) : (
+              /* Canvas Mode - Enhanced Input with @ Mentions */
+              <div className="border-2 border-blue-300 dark:border-blue-600 rounded-lg p-4 bg-blue-50 dark:bg-blue-900/10 space-y-3">
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold text-blue-800 dark:text-blue-200">
+                    Enhanced Brief Mode - Use @ to mention team members
+                  </p>
+                  <MentionInput
+                    value={conceptNotes}
+                    onChange={setConceptNotes}
+                    placeholder="Describe your request in detail... Type @ to mention team members"
+                    multiline={true}
+                    rows={8}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white resize-none"
+                  />
+                  <div className="bg-white dark:bg-gray-800 rounded-md p-3 border border-blue-200 dark:border-blue-700">
+                    <p className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">Quick Tips:</p>
+                    <ul className="text-xs text-gray-600 dark:text-gray-400 space-y-1 ml-4">
+                      <li>• Type <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">@</code> to mention team members</li>
+                      <li>• Include product details, requirements, and success criteria</li>
+                      <li>• Add links to reference materials or documents</li>
+                      <li>• After creating the request, you can open the full Canvas editor to add attachments</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Number of Creatives */}
@@ -492,31 +526,6 @@ export function CreateFileRequestModal({ onClose, onSuccess }: CreateFileRequest
             <p className="text-xs text-muted-foreground mt-1">
               Request will not accept uploads after this date
             </p>
-          </div>
-
-          {/* Canvas Brief Section */}
-          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border-2 border-blue-400 dark:border-blue-600 rounded-lg p-4 shadow-sm">
-            <div className="flex items-center gap-2 mb-2">
-              <FileText className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-              <label className="block text-base font-bold text-blue-900 dark:text-blue-100">
-                Canvas Brief (Recommended)
-              </label>
-            </div>
-            <p className="text-sm text-blue-800 dark:text-blue-200 mb-3">
-              Create a detailed product brief with:
-            </p>
-            <ul className="text-xs text-blue-700 dark:text-blue-300 space-y-1 mb-3 ml-4">
-              <li>• Team members (use @ mentions)</li>
-              <li>• Product description & requirements</li>
-              <li>• Key features & milestones</li>
-              <li>• File attachments (images, docs, videos)</li>
-              <li>• Success criteria & timelines</li>
-            </ul>
-            <div className="bg-blue-100 dark:bg-blue-800/30 border border-blue-300 dark:border-blue-700 rounded p-2 text-center">
-              <p className="text-xs font-semibold text-blue-900 dark:text-blue-100">
-                ⬇️ Click "Create Request" below, then add your Canvas brief
-              </p>
-            </div>
           </div>
 
           {/* Custom Message */}
