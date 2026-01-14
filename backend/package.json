@@ -19,7 +19,10 @@
     "init-analytics": "node src/scripts/initAnalyticsTables.js",
     "reset-analytics": "node src/scripts/resetAnalyticsTables.js",
     "link-users-editors": "node src/scripts/linkUsersToEditors.js",
-    "add-approval-workflow": "node src/scripts/addApprovalWorkflow.js"
+    "add-approval-workflow": "node src/scripts/addApprovalWorkflow.js",
+    "migrate:comments": "node scripts/run-comments-migration.js",
+    "migrate:phase5": "node scripts/run-comments-migration.js",
+    "migrate:rbac-enhancements": "node scripts/run-rbac-enhancements.js"
   },
   "keywords": [
     "creative",

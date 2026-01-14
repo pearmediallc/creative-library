@@ -457,7 +457,7 @@ class Folder extends BaseModel {
   /**
    * Update folder (rename, change description, etc.)
    */
-  async updateFolder(folderId, updates, userId) {
+  async updateFolder(folderId, updates, userId, userRole = null) {
     try {
       // Verify ownership or admin
       const folder = await this.findById(folderId);
@@ -465,7 +465,8 @@ class Folder extends BaseModel {
         throw new Error('Folder not found');
       }
 
-      const hasPermission = folder.owner_id === userId || await this.canAccess(userId, folderId, 'edit');
+      const isAdmin = userRole === 'admin' || userRole === 'super_admin';
+      const hasPermission = folder.owner_id === userId || await this.canAccess(userId, folderId, 'edit') || isAdmin;
       if (!hasPermission) {
         throw new Error('No permission to update folder');
       }
@@ -511,14 +512,15 @@ class Folder extends BaseModel {
   /**
    * Soft delete folder (and optionally all contents)
    */
-  async deleteFolder(folderId, userId, deleteContents = false) {
+  async deleteFolder(folderId, userId, deleteContents = false, userRole = null) {
     try {
       const folder = await this.findById(folderId);
       if (!folder) {
         throw new Error('Folder not found');
       }
 
-      const hasPermission = folder.owner_id === userId || await this.canAccess(userId, folderId, 'delete');
+      const isAdmin = userRole === 'admin' || userRole === 'super_admin';
+      const hasPermission = folder.owner_id === userId || await this.canAccess(userId, folderId, 'delete') || isAdmin;
       if (!hasPermission) {
         throw new Error('No permission to delete folder');
       }

@@ -7,6 +7,7 @@ const express = require('express');
 const router = express.Router();
 const fileRequestController = require('../controllers/fileRequestController');
 const CanvasController = require('../controllers/canvasController');
+const requestCommentsController = require('../controllers/requestCommentsController');
 const { authenticateToken } = require('../middleware/auth');
 const { upload } = require('../middleware/upload');
 
@@ -119,6 +120,40 @@ router.delete('/:id/canvas/attachments/:fileId',
 router.delete('/:id/canvas',
   authenticateToken,
   CanvasController.deleteCanvas
+);
+
+// ============================================
+// COMMENT ROUTES (Request Feedback System)
+// ============================================
+
+// Get all comments for a request
+router.get('/:requestId/comments',
+  authenticateToken,
+  requestCommentsController.getRequestComments
+);
+
+// Add a comment to a request
+router.post('/:requestId/comments',
+  authenticateToken,
+  requestCommentsController.addRequestComment
+);
+
+// Update a comment
+router.put('/comments/:commentId',
+  authenticateToken,
+  requestCommentsController.updateRequestComment
+);
+
+// Delete a comment
+router.delete('/comments/:commentId',
+  authenticateToken,
+  requestCommentsController.deleteRequestComment
+);
+
+// Get comment count for a request
+router.get('/:requestId/comments/count',
+  authenticateToken,
+  requestCommentsController.getCommentCount
 );
 
 // ============================================

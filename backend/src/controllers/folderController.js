@@ -210,7 +210,7 @@ class FolderController {
       if (description !== undefined) updates.description = description;
       if (color !== undefined) updates.color = color;
 
-      const folder = await Folder.updateFolder(id, updates, req.user.id);
+      const folder = await Folder.updateFolder(id, updates, req.user.id, req.user.role);
 
       logger.info('Folder updated', {
         folder_id: id,
@@ -251,7 +251,8 @@ class FolderController {
       await Folder.deleteFolder(
         id,
         req.user.id,
-        delete_contents === 'true'
+        delete_contents === 'true',
+        req.user.role
       );
 
       logger.info('Folder deleted', {
