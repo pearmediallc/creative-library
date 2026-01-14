@@ -355,13 +355,13 @@ class FileRequestController {
         });
       } else {
         // For non-editors (admin, buyer): show requests they created
-        whereClause = 'WHERE created_by = $1';
+        whereClause = 'WHERE fr.created_by = $1';
         params = [userId];
 
         if (status === 'active') {
-          whereClause += ' AND is_active = TRUE';
+          whereClause += ' AND fr.is_active = TRUE';
         } else if (status === 'closed') {
-          whereClause += ' AND is_active = FALSE';
+          whereClause += ' AND fr.is_active = FALSE';
         }
 
         const result = await query(
@@ -381,7 +381,7 @@ class FileRequestController {
           LEFT JOIN file_request_editors fre ON fr.id = fre.request_id
           LEFT JOIN editors e ON fre.editor_id = e.id
           ${whereClause}
-          GROUP BY fr.id, f.name, buyer.name, buyer.email, creator.name
+          GROUP BY fr.id, f.id, f.name, buyer.id, buyer.name, buyer.email, creator.id, creator.name
           ORDER BY fr.created_at DESC`,
           params
         );

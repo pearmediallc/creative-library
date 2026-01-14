@@ -1092,13 +1092,30 @@ export function MediaLibraryPage() {
                                     </td>
                                   )}
                                   <td className="p-3">
-                                    <div className="w-12 h-12 rounded overflow-hidden bg-muted flex items-center justify-center">
+                                    <div
+                                      className="w-12 h-12 rounded overflow-hidden bg-muted flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity relative group"
+                                      onClick={() => {
+                                        const fileIndex = files.findIndex(f => f.id === file.id);
+                                        setLightbox({ isOpen: true, initialIndex: fileIndex });
+                                      }}
+                                      title="Click to preview"
+                                    >
                                       {file.thumbnail_url ? (
-                                        <img
-                                          src={file.thumbnail_url}
-                                          alt={file.original_filename}
-                                          className="w-full h-full object-cover"
-                                        />
+                                        <>
+                                          <img
+                                            src={file.thumbnail_url}
+                                            alt={file.original_filename}
+                                            className="w-full h-full object-cover"
+                                          />
+                                          {/* Play icon for videos */}
+                                          {file.file_type === 'video' && (
+                                            <div className="absolute inset-0 flex items-center justify-center bg-black/10 group-hover:bg-black/20 transition-colors">
+                                              <div className="w-6 h-6 rounded-full bg-white/95 flex items-center justify-center">
+                                                <div className="w-0 h-0 border-l-[8px] border-l-blue-600 border-y-[5px] border-y-transparent ml-0.5" />
+                                              </div>
+                                            </div>
+                                          )}
+                                        </>
                                       ) : (
                                         file.file_type === 'image' ? (
                                           <ImageIcon className="w-6 h-6 text-muted-foreground" />

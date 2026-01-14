@@ -191,7 +191,7 @@ class MediaService {
       const mediaFile = await MediaFile.createMediaFile({
         uploaded_by: userId,
         editor_id: editorId,
-        editor_name: editor?.name || null,
+        editor_name: editor?.name || 'public-upload',
         filename: uploadResult.filename || file.originalname,
         original_filename: file.originalname,
         file_type: fileType,
