@@ -13,6 +13,7 @@
     "migrate:direct": "cd scripts && ./run-migration-direct.sh ../migrations/COMPLETE_MIGRATION_SCRIPT.sql",
     "migrate:run-all": "cd scripts && ./run-migration.sh --all",
     "migrate:create": "cd scripts && ./create-migration.sh",
+    "migrate:production": "node scripts/run-production-migration.js",
     "db:check": "cd scripts && ./check-db.sh",
     "init-analytics": "node src/scripts/initAnalyticsTables.js",
     "reset-analytics": "node src/scripts/resetAnalyticsTables.js",
