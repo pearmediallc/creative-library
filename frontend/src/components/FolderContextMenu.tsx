@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { Edit2, Trash2, FolderPlus, Info, Share2, Download, Lock, Unlock } from 'lucide-react';
+import { Edit2, Trash2, FolderPlus, Info, Share2, Download, Lock, Unlock, Shield } from 'lucide-react';
 
 interface FolderContextMenuProps {
   isOpen: boolean;
@@ -12,6 +12,7 @@ interface FolderContextMenuProps {
   onShare?: () => void;
   onDownloadZip?: () => void;
   onToggleLock?: () => void;
+  onManageAccess?: () => void;
   isLocked?: boolean;
 }
 
@@ -26,6 +27,7 @@ export function FolderContextMenu({
   onShare,
   onDownloadZip,
   onToggleLock,
+  onManageAccess,
   isLocked
 }: FolderContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null);
@@ -94,6 +96,14 @@ export function FolderContextMenu({
       label: isLocked ? 'Unlock Folder' : 'Lock Folder',
       onClick: () => {
         onToggleLock();
+        onClose();
+      }
+    }] : []),
+    ...(onManageAccess ? [{
+      icon: Shield,
+      label: 'Manage Access',
+      onClick: () => {
+        onManageAccess();
         onClose();
       }
     }] : []),

@@ -7,6 +7,7 @@ const express = require('express');
 const router = express.Router();
 const folderController = require('../controllers/folderController');
 const folderLockController = require('../controllers/folderLockController');
+const folderAccessController = require('../controllers/folderAccessController');
 const { authenticateToken } = require('../middleware/auth');
 
 // All folder routes require authentication
@@ -34,5 +35,11 @@ router.post('/date-folder', folderController.createDateFolder.bind(folderControl
 // Folder lock
 router.post('/:id/toggle-lock', folderLockController.toggleFolderLock);
 router.get('/:id/lock-status', folderLockController.getFolderLockStatus);
+
+// Folder access management
+router.post('/:folderId/grant-access', folderAccessController.grantFolderAccess);
+router.get('/:folderId/permissions', folderAccessController.getFolderPermissions);
+router.delete('/:folderId/permissions/:permissionId', folderAccessController.revokeFolderAccess);
+router.get('/search-users', folderAccessController.searchUsersForAccess);
 
 module.exports = router;

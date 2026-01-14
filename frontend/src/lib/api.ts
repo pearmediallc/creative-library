@@ -386,6 +386,40 @@ export const folderApi = {
   // Get folder lock status
   getLockStatus: (id: string) =>
     api.get(`/folders/${id}/lock-status`),
+
+  // Folder access management
+  grantAccess: (folderId: string, data: {
+    userId: string;
+    permissionType: 'view' | 'edit' | 'delete';
+    expiresAt?: string;
+  }) => api.post(`/folders/${folderId}/grant-access`, data),
+
+  getPermissions: (folderId: string) =>
+    api.get(`/folders/${folderId}/permissions`),
+
+  revokeAccess: (folderId: string, permissionId: string) =>
+    api.delete(`/folders/${folderId}/permissions/${permissionId}`),
+
+  searchUsers: (query: string) =>
+    api.get(`/folders/search-users`, { params: { q: query } }),
+};
+
+// File Request Comments endpoints
+export const requestCommentsApi = {
+  getComments: (requestId: string) =>
+    api.get(`/file-requests/${requestId}/comments`),
+
+  addComment: (requestId: string, comment: string) =>
+    api.post(`/file-requests/${requestId}/comments`, { comment }),
+
+  updateComment: (commentId: string, comment: string) =>
+    api.put(`/file-requests/comments/${commentId}`, { comment }),
+
+  deleteComment: (commentId: string) =>
+    api.delete(`/file-requests/comments/${commentId}`),
+
+  getCommentCount: (requestId: string) =>
+    api.get(`/file-requests/${requestId}/comments/count`),
 };
 
 // Starred endpoints
