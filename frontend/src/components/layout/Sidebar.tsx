@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Image, Star, Clock, Trash2, TrendingUp, Users, Settings, LogOut, FileText, Tags, Share2, UserCheck, Layers, ChevronRight, Inbox, User, Download, BarChart3 } from 'lucide-react';
+import { LayoutDashboard, Image, Star, Clock, Trash2, TrendingUp, Users, Settings, LogOut, FileText, Tags, Share2, UserCheck, Layers, ChevronRight, Inbox, User, Download, BarChart3, Shield } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { cn } from '../../lib/utils';
 import { savedSearchApi } from '../../lib/api';
@@ -34,6 +34,7 @@ const editorNavigation = [
 
 const adminNavigation = [
   { name: 'Admin Panel', href: '/admin', icon: Settings },
+  { name: 'RBAC Permissions', href: '/rbac-admin', icon: Shield },
   { name: 'Activity Logs', href: '/activity-logs', icon: FileText },
   { name: 'Log Exports', href: '/activity-log-export', icon: Download },
 ];

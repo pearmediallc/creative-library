@@ -39,9 +39,17 @@ CREATE TABLE IF NOT EXISTS user_roles (
   granted_by UUID REFERENCES users(id),
   granted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   expires_at TIMESTAMP, -- NULL = no expiration
-  is_active BOOLEAN DEFAULT TRUE,
-  UNIQUE(user_id, role_id, scope_type, scope_id)
+  is_active BOOLEAN DEFAULT TRUE
 );
+
+-- Unique constraint that handles NULL scope_id properly
+CREATE UNIQUE INDEX idx_user_roles_unique_with_scope
+  ON user_roles(user_id, role_id, scope_type, scope_id)
+  WHERE scope_id IS NOT NULL;
+
+CREATE UNIQUE INDEX idx_user_roles_unique_without_scope
+  ON user_roles(user_id, role_id, scope_type)
+  WHERE scope_id IS NULL;
 
 CREATE INDEX idx_user_roles_user ON user_roles(user_id);
 CREATE INDEX idx_user_roles_role ON user_roles(role_id);
@@ -64,6 +72,15 @@ CREATE TABLE IF NOT EXISTS permissions (
   reason TEXT, -- Why this permission was granted/denied
   is_active BOOLEAN DEFAULT TRUE
 );
+
+-- Unique constraint for permissions that handles NULL resource_id
+CREATE UNIQUE INDEX idx_permissions_unique_with_resource
+  ON permissions(user_id, resource_type, resource_id, action)
+  WHERE resource_id IS NOT NULL;
+
+CREATE UNIQUE INDEX idx_permissions_unique_without_resource
+  ON permissions(user_id, resource_type, action)
+  WHERE resource_id IS NULL;
 
 CREATE INDEX idx_permissions_user ON permissions(user_id);
 CREATE INDEX idx_permissions_resource ON permissions(resource_type, resource_id);

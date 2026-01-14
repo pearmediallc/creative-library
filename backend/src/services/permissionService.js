@@ -145,20 +145,27 @@ class PermissionService {
     try {
       const { resourceId = null, expiresAt = null, reason = null } = options;
 
-      const result = await query(
-        `INSERT INTO permissions (user_id, resource_type, resource_id, action, permission, granted_by, expires_at, reason)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-         ON CONFLICT (user_id, resource_type, COALESCE(resource_id, '00000000-0000-0000-0000-000000000000'::uuid), action)
-         DO UPDATE SET
-           permission = EXCLUDED.permission,
-           granted_by = EXCLUDED.granted_by,
-           granted_at = CURRENT_TIMESTAMP,
-           expires_at = EXCLUDED.expires_at,
-           reason = EXCLUDED.reason,
-           is_active = TRUE
+      // First try to update existing permission
+      let result = await query(
+        `UPDATE permissions
+         SET permission = $5, granted_by = $6, granted_at = CURRENT_TIMESTAMP,
+             expires_at = $7, reason = $8, is_active = TRUE
+         WHERE user_id = $1 AND resource_type = $2
+           AND action = $4
+           AND (resource_id = $3 OR ($3 IS NULL AND resource_id IS NULL))
          RETURNING *`,
         [userId, resourceType, resourceId, action, permission, grantedBy, expiresAt, reason]
       );
+
+      // If no rows updated, insert new permission
+      if (result.rows.length === 0) {
+        result = await query(
+          `INSERT INTO permissions (user_id, resource_type, resource_id, action, permission, granted_by, expires_at, reason)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+           RETURNING *`,
+          [userId, resourceType, resourceId, action, permission, grantedBy, expiresAt, reason]
+        );
+      }
 
       // Log the action
       await this._logPermissionChange('permission_granted', grantedBy, userId, 'permission', result.rows[0].id, {
@@ -222,18 +229,25 @@ class PermissionService {
       }
       const roleId = roleResult.rows[0].id;
 
-      const result = await query(
-        `INSERT INTO user_roles (user_id, role_id, scope_type, scope_id, granted_by, expires_at)
-         VALUES ($1, $2, $3, $4, $5, $6)
-         ON CONFLICT (user_id, role_id, scope_type, COALESCE(scope_id, '00000000-0000-0000-0000-000000000000'::uuid))
-         DO UPDATE SET
-           granted_by = EXCLUDED.granted_by,
-           granted_at = CURRENT_TIMESTAMP,
-           expires_at = EXCLUDED.expires_at,
-           is_active = TRUE
+      // First try to update existing role assignment
+      let result = await query(
+        `UPDATE user_roles
+         SET granted_by = $5, granted_at = CURRENT_TIMESTAMP, expires_at = $6, is_active = TRUE
+         WHERE user_id = $1 AND role_id = $2 AND scope_type = $3
+           AND (scope_id = $4 OR ($4 IS NULL AND scope_id IS NULL))
          RETURNING *`,
         [userId, roleId, scopeType, scopeId, assignedBy, expiresAt]
       );
+
+      // If no rows updated, insert new role assignment
+      if (result.rows.length === 0) {
+        result = await query(
+          `INSERT INTO user_roles (user_id, role_id, scope_type, scope_id, granted_by, expires_at)
+           VALUES ($1, $2, $3, $4, $5, $6)
+           RETURNING *`,
+          [userId, roleId, scopeType, scopeId, assignedBy, expiresAt]
+        );
+      }
 
       await this._logPermissionChange('role_assigned', assignedBy, userId, 'role', result.rows[0].id, {
         roleName,
