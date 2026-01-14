@@ -100,19 +100,22 @@ const PRODUCT_BRIEF_TEMPLATE = {
 class CanvasController {
   /**
    * Extract mentioned user IDs from canvas content
-   * Mentions format: @[User Name](user_id)
+   * Mentions format: @Username (simple, clean format)
    */
-  static extractMentions(content) {
+  static async extractMentions(content) {
     const mentions = new Set();
-    const mentionRegex = /@\[([^\]]+)\]\(([a-f0-9-]+)\)/g;
+    const mentionRegex = /@([\w\s]+)/g; // Matches @Username or @First Last
 
-    // Extract from all text content in blocks
+    // Collect all mentioned names
+    const mentionedNames = new Set();
+
     if (content && content.blocks) {
       content.blocks.forEach(block => {
         if (block.content) {
           let match;
           while ((match = mentionRegex.exec(block.content)) !== null) {
-            mentions.add(match[2]); // user_id is in capture group 2
+            const name = match[1].trim();
+            if (name) mentionedNames.add(name);
           }
         }
 
@@ -123,12 +126,24 @@ class CanvasController {
             if (text) {
               let match;
               while ((match = mentionRegex.exec(text)) !== null) {
-                mentions.add(match[2]);
+                const name = match[1].trim();
+                if (name) mentionedNames.add(name);
               }
             }
           });
         }
       });
+    }
+
+    // Look up user IDs from names
+    if (mentionedNames.size > 0) {
+      const names = Array.from(mentionedNames);
+      const placeholders = names.map((_, i) => `$${i + 1}`).join(',');
+      const result = await query(
+        `SELECT id FROM users WHERE name IN (${placeholders})`,
+        names
+      );
+      result.rows.forEach(row => mentions.add(row.id));
     }
 
     return Array.from(mentions);
@@ -250,7 +265,7 @@ class CanvasController {
       const canvas = await Canvas.upsertCanvas(requestId, content, attachments);
 
       // Extract mentions and create notifications
-      const mentionedUserIds = CanvasController.extractMentions(content);
+      const mentionedUserIds = await CanvasController.extractMentions(content);
 
       if (mentionedUserIds.length > 0) {
         // Get current user's name

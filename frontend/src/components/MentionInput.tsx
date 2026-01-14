@@ -94,9 +94,9 @@ export const MentionInput: React.FC<MentionInputProps> = ({
 
     if (lastAtIndex === -1) return;
 
-    // Replace @query with @[Name](user_id)
+    // Replace @query with just @Name (clean display, ID stored in data attribute)
     const beforeAt = value.substring(0, lastAtIndex);
-    const mention = `@[${user.name}](${user.id})`;
+    const mention = `@${user.name}`;
     const newValue = beforeAt + mention + ' ' + textAfterCursor;
 
     onChange(newValue);
