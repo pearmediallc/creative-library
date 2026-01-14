@@ -7,6 +7,7 @@ import { MediaFile } from '../types';
 import { formatBytes, formatDate } from '../lib/utils';
 import { Image as ImageIcon, Video, Download, Share2, Star, Clock, LayoutGrid, List, FileText } from 'lucide-react';
 import { ShareDialog } from '../components/ShareDialog';
+import { MediaLightbox } from '../components/MediaLightbox';
 
 type ViewMode = 'grid' | 'list';
 
@@ -25,6 +26,10 @@ export function RecentsPage() {
     const saved = localStorage.getItem('recentsViewMode');
     return (saved === 'list' || saved === 'grid') ? saved : 'grid';
   });
+
+  // Lightbox state
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
 
   useEffect(() => {
     fetchRecentFiles();
@@ -99,6 +104,11 @@ export function RecentsPage() {
     }
   };
 
+  const handleFileClick = (fileIndex: number) => {
+    setLightboxIndex(fileIndex);
+    setLightboxOpen(true);
+  };
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -154,12 +164,15 @@ export function RecentsPage() {
             {viewMode === 'grid' ? (
               /* Grid View */
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {files.map((file) => {
+                {files.map((file, index) => {
                   const isStarred = starredFileIds.has(file.id);
 
                   return (
                     <Card key={file.id} className="overflow-hidden">
-                      <div className="aspect-video bg-muted relative">
+                      <div
+                        className="aspect-video bg-muted relative cursor-pointer hover:opacity-90 transition-opacity"
+                        onClick={() => handleFileClick(index)}
+                      >
                         {file.thumbnail_url ? (
                           <img
                             src={file.thumbnail_url}
@@ -281,7 +294,10 @@ export function RecentsPage() {
                           }`}
                         >
                           <td className="p-3">
-                            <div className="w-12 h-12 rounded overflow-hidden bg-muted flex items-center justify-center">
+                            <div
+                              className="w-12 h-12 rounded overflow-hidden bg-muted flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity"
+                              onClick={() => handleFileClick(index)}
+                            >
                               {file.thumbnail_url ? (
                                 <img
                                   src={file.thumbnail_url}
@@ -399,6 +415,15 @@ export function RecentsPage() {
           resourceId={shareDialogFile.id}
           resourceName={shareDialogFile.name}
           resourceType={shareDialogFile.type}
+        />
+      )}
+
+      {/* Media Lightbox */}
+      {lightboxOpen && files.length > 0 && (
+        <MediaLightbox
+          files={files}
+          initialIndex={lightboxIndex}
+          onClose={() => setLightboxOpen(false)}
         />
       )}
     </DashboardLayout>

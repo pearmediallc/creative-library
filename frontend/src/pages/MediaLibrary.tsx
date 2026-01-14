@@ -34,6 +34,8 @@ interface FolderNode {
   name: string;
   created_at: string;
   color?: string;
+  is_locked?: boolean;
+  locked_by?: string;
 }
 
 interface BreadcrumbItem {
@@ -340,6 +342,27 @@ export function MediaLibraryPage() {
       alert(error.response?.data?.error || 'Failed to download folder as ZIP');
     } finally {
       setDownloadingZip(false);
+    }
+  };
+
+  const handleToggleLock = async () => {
+    if (!contextMenuFolder) return;
+
+    const isLocked = contextMenuFolder.is_locked;
+    let reason: string | undefined;
+
+    // If locking, ask for reason (optional)
+    if (!isLocked) {
+      reason = prompt('Reason for locking this folder (optional):') || undefined;
+    }
+
+    try {
+      await folderApi.toggleLock(contextMenuFolder.id, reason);
+      await fetchData(); // Refresh data to show updated lock status
+      alert(isLocked ? 'Folder unlocked successfully' : 'Folder locked successfully');
+    } catch (error: any) {
+      console.error('Failed to toggle folder lock:', error);
+      alert(error.response?.data?.error || 'Failed to toggle folder lock');
     }
   };
 
@@ -1324,6 +1347,8 @@ export function MediaLibraryPage() {
         onProperties={handleFolderProperties}
         onShare={handleShareFolder}
         onDownloadZip={handleDownloadFolderZip}
+        onToggleLock={handleToggleLock}
+        isLocked={contextMenuFolder?.is_locked || false}
       />
 
       {contextMenuFile && (

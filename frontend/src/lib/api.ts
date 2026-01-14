@@ -378,6 +378,14 @@ export const folderApi = {
     api.get(`/folders/${id}/download`, {
       responseType: 'blob',
     }),
+
+  // Toggle folder lock
+  toggleLock: (id: string, reason?: string) =>
+    api.post(`/folders/${id}/toggle-lock`, { reason }),
+
+  // Get folder lock status
+  getLockStatus: (id: string) =>
+    api.get(`/folders/${id}/lock-status`),
 };
 
 // Starred endpoints

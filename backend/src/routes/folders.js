@@ -6,6 +6,7 @@
 const express = require('express');
 const router = express.Router();
 const folderController = require('../controllers/folderController');
+const folderLockController = require('../controllers/folderLockController');
 const { authenticateToken } = require('../middleware/auth');
 
 // All folder routes require authentication
@@ -29,5 +30,9 @@ router.post('/copy-files', folderController.copyFiles.bind(folderController));
 
 // Date-based folder creation
 router.post('/date-folder', folderController.createDateFolder.bind(folderController));
+
+// Folder lock
+router.post('/:id/toggle-lock', folderLockController.toggleFolderLock);
+router.get('/:id/lock-status', folderLockController.getFolderLockStatus);
 
 module.exports = router;
