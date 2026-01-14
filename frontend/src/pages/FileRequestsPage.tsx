@@ -230,7 +230,7 @@ export function FileRequestsPage() {
               >
                 All
               </Button>
-              {VERTICALS.slice(0, 6).map((vertical) => (
+              {VERTICALS.map((vertical) => (
                 <Button
                   key={vertical}
                   variant={selectedVertical === vertical ? 'default' : 'outline'}
