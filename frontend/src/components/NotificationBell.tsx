@@ -32,11 +32,11 @@ export const NotificationBell: React.FC = () => {
     try {
       const token = localStorage.getItem('token');
       const [notifResponse, countResponse] = await Promise.all([
-        axios.get(`${process.env.REACT_APP_API_URL}/api/notifications`, {
+        axios.get(`${process.env.REACT_APP_API_URL}/notifications`, {
           headers: { Authorization: `Bearer ${token}` },
           params: { limit: 20 }
         }),
-        axios.get(`${process.env.REACT_APP_API_URL}/api/notifications/unread-count`, {
+        axios.get(`${process.env.REACT_APP_API_URL}/notifications/unread-count`, {
           headers: { Authorization: `Bearer ${token}` }
         })
       ]);
@@ -60,7 +60,7 @@ export const NotificationBell: React.FC = () => {
     try {
       const token = localStorage.getItem('token');
       await axios.patch(
-        `${process.env.REACT_APP_API_URL}/api/notifications/${notificationId}/read`,
+        `${process.env.REACT_APP_API_URL}/notifications/${notificationId}/read`,
         {},
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -80,7 +80,7 @@ export const NotificationBell: React.FC = () => {
       setLoading(true);
       const token = localStorage.getItem('token');
       await axios.post(
-        `${process.env.REACT_APP_API_URL}/api/notifications/mark-all-read`,
+        `${process.env.REACT_APP_API_URL}/notifications/mark-all-read`,
         {},
         { headers: { Authorization: `Bearer ${token}` } }
       );

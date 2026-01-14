@@ -250,7 +250,7 @@ class CanvasController {
       const canvas = await Canvas.upsertCanvas(requestId, content, attachments);
 
       // Extract mentions and create notifications
-      const mentionedUserIds = this.extractMentions(content);
+      const mentionedUserIds = CanvasController.extractMentions(content);
 
       if (mentionedUserIds.length > 0) {
         // Get current user's name

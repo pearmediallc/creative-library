@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Inbox, FolderPlus, FileText, Maximize2, Minimize2 } from 'lucide-react';
+import { X, Inbox, FolderPlus, FileText } from 'lucide-react';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { fileRequestApi, folderApi, editorApi, adminApi } from '../lib/api';
@@ -7,7 +7,6 @@ import { FILE_REQUEST_TYPES } from '../constants/fileRequestTypes';
 import { PLATFORMS } from '../constants/platforms';
 import { VERTICALS } from '../constants/verticals';
 import { CanvasEditor } from './CanvasEditor';
-import { MentionInput } from './MentionInput';
 
 interface CreateFileRequestModalProps {
   onClose: () => void;
@@ -55,7 +54,6 @@ export function CreateFileRequestModal({ onClose, onSuccess }: CreateFileRequest
   const [showCanvas, setShowCanvas] = useState(false);
   const [hasCanvas, setHasCanvas] = useState(false);
   const [createdRequestId, setCreatedRequestId] = useState<string | null>(null);
-  const [useCanvasMode, setUseCanvasMode] = useState(false);
 
   useEffect(() => {
     fetchFolders();
@@ -202,9 +200,9 @@ export function CreateFileRequestModal({ onClose, onSuccess }: CreateFileRequest
           await fileRequestApi.assignEditors(requestId, selectedEditorIds);
         }
 
-        // Show success message and keep modal open for canvas creation
+        // Open Canvas Editor automatically
+        setShowCanvas(true);
         setError('');
-        // Don't call onSuccess() yet - let user add canvas or close manually
       } else {
         onSuccess();
       }
@@ -302,76 +300,43 @@ export function CreateFileRequestModal({ onClose, onSuccess }: CreateFileRequest
             </select>
           </div>
 
-          {/* Concept Notes / Canvas Brief Toggle */}
+          {/* Concept Notes */}
           <div>
-            <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center justify-between mb-1">
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                {useCanvasMode ? 'Canvas Brief (Detailed)' : 'Concept Notes'}
+                Concept Notes
               </label>
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={() => setUseCanvasMode(!useCanvasMode)}
-                disabled={creating}
-                className="text-xs flex items-center gap-1.5 bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700 hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-all"
+                onClick={() => {
+                  // Open Canvas Editor immediately without requiring request creation first
+                  if (!requestType || !platform || !vertical) {
+                    setError('Please fill in Request Type, Platform, and Vertical first');
+                    return;
+                  }
+                  // Create request first, then open canvas
+                  handleSubmit(new Event('submit') as any);
+                }}
+                disabled={creating || !requestType || !platform || !vertical}
+                className="text-xs flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white border-blue-600"
               >
-                {useCanvasMode ? (
-                  <>
-                    <Minimize2 className="w-4 h-4" />
-                    Simple Notes
-                  </>
-                ) : (
-                  <>
-                    <Maximize2 className="w-4 h-4" />
-                    Canvas Brief
-                  </>
-                )}
+                <FileText className="w-4 h-4" />
+                Create Canvas Brief
               </Button>
             </div>
-
-            {!useCanvasMode ? (
-              /* Simple Mode - Basic Textarea */
-              <div className="space-y-2">
-                <textarea
-                  value={conceptNotes}
-                  onChange={(e) => setConceptNotes(e.target.value)}
-                  placeholder="Quick notes about this request..."
-                  rows={3}
-                  disabled={creating}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-                />
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  💡 Tip: Need more detail? Click "Canvas Brief" above for @ mentions, formatting, and structured requirements.
-                </p>
-              </div>
-            ) : (
-              /* Canvas Mode - Enhanced Input with @ Mentions */
-              <div className="border-2 border-blue-300 dark:border-blue-600 rounded-lg p-4 bg-blue-50 dark:bg-blue-900/10 space-y-3">
-                <div className="space-y-2">
-                  <p className="text-xs font-semibold text-blue-800 dark:text-blue-200">
-                    Enhanced Brief Mode - Use @ to mention team members
-                  </p>
-                  <MentionInput
-                    value={conceptNotes}
-                    onChange={setConceptNotes}
-                    placeholder="Describe your request in detail... Type @ to mention team members"
-                    multiline={true}
-                    rows={8}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white resize-none"
-                  />
-                  <div className="bg-white dark:bg-gray-800 rounded-md p-3 border border-blue-200 dark:border-blue-700">
-                    <p className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">Quick Tips:</p>
-                    <ul className="text-xs text-gray-600 dark:text-gray-400 space-y-1 ml-4">
-                      <li>• Type <code className="bg-gray-100 dark:bg-gray-700 px-1 rounded">@</code> to mention team members</li>
-                      <li>• Include product details, requirements, and success criteria</li>
-                      <li>• Add links to reference materials or documents</li>
-                      <li>• After creating the request, you can open the full Canvas editor to add attachments</li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-            )}
+            <textarea
+              value={conceptNotes}
+              onChange={(e) => setConceptNotes(e.target.value)}
+              placeholder="Quick notes about this request..."
+              rows={3}
+              disabled={creating}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+            />
+            <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+              💡 Want a detailed brief with @ mentions, structure, and attachments? Click "Create Canvas Brief" above
+            </p>
           </div>
 
           {/* Number of Creatives */}
