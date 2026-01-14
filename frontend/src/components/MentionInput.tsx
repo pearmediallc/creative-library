@@ -41,7 +41,7 @@ export const MentionInput: React.FC<MentionInputProps> = ({
         const response = await axios.get(`${process.env.REACT_APP_API_URL}/admin/users`, {
           headers: { Authorization: `Bearer ${token}` }
         });
-        setUsers(response.data.users || []);
+        setUsers(response.data.data || []);
       } catch (error) {
         console.error('Failed to fetch users for mentions:', error);
       }

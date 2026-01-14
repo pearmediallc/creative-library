@@ -200,9 +200,14 @@ export function CreateFileRequestModal({ onClose, onSuccess }: CreateFileRequest
           await fileRequestApi.assignEditors(requestId, selectedEditorIds);
         }
 
-        // Open Canvas Editor automatically
-        setShowCanvas(true);
-        setError('');
+        // Open Canvas Editor if user toggled it on, otherwise close modal
+        if (showCanvas) {
+          // Canvas toggle is ON - keep modal open and show canvas editor
+          setError('');
+        } else {
+          // Canvas toggle is OFF - close modal and refresh
+          onSuccess();
+        }
       } else {
         onSuccess();
       }
@@ -300,43 +305,38 @@ export function CreateFileRequestModal({ onClose, onSuccess }: CreateFileRequest
             </select>
           </div>
 
-          {/* Concept Notes */}
+          {/* Concept Notes with Canvas Toggle */}
           <div>
             <div className="flex items-center justify-between mb-1">
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                Concept Notes
+                Concept Notes / Brief
               </label>
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={() => {
-                  // Open Canvas Editor immediately without requiring request creation first
-                  if (!requestType || !platform || !vertical) {
-                    setError('Please fill in Request Type, Platform, and Vertical first');
-                    return;
-                  }
-                  // Create request first, then open canvas
-                  handleSubmit(new Event('submit') as any);
-                }}
-                disabled={creating || !requestType || !platform || !vertical}
+                onClick={() => setShowCanvas(!showCanvas)}
+                disabled={creating}
                 className="text-xs flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white border-blue-600"
               >
                 <FileText className="w-4 h-4" />
-                Create Canvas Brief
+                {showCanvas ? 'Simple Notes' : 'Canvas Brief (Detailed)'}
               </Button>
             </div>
-            <textarea
-              value={conceptNotes}
-              onChange={(e) => setConceptNotes(e.target.value)}
-              placeholder="Quick notes about this request..."
-              rows={3}
-              disabled={creating}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-            />
-            <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
-              💡 Want a detailed brief with @ mentions, structure, and attachments? Click "Create Canvas Brief" above
-            </p>
+            {!showCanvas ? (
+              <textarea
+                value={conceptNotes}
+                onChange={(e) => setConceptNotes(e.target.value)}
+                placeholder="Quick notes about this request..."
+                rows={3}
+                disabled={creating}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+              />
+            ) : (
+              <p className="text-sm text-blue-600 dark:text-blue-400 italic">
+                Canvas Brief editor will open after you click "Create Request" below
+              </p>
+            )}
           </div>
 
           {/* Number of Creatives */}
