@@ -25,6 +25,7 @@ import { PublicFileRequestPage } from './pages/PublicFileRequestPage';
 import { UserSettingsPage } from './pages/UserSettings';
 import { ActivityLogExportPage } from './pages/ActivityLogExport';
 import { WorkloadDashboardPage } from './pages/WorkloadDashboardPage';
+import { AccessRequestsPage } from './pages/AccessRequestsPage';
 
 function PrivateRoute({ children }: { children: React.ReactElement }) {
   const { user, loading } = useAuth();
@@ -240,6 +241,14 @@ function AppRoutes() {
         element={
           <PrivateRoute>
             <FileRequestsPage />
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/access-requests"
+        element={
+          <PrivateRoute>
+            <AccessRequestsPage />
           </PrivateRoute>
         }
       />

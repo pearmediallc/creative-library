@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Image, Star, Clock, Trash2, TrendingUp, Users, Settings, LogOut, FileText, Tags, Share2, UserCheck, Layers, ChevronRight, Inbox, User, Download, BarChart3, Shield } from 'lucide-react';
+import { LayoutDashboard, Image, Star, Clock, Trash2, TrendingUp, Users, Settings, LogOut, FileText, Tags, Share2, UserCheck, Layers, ChevronRight, Inbox, User, Download, BarChart3, Shield, Key } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { cn } from '../../lib/utils';
 import { savedSearchApi } from '../../lib/api';
@@ -10,6 +10,7 @@ const baseNavigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
   { name: 'Media Library', href: '/media', icon: Image },
   { name: 'File Requests', href: '/file-requests', icon: Inbox },
+  { name: 'Access Requests', href: '/access-requests', icon: Key },
   { name: 'Starred', href: '/starred', icon: Star },
   { name: 'Recents', href: '/recents', icon: Clock },
   { name: 'Shared with me', href: '/shared-with-me', icon: UserCheck },

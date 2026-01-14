@@ -101,8 +101,16 @@ export const NotificationBell: React.FC = () => {
       await markAsRead(notification.id);
     }
 
-    // Navigate based on reference type
-    if (notification.reference_type === 'canvas' && notification.metadata?.fileRequestId) {
+    // Navigate based on notification type
+    if (notification.type === 'access_request') {
+      // Navigate to access requests to review page
+      navigate('/access-requests?tab=to-review');
+      setShowDropdown(false);
+    } else if (notification.type === 'access_request_approved' || notification.type === 'access_request_denied') {
+      // Navigate to my requests page
+      navigate('/access-requests?tab=my-requests');
+      setShowDropdown(false);
+    } else if (notification.reference_type === 'canvas' && notification.metadata?.fileRequestId) {
       navigate(`/dashboard?requestId=${notification.metadata.fileRequestId}&openCanvas=true`);
       setShowDropdown(false);
     }

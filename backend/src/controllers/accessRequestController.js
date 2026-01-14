@@ -1,5 +1,5 @@
 const accessRequestService = require('../services/accessRequestService');
-const Notification = require('../services/notificationService');
+const Notification = require('../models/Notification');
 
 /**
  * Access Request Controller

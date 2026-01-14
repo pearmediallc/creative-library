@@ -3,6 +3,7 @@ import { X, ChevronLeft, ChevronRight, Download, Trash2, Info, Share2, Star, Tag
 import { VideoPlayer } from './VideoPlayer';
 import { MediaFile } from '../types';
 import { Button } from './ui/Button';
+import { RequestAccessButton } from './RequestAccessButton';
 
 interface MediaLightboxProps {
   files: MediaFile[];
@@ -175,6 +176,19 @@ export function MediaLightbox({
             >
               <Trash2 className="w-5 h-5" />
             </Button>
+          )}
+
+          {/* Request Access Button - shows when user doesn't have permission */}
+          {!onDelete && !onShare && (
+            <RequestAccessButton
+              resourceType="media_file"
+              resourceId={currentFile.id}
+              resourceName={currentFile.original_filename}
+              requestedPermission="download"
+              variant="ghost"
+              size="sm"
+              className="text-white hover:bg-white/10"
+            />
           )}
 
           <div className="w-px h-6 bg-gray-600 mx-2" />

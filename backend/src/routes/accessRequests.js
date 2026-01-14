@@ -1,10 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const accessRequestController = require('../controllers/accessRequestController');
-const { auth } = require('../middleware/auth');
+const { authenticateToken } = require('../middleware/auth');
 
 // All routes require authentication
-router.use(auth);
+router.use(authenticateToken);
 
 /**
  * @route   POST /api/access-requests

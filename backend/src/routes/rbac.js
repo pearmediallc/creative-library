@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const rbacController = require('../controllers/rbacController');
-const { auth } = require('../middleware/auth');
+const { authenticateToken: auth } = require('../middleware/auth');
 const { permissions, requireSuperAdmin } = require('../middleware/permissionMiddleware');
 
 // ==================== USER ENDPOINTS (Authenticated users) ====================

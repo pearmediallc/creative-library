@@ -146,16 +146,16 @@ SELECT
   -- Resource name based on type
   CASE
     WHEN ar.resource_type = 'folder' THEN f.name
-    WHEN ar.resource_type = 'file_request' THEN fr.name
+    WHEN ar.resource_type = 'file_request' THEN CONCAT('File Request #', SUBSTRING(ar.resource_id::text, 1, 8))
     WHEN ar.resource_type = 'media_file' THEN mf.original_filename
-    WHEN ar.resource_type = 'canvas' THEN frc.name
+    WHEN ar.resource_type = 'canvas' THEN CONCAT('Canvas for Request #', SUBSTRING(frc.file_request_id::text, 1, 8))
   END as resource_name,
   -- Resource owner
   CASE
     WHEN ar.resource_type = 'folder' THEN f.owner_id
     WHEN ar.resource_type = 'file_request' THEN fr.created_by
     WHEN ar.resource_type = 'media_file' THEN mf.uploaded_by
-    WHEN ar.resource_type = 'canvas' THEN frc.created_by
+    WHEN ar.resource_type = 'canvas' THEN fr_canvas.created_by
   END as resource_owner_id
 FROM access_requests ar
 JOIN users requester ON ar.requester_id = requester.id
@@ -163,7 +163,8 @@ LEFT JOIN users reviewer ON ar.reviewed_by = reviewer.id
 LEFT JOIN folders f ON ar.resource_type = 'folder' AND ar.resource_id = f.id
 LEFT JOIN file_requests fr ON ar.resource_type = 'file_request' AND ar.resource_id = fr.id
 LEFT JOIN media_files mf ON ar.resource_type = 'media_file' AND ar.resource_id = mf.id
-LEFT JOIN file_request_canvas frc ON ar.resource_type = 'canvas' AND ar.resource_id = frc.id;
+LEFT JOIN file_request_canvas frc ON ar.resource_type = 'canvas' AND ar.resource_id = frc.id
+LEFT JOIN file_requests fr_canvas ON frc.file_request_id = fr_canvas.id;
 
 -- =====================================================
 -- 6. COMMENTS
