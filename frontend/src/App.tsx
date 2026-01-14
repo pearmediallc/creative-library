@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { PermissionsProvider } from './contexts/PermissionsContext';
 import { LoginPage } from './pages/Login';
 import { RegisterPage } from './pages/Register';
 import { DashboardPage } from './pages/Dashboard';
@@ -8,6 +9,7 @@ import { MediaLibraryPage } from './pages/MediaLibrary';
 import { AnalyticsPage } from './pages/Analytics';
 import { EditorsPage } from './pages/Editors';
 import { AdminPage } from './pages/Admin';
+import { RBACAdminPanel } from './pages/RBACAdminPanel';
 import { ActivityLogsPage } from './pages/ActivityLogs';
 import { MetadataExtraction } from './pages/MetadataExtraction';
 import { TeamsPage } from './pages/TeamsPage';
@@ -178,6 +180,14 @@ function AppRoutes() {
         }
       />
       <Route
+        path="/rbac-admin"
+        element={
+          <AdminRoute>
+            <RBACAdminPanel />
+          </AdminRoute>
+        }
+      />
+      <Route
         path="/activity-logs"
         element={
           <AdminRoute>
@@ -250,7 +260,9 @@ function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <AppRoutes />
+        <PermissionsProvider>
+          <AppRoutes />
+        </PermissionsProvider>
       </AuthProvider>
     </BrowserRouter>
   );
