@@ -44,7 +44,7 @@ export function FileRequestsPage() {
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [showReassignModal, setShowReassignModal] = useState(false);
   const [requestToReassign, setRequestToReassign] = useState<FileRequest | null>(null);
-  const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
+  const [viewMode, setViewMode] = useState<'grid' | 'table'>('table');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedVertical, setSelectedVertical] = useState<string>('All');
   const [selectedPlatform, setSelectedPlatform] = useState<string>('All');
