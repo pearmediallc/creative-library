@@ -9,7 +9,7 @@ interface RequestAccessButtonProps {
   resourceName?: string;
   requestedPermission?: 'view' | 'edit' | 'download' | 'delete';
   variant?: 'default' | 'outline' | 'ghost';
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'default' | 'sm' | 'lg';
   className?: string;
 }
 

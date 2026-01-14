@@ -301,12 +301,13 @@ export function RBACAdminPanel() {
                 <CardHeader>
                   <CardTitle>All Users</CardTitle>
                   <CardDescription>Select a user to manage permissions</CardDescription>
-                  <div className="mt-4">
+                  <div className="mt-4 relative">
+                    <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                     <Input
                       placeholder="Search users..."
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
-                      leftIcon={<Search className="w-4 h-4" />}
+                      className="pl-9"
                     />
                   </div>
                 </CardHeader>
