@@ -31,7 +31,7 @@ interface FileRequest {
   buyer_name?: string;
   buyer_email?: string;
   created_by_name?: string;
-  assigned_editors?: string[];
+  assigned_editors?: string; // STRING_AGG returns a comma-separated string
 }
 
 export function FileRequestsPage() {
@@ -359,9 +359,7 @@ export function FileRequestsPage() {
                         {request.concept_notes || '-'}
                       </td>
                       <td className="p-4 text-sm">
-                        {request.assigned_editors && request.assigned_editors.length > 0
-                          ? request.assigned_editors.join(', ')
-                          : '-'}
+                        {request.assigned_editors || '-'}
                       </td>
                       <td className="p-4">
                         {request.is_active ? (
@@ -485,8 +483,8 @@ export function FileRequestsPage() {
                       {request.concept_notes && (
                         <p className="line-clamp-2">Notes: {request.concept_notes}</p>
                       )}
-                      {request.assigned_editors && request.assigned_editors.length > 0 && (
-                        <p>Editors: {request.assigned_editors.join(', ')}</p>
+                      {request.assigned_editors && (
+                        <p>Editors: {request.assigned_editors}</p>
                       )}
                       {request.folder_name && (
                         <p>Folder: {request.folder_name}</p>
