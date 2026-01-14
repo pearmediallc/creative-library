@@ -353,7 +353,13 @@ export function MediaLibraryPage() {
 
     // If locking, ask for reason (optional)
     if (!isLocked) {
-      reason = prompt('Reason for locking this folder (optional):') || undefined;
+      const userInput = prompt('Reason for locking this folder (optional):');
+      if (userInput === null) {
+        // User clicked cancel
+        return;
+      }
+      // Only set reason if user actually entered something
+      reason = userInput.trim() || undefined;
     }
 
     try {

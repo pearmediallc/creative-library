@@ -57,6 +57,8 @@ export function RBACAdminPanel() {
   const [userDetailPermissions, setUserDetailPermissions] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [auditLogs, setAuditLogs] = useState<any[]>([]);
+  const [auditLoading, setAuditLoading] = useState(false);
 
   // Role assignment state
   const [showAssignRole, setShowAssignRole] = useState(false);
@@ -94,6 +96,12 @@ export function RBACAdminPanel() {
     fetchData();
   }, []);
 
+  useEffect(() => {
+    if (activeTab === 'audit') {
+      fetchAuditLogs();
+    }
+  }, [activeTab]);
+
   const fetchData = async () => {
     try {
       setLoading(true);
@@ -126,6 +134,23 @@ export function RBACAdminPanel() {
       setUserDetailPermissions(response.data.data);
     } catch (error) {
       console.error('Failed to fetch user permissions:', error);
+    }
+  };
+
+  const fetchAuditLogs = async () => {
+    try {
+      setAuditLoading(true);
+      const token = localStorage.getItem('token');
+      const response = await axios.get(
+        `${process.env.REACT_APP_API_URL}/rbac/audit-log`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setAuditLogs(response.data.data || []);
+    } catch (error) {
+      console.error('Failed to fetch audit logs:', error);
+      setAuditLogs([]);
+    } finally {
+      setAuditLoading(false);
     }
   };
 
@@ -577,9 +602,56 @@ export function RBACAdminPanel() {
               <CardDescription>Track all permission changes</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="text-center py-8 text-gray-500">
-                Audit log coming soon...
-              </div>
+              {auditLoading ? (
+                <div className="text-center py-8 text-gray-500">Loading audit logs...</div>
+              ) : auditLogs.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">No audit logs found</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-gray-50 border-b">
+                      <tr>
+                        <th className="text-left p-3 text-sm font-medium text-gray-700">Timestamp</th>
+                        <th className="text-left p-3 text-sm font-medium text-gray-700">Action</th>
+                        <th className="text-left p-3 text-sm font-medium text-gray-700">User</th>
+                        <th className="text-left p-3 text-sm font-medium text-gray-700">Target User</th>
+                        <th className="text-left p-3 text-sm font-medium text-gray-700">Details</th>
+                        <th className="text-left p-3 text-sm font-medium text-gray-700">Resource</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {auditLogs.map((log, index) => (
+                        <tr key={log.id} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                          <td className="p-3 text-sm text-gray-600">
+                            {new Date(log.created_at).toLocaleString()}
+                          </td>
+                          <td className="p-3">
+                            <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
+                              log.action_type === 'grant_permission' ? 'bg-green-100 text-green-800' :
+                              log.action_type === 'revoke_permission' ? 'bg-red-100 text-red-800' :
+                              log.action_type === 'assign_role' ? 'bg-blue-100 text-blue-800' :
+                              log.action_type === 'remove_role' ? 'bg-orange-100 text-orange-800' :
+                              'bg-gray-100 text-gray-800'
+                            }`}>
+                              {log.action_type.replace(/_/g, ' ').toUpperCase()}
+                            </span>
+                          </td>
+                          <td className="p-3 text-sm text-gray-900">{log.performed_by_name || 'Unknown'}</td>
+                          <td className="p-3 text-sm text-gray-900">{log.target_user_name || '-'}</td>
+                          <td className="p-3 text-sm text-gray-600">
+                            {log.role_name && <div>Role: {log.role_name}</div>}
+                            {log.permission_action && <div>Action: {log.permission_action}</div>}
+                            {log.scope_type && <div>Scope: {log.scope_type}</div>}
+                          </td>
+                          <td className="p-3 text-sm text-gray-600">
+                            {log.resource_type ? `${log.resource_type}${log.resource_id ? ` (${log.resource_id.substring(0, 8)}...)` : ''}` : '-'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
