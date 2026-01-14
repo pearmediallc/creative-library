@@ -306,18 +306,22 @@ export function CreateFileRequestModal({ onClose, onSuccess }: CreateFileRequest
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                 Concept Notes
               </label>
-              {createdRequestId && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowCanvas(true)}
-                  className="text-xs"
-                >
-                  <FileText className="w-3 h-3 mr-1" />
-                  {hasCanvas ? 'Edit Canvas Brief' : 'Create Canvas Brief'}
-                </Button>
-              )}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  if (createdRequestId) {
+                    setShowCanvas(true);
+                  } else {
+                    alert('Please fill out the form and click "Create Request" first. Then you can add your Canvas brief with team members, attachments, and detailed requirements.');
+                  }
+                }}
+                className="text-xs flex items-center gap-1 bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700 hover:bg-blue-100 dark:hover:bg-blue-900/30"
+              >
+                <FileText className="w-4 h-4" />
+                {createdRequestId ? (hasCanvas ? 'Edit Canvas Brief' : 'Open Canvas Brief') : 'Add Canvas Brief'}
+              </Button>
             </div>
             <div className="space-y-2">
               <textarea
@@ -329,8 +333,8 @@ export function CreateFileRequestModal({ onClose, onSuccess }: CreateFileRequest
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
               />
               {!createdRequestId && (
-                <p className="text-xs text-muted-foreground">
-                  Create the request first, then you can add a detailed canvas brief with attachments.
+                <p className="text-xs text-blue-600 dark:text-blue-400 italic">
+                  💡 Tip: Create the request first, then click "Add Canvas Brief" button above for a detailed product brief with @mentions and attachments.
                 </p>
               )}
             </div>
