@@ -368,12 +368,20 @@ class FileRequestController {
           `SELECT
             fr.*,
             f.name as folder_name,
-            COUNT(DISTINCT fru.id) as upload_count
+            COUNT(DISTINCT fru.id) as upload_count,
+            buyer.name as buyer_name,
+            buyer.email as buyer_email,
+            creator.name as created_by_name,
+            STRING_AGG(DISTINCT e.display_name, ', ') as assigned_editors
           FROM file_requests fr
           LEFT JOIN folders f ON fr.folder_id = f.id
           LEFT JOIN file_request_uploads fru ON fr.id = fru.file_request_id
+          LEFT JOIN users buyer ON fr.assigned_buyer_id = buyer.id
+          LEFT JOIN users creator ON fr.created_by = creator.id
+          LEFT JOIN file_request_editors fre ON fr.id = fre.request_id
+          LEFT JOIN editors e ON fre.editor_id = e.id
           ${whereClause}
-          GROUP BY fr.id, f.name
+          GROUP BY fr.id, f.name, buyer.name, buyer.email, creator.name
           ORDER BY fr.created_at DESC`,
           params
         );
