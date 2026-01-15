@@ -93,84 +93,92 @@ function sanitizeEditorName(editorName) {
 }
 
 /**
- * Generate S3 key for file with folder structure support
- * PRIORITY:
- * 1. Folder path (if provided) - editor-name/folder-path/media-type/file
- * 2. Editor-based (if no folder) - editor-name/media-type/file
- * 3. Old structure fallback - folder/year/month/file
+ * Generate S3 key for file with YYYY/MM/DD date structure
+ * NEW STRUCTURE:
+ * - Media Library: media-library/{uploader}/{YYYY}/{MM}/{DD}/{media-type}/file
+ * - File Requests: file-requests/{request-id}/uploads/{uploader}/{YYYY}/{MM}/{DD}/{media-type}/file
+ * - Thumbnails: thumbnails/{YYYY}/{MM}/{DD}/file
+ * - Deleted: deleted/{YYYY}/{MM}/{DD}/{deleted-by}/original-path/file
  *
  * @param {string} filename - Original filename
- * @param {string} folder - Folder type ('originals', 'thumbnails')
- * @param {string|null} editorName - Editor name (optional)
+ * @param {string} folder - Folder type ('originals', 'thumbnails', 'file-requests', 'deleted')
+ * @param {string|null} uploaderName - Uploader/editor name (REQUIRED for new structure)
  * @param {string|null} mediaType - Media type ('image', 'video', optional)
- * @param {string|null} folderPath - Database folder path (e.g., "jan2024/15-jan/")
+ * @param {Object} options - Additional options
+ * @param {string|null} options.requestId - File request ID (for file-request uploads)
+ * @param {string|null} options.folderPath - Legacy folder path support
+ * @param {string|null} options.deletedBy - Name of person who deleted (for deleted folder)
+ * @param {string|null} options.originalPath - Original S3 path (for deleted folder)
  * @returns {string} S3 key path
  */
-function generateS3Key(filename, folder = 'originals', editorName = null, mediaType = null, folderPath = null) {
+function generateS3Key(filename, folder = 'originals', uploaderName = null, mediaType = null, options = {}) {
+  const { requestId, folderPath, deletedBy, originalPath } = options;
+
   const uniqueId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   const uniqueFilename = `${uniqueId}-${filename}`;
 
-  // STRUCTURE 1: WITH FOLDER PATH (highest priority)
-  // Example: editor-name/jan2024/15-jan/images/file.jpg
-  if (editorName && mediaType && folderPath) {
-    const sanitizedEditor = sanitizeEditorName(editorName);
-
-    if (sanitizedEditor) {
-      let subFolder;
-
-      if (folder === 'thumbnails') {
-        subFolder = 'thumbnails';
-      } else {
-        subFolder = mediaType === 'image' ? 'images' : 'videos';
-      }
-
-      // Clean folder path (remove leading/trailing slashes)
-      const cleanFolderPath = folderPath.replace(/^\/+|\/+$/g, '');
-
-      const newPath = `${sanitizedEditor}/${cleanFolderPath}/${subFolder}/${uniqueFilename}`;
-      console.log(`🆕 NEW S3 STRUCTURE (with folders): ${newPath}`);
-      console.log(`  └─ Editor: ${editorName} (sanitized: ${sanitizedEditor})`);
-      console.log(`  └─ Folder Path: ${cleanFolderPath}`);
-      console.log(`  └─ Media Type: ${mediaType}`);
-      console.log(`  └─ Subfolder: ${subFolder}`);
-
-      return newPath;
-    }
-  }
-
-  // STRUCTURE 2: WITHOUT FOLDER PATH (editor-based)
-  // Example: editor-name/images/file.jpg
-  if (editorName && mediaType) {
-    const sanitizedEditor = sanitizeEditorName(editorName);
-
-    if (sanitizedEditor) {
-      let subFolder;
-
-      if (folder === 'thumbnails') {
-        subFolder = 'thumbnails';
-      } else {
-        subFolder = mediaType === 'image' ? 'images' : 'videos';
-      }
-
-      const newPath = `${sanitizedEditor}/${subFolder}/${uniqueFilename}`;
-      console.log(`🆕 NEW S3 STRUCTURE (no folders): ${newPath}`);
-      console.log(`  └─ Editor: ${editorName} (sanitized: ${sanitizedEditor})`);
-      console.log(`  └─ Media Type: ${mediaType}`);
-      console.log(`  └─ Subfolder: ${subFolder}`);
-
-      return newPath;
-    }
-  }
-
-  // STRUCTURE 3: OLD FALLBACK
-  // Example: originals/2024/01/file.jpg
   const date = new Date();
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
 
+  // DELETED FILES STRUCTURE
+  // deleted/YYYY/MM/DD/deleted-by-name/original-path/file
+  if (folder === 'deleted' && deletedBy && originalPath) {
+    const sanitizedDeleter = sanitizeEditorName(deletedBy);
+    if (sanitizedDeleter) {
+      const deletedPath = `deleted/${year}/${month}/${day}/${sanitizedDeleter}/${originalPath}`;
+      console.log(`🗑️ DELETED FILE STRUCTURE: ${deletedPath}`);
+      console.log(`  └─ Deleted by: ${deletedBy} (sanitized: ${sanitizedDeleter})`);
+      console.log(`  └─ Original path: ${originalPath}`);
+      return deletedPath;
+    }
+  }
+
+  // THUMBNAILS STRUCTURE
+  // thumbnails/YYYY/MM/DD/file
+  if (folder === 'thumbnails') {
+    const thumbPath = `thumbnails/${year}/${month}/${day}/${uniqueFilename}`;
+    console.log(`🖼️ THUMBNAIL STRUCTURE: ${thumbPath}`);
+    return thumbPath;
+  }
+
+  // FILE REQUEST UPLOADS STRUCTURE
+  // file-requests/{request-id}/uploads/{uploader}/{YYYY}/{MM}/{DD}/{media-type}/file
+  if (requestId && uploaderName && mediaType) {
+    const sanitizedUploader = sanitizeEditorName(uploaderName);
+    if (sanitizedUploader) {
+      const mediaFolder = mediaType === 'image' ? 'images' : 'videos';
+      const requestPath = `file-requests/${requestId}/uploads/${sanitizedUploader}/${year}/${month}/${day}/${mediaFolder}/${uniqueFilename}`;
+      console.log(`📋 FILE REQUEST UPLOAD STRUCTURE: ${requestPath}`);
+      console.log(`  └─ Request ID: ${requestId}`);
+      console.log(`  └─ Uploader: ${uploaderName} (sanitized: ${sanitizedUploader})`);
+      console.log(`  └─ Date: ${year}/${month}/${day}`);
+      console.log(`  └─ Media Type: ${mediaType}`);
+      return requestPath;
+    }
+  }
+
+  // MEDIA LIBRARY STRUCTURE (with uploader)
+  // media-library/{uploader}/{YYYY}/{MM}/{DD}/{media-type}/file
+  if (uploaderName && mediaType) {
+    const sanitizedUploader = sanitizeEditorName(uploaderName);
+    if (sanitizedUploader) {
+      const mediaFolder = mediaType === 'image' ? 'images' : 'videos';
+      const mediaPath = `media-library/${sanitizedUploader}/${year}/${month}/${day}/${mediaFolder}/${uniqueFilename}`;
+      console.log(`📚 MEDIA LIBRARY STRUCTURE: ${mediaPath}`);
+      console.log(`  └─ Uploader: ${uploaderName} (sanitized: ${sanitizedUploader})`);
+      console.log(`  └─ Date: ${year}/${month}/${day}`);
+      console.log(`  └─ Media Type: ${mediaType}`);
+      return mediaPath;
+    }
+  }
+
+  // LEGACY FALLBACK (for backward compatibility)
+  // originals/YYYY/MM/file
   const oldPath = `${folder}/${year}/${month}/${uniqueFilename}`;
-  console.log(`🔙 OLD S3 STRUCTURE (fallback): ${oldPath}`);
-  console.log(`  └─ Reason: ${!editorName ? 'No editor name' : !mediaType ? 'No media type' : 'Sanitization failed'}`);
+  console.log(`🔙 LEGACY FALLBACK STRUCTURE: ${oldPath}`);
+  console.log(`  └─ Reason: ${!uploaderName ? 'No uploader name' : !mediaType ? 'No media type' : 'Sanitization failed'}`);
 
   return oldPath;
 }

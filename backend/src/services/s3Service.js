@@ -493,6 +493,175 @@ class S3Service {
   }
 
   /**
+   * Soft delete file - move to deleted folder with metadata
+   * @param {string} s3Key - Current S3 key
+   * @param {Object} metadata - Deletion metadata
+   * @param {string} metadata.deletedBy - Name of person who deleted
+   * @param {string} metadata.deletedById - User ID who deleted
+   * @param {string} metadata.reason - Deletion reason
+   * @param {string} metadata.uploaderName - Original uploader name
+   * @param {Date} metadata.uploadedAt - Upload timestamp
+   * @returns {Promise<Object>} Deleted file info with new S3 keys
+   */
+  async softDeleteFile(s3Key, metadata) {
+    try {
+      const { deletedBy, deletedById, reason, uploaderName, uploadedAt } = metadata;
+
+      console.log(`🗑️ Soft deleting file: ${s3Key}`);
+      console.log(`  └─ Deleted by: ${deletedBy} (${deletedById})`);
+
+      // Generate new S3 key in deleted folder
+      const filename = path.basename(s3Key);
+      const deletedS3Key = generateS3Key(filename, 'deleted', null, null, {
+        deletedBy,
+        originalPath: s3Key
+      });
+
+      // Create deletion metadata
+      const deletionMetadata = {
+        original_file: {
+          s3_key: s3Key,
+          uploaded_by_name: uploaderName || 'Unknown',
+          uploaded_at: uploadedAt || new Date().toISOString(),
+          file_size: 0 // Will be updated after copy
+        },
+        deletion_info: {
+          deleted_by_id: deletedById,
+          deleted_by_name: deletedBy,
+          deleted_at: new Date().toISOString(),
+          deletion_reason: reason || 'No reason provided',
+          auto_delete_after: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString() // 90 days
+        },
+        restoration_info: {
+          can_restore: true,
+          restore_to_path: s3Key
+        }
+      };
+
+      // Copy file to deleted location
+      const copyCommand = new CopyObjectCommand({
+        Bucket: S3_BUCKET,
+        CopySource: `${S3_BUCKET}/${s3Key}`,
+        Key: deletedS3Key,
+        ServerSideEncryption: 'AES256'
+      });
+
+      await s3Client.send(copyCommand);
+      console.log(`✅ File copied to deleted folder: ${deletedS3Key}`);
+
+      // Upload deletion metadata JSON
+      const metadataKey = `${deletedS3Key}.deletion-metadata.json`;
+      const metadataCommand = new PutObjectCommand({
+        Bucket: S3_BUCKET,
+        Key: metadataKey,
+        Body: JSON.stringify(deletionMetadata, null, 2),
+        ContentType: 'application/json',
+        ServerSideEncryption: 'AES256'
+      });
+
+      await s3Client.send(metadataCommand);
+      console.log(`✅ Deletion metadata uploaded: ${metadataKey}`);
+
+      // Delete original file
+      const deleteCommand = new DeleteObjectCommand({
+        Bucket: S3_BUCKET,
+        Key: s3Key
+      });
+
+      await s3Client.send(deleteCommand);
+      console.log(`✅ Original file deleted: ${s3Key}`);
+
+      logger.info('File soft deleted', {
+        originalKey: s3Key,
+        deletedKey: deletedS3Key,
+        deletedBy,
+        reason
+      });
+
+      return {
+        success: true,
+        original_s3_key: s3Key,
+        deleted_s3_key: deletedS3Key,
+        metadata_s3_key: metadataKey,
+        deletion_metadata: deletionMetadata
+      };
+    } catch (error) {
+      console.error('❌ Soft delete failed:', error.message);
+      logger.error('Soft delete error', { error: error.message, s3Key });
+      throw new Error(`Failed to soft delete file: ${error.message}`);
+    }
+  }
+
+  /**
+   * Restore soft-deleted file to original location
+   * @param {string} deletedS3Key - S3 key in deleted folder
+   * @param {string} restoredBy - Name of person restoring
+   * @returns {Promise<Object>} Restored file info
+   */
+  async restoreDeletedFile(deletedS3Key, restoredBy) {
+    try {
+      console.log(`♻️ Restoring deleted file: ${deletedS3Key}`);
+      console.log(`  └─ Restored by: ${restoredBy}`);
+
+      // Get deletion metadata
+      const metadataKey = `${deletedS3Key}.deletion-metadata.json`;
+      const metadataCommand = new GetObjectCommand({
+        Bucket: S3_BUCKET,
+        Key: metadataKey
+      });
+
+      const metadataResponse = await s3Client.send(metadataCommand);
+      const metadataBody = await metadataResponse.Body.transformToString();
+      const metadata = JSON.parse(metadataBody);
+
+      const originalS3Key = metadata.restoration_info.restore_to_path;
+
+      // Copy file back to original location
+      const copyCommand = new CopyObjectCommand({
+        Bucket: S3_BUCKET,
+        CopySource: `${S3_BUCKET}/${deletedS3Key}`,
+        Key: originalS3Key,
+        ServerSideEncryption: 'AES256'
+      });
+
+      await s3Client.send(copyCommand);
+      console.log(`✅ File restored to original location: ${originalS3Key}`);
+
+      // Delete from deleted folder
+      const deleteFileCommand = new DeleteObjectCommand({
+        Bucket: S3_BUCKET,
+        Key: deletedS3Key
+      });
+
+      const deleteMetadataCommand = new DeleteObjectCommand({
+        Bucket: S3_BUCKET,
+        Key: metadataKey
+      });
+
+      await s3Client.send(deleteFileCommand);
+      await s3Client.send(deleteMetadataCommand);
+      console.log(`✅ Deleted files removed from deleted folder`);
+
+      logger.info('File restored', {
+        deletedKey: deletedS3Key,
+        restoredKey: originalS3Key,
+        restoredBy
+      });
+
+      return {
+        success: true,
+        restored_s3_key: originalS3Key,
+        deleted_from: deletedS3Key,
+        restored_by: restoredBy
+      };
+    } catch (error) {
+      console.error('❌ Restore failed:', error.message);
+      logger.error('Restore error', { error: error.message, deletedS3Key });
+      throw new Error(`Failed to restore file: ${error.message}`);
+    }
+  }
+
+  /**
    * Format bytes to human-readable string
    * @private
    */
