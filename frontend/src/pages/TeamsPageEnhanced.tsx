@@ -7,9 +7,10 @@ import { TeamActivityFeed } from '../components/TeamActivityFeed';
 import { RequestTemplateManager } from '../components/RequestTemplateManager';
 import { TeamDiscussionPanel } from '../components/TeamDiscussionPanel';
 import { TeamAnalyticsDashboard } from '../components/TeamAnalyticsDashboard';
+import { SmartCollectionsManager } from '../components/SmartCollectionsManager';
 import { teamApi } from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
-import { Users, Plus, FolderOpen, Activity, FileText, BarChart3, MessageSquare } from 'lucide-react';
+import { Users, Plus, FolderOpen, Activity, FileText, BarChart3, MessageSquare, FolderPlus } from 'lucide-react';
 
 interface Team {
   id: string;
@@ -21,7 +22,7 @@ interface Team {
   created_at: string;
 }
 
-type TabType = 'overview' | 'activity' | 'templates' | 'analytics' | 'discussion';
+type TabType = 'overview' | 'activity' | 'templates' | 'analytics' | 'discussion' | 'collections';
 
 export function TeamsPageEnhanced() {
   const { user } = useAuth();
@@ -60,6 +61,7 @@ export function TeamsPageEnhanced() {
   const tabs = [
     { id: 'overview' as TabType, label: 'Overview', icon: Users },
     { id: 'activity' as TabType, label: 'Activity', icon: Activity },
+    { id: 'collections' as TabType, label: 'Collections', icon: FolderPlus },
     { id: 'templates' as TabType, label: 'Templates', icon: FileText },
     { id: 'analytics' as TabType, label: 'Analytics', icon: BarChart3 },
     { id: 'discussion' as TabType, label: 'Discussion', icon: MessageSquare },
@@ -213,6 +215,10 @@ export function TeamsPageEnhanced() {
 
                 {activeTab === 'activity' && (
                   <TeamActivityFeed teamId={selectedTeam.id} />
+                )}
+
+                {activeTab === 'collections' && (
+                  <SmartCollectionsManager teamId={selectedTeam.id} />
                 )}
 
                 {activeTab === 'templates' && (

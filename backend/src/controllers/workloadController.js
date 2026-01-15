@@ -142,7 +142,7 @@ class WorkloadController {
           fr.actual_hours,
           fr.deadline,
           fr.created_at,
-          fre.assigned_at,
+          fr.created_at as assigned_at,
           ftt.estimated_completion,
           ftt.started_at,
           f.name AS folder_name
