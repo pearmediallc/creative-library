@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { X, Copy, Download, Calendar, Folder, Mail, CheckCircle, Clock, FileText } from 'lucide-react';
+import { X, Copy, Download, Calendar, Folder, Mail, CheckCircle, Clock, FileText, Upload as UploadIcon } from 'lucide-react';
 import { Button } from './ui/Button';
 import { fileRequestApi } from '../lib/api';
 import { formatDate, formatBytes } from '../lib/utils';
 import { CanvasEditor } from './CanvasEditor';
 import { CanvasRenderer } from './CanvasRenderer';
 import type { Canvas } from '../lib/canvasTemplates';
+import { useAuth } from '../contexts/AuthContext';
 
 interface FileRequestDetailsModalProps {
   requestId: string;
@@ -62,11 +63,20 @@ interface FileRequestDetails {
 }
 
 export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRequestDetailsModalProps) {
+  const { user } = useAuth();
   const [request, setRequest] = useState<FileRequestDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [canvas, setCanvas] = useState<Canvas | null>(null);
   const [showCanvas, setShowCanvas] = useState(false);
   const [canvasMode, setCanvasMode] = useState<'view' | 'edit'>('view');
+
+  // Upload state
+  const [showUploadForm, setShowUploadForm] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [uploadComments, setUploadComments] = useState('');
+  const [uploading, setUploading] = useState(false);
+  const [uploadSuccess, setUploadSuccess] = useState(false);
+  const [uploadError, setUploadError] = useState('');
 
   useEffect(() => {
     fetchRequestDetails();
@@ -134,6 +144,40 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
       return `${diffHours}h ${remainingMins}m`;
     } else {
       return `${diffMins}m`;
+    }
+  };
+
+  const handleFileUpload = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!selectedFile) {
+      setUploadError('Please select a file');
+      return;
+    }
+
+    setUploading(true);
+    setUploadError('');
+    setUploadSuccess(false);
+
+    try {
+      await fileRequestApi.uploadToRequestAuth(requestId, selectedFile, uploadComments || undefined);
+
+      setUploadSuccess(true);
+      setSelectedFile(null);
+      setUploadComments('');
+
+      // Refresh the request details to show the new upload
+      setTimeout(() => {
+        fetchRequestDetails();
+        onUpdate();
+        setUploadSuccess(false);
+        setShowUploadForm(false);
+      }, 2000);
+    } catch (error: any) {
+      console.error('Upload failed:', error);
+      setUploadError(error.response?.data?.error || 'Failed to upload file. Please try again.');
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -448,6 +492,107 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
               </Button>
             </div>
           </div>
+
+          {/* Direct Upload for Editors */}
+          {request.is_active && (
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Upload File Directly
+                </h3>
+                {!showUploadForm && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowUploadForm(true)}
+                  >
+                    <UploadIcon className="w-4 h-4 mr-2" />
+                    Upload File
+                  </Button>
+                )}
+              </div>
+
+              {showUploadForm && (
+                <form onSubmit={handleFileUpload} className="space-y-4 p-4 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700">
+                  {/* File Selection */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Select File *
+                    </label>
+                    <input
+                      type="file"
+                      onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
+                      className="w-full text-sm text-gray-700 dark:text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 dark:file:bg-blue-900 dark:file:text-blue-200"
+                      disabled={uploading}
+                      required
+                    />
+                    {selectedFile && (
+                      <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                        Selected: {selectedFile.name}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Comments */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Comments / Remarks (optional)
+                    </label>
+                    <textarea
+                      value={uploadComments}
+                      onChange={(e) => setUploadComments(e.target.value)}
+                      placeholder="Add any notes about this upload..."
+                      rows={3}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                      disabled={uploading}
+                    />
+                  </div>
+
+                  {/* Error Message */}
+                  {uploadError && (
+                    <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
+                      <p className="text-sm text-red-800 dark:text-red-200">{uploadError}</p>
+                    </div>
+                  )}
+
+                  {/* Success Message */}
+                  {uploadSuccess && (
+                    <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-3">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle className="w-5 h-5 text-green-600" />
+                        <p className="text-sm text-green-800 dark:text-green-200">
+                          File uploaded successfully!
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Buttons */}
+                  <div className="flex gap-2">
+                    <Button
+                      type="submit"
+                      disabled={!selectedFile || uploading}
+                    >
+                      {uploading ? 'Uploading...' : 'Upload'}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        setShowUploadForm(false);
+                        setSelectedFile(null);
+                        setUploadComments('');
+                        setUploadError('');
+                      }}
+                      disabled={uploading}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </form>
+              )}
+            </div>
+          )}
 
           {/* Uploaded Files */}
           <div>

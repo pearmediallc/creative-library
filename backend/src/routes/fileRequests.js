@@ -87,6 +87,13 @@ router.post('/:id/reassign',
   fileRequestController.reassignRequest.bind(fileRequestController)
 );
 
+// Authenticated upload to file request (for editors)
+router.post('/:id/upload',
+  authenticateToken,
+  upload.single('file'),
+  fileRequestController.uploadToRequestAuth.bind(fileRequestController)
+);
+
 // ============================================
 // CANVAS ROUTES (Product Brief Feature)
 // ============================================

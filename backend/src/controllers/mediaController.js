@@ -1107,8 +1107,10 @@ class MediaController {
     try {
       const MediaFile = require('../models/MediaFile');
       const s3Service = require('../services/s3Service');
+      const userId = req.user.id;
+      const userRole = req.user.role;
 
-      // Query for deleted files only
+      // Query for deleted files - filter by user unless admin
       const sql = `
         SELECT
           mf.*,
@@ -1119,10 +1121,13 @@ class MediaController {
         LEFT JOIN users u ON u.id = mf.uploaded_by
         LEFT JOIN editors e ON e.id = mf.editor_id
         WHERE mf.is_deleted = TRUE
+        ${userRole !== 'admin' ? 'AND mf.uploaded_by = $1' : ''}
         ORDER BY mf.deleted_at DESC
       `;
 
-      const result = await MediaFile.raw(sql);
+      const result = userRole !== 'admin'
+        ? await MediaFile.raw(sql, [userId])
+        : await MediaFile.raw(sql);
 
       // Refresh signed URLs for files that need it (expired or missing)
       const filesWithFreshUrls = await Promise.all(
@@ -1253,6 +1258,17 @@ class MediaController {
         return res.status(400).json({
           success: false,
           error: 'File must be in trash before permanent deletion. Use DELETE /api/media/:id to move to trash first.'
+        });
+      }
+
+      // Check permissions (only uploader or admin can permanently delete)
+      const User = require('../models/User');
+      const user = await User.findById(userId);
+
+      if (file.uploaded_by !== userId && user.role !== 'admin') {
+        return res.status(403).json({
+          success: false,
+          error: 'Permission denied - you can only permanently delete your own files'
         });
       }
 

@@ -569,11 +569,13 @@ export const fileRequestApi = {
   getPublic: (token: string) =>
     axios.get(`${API_BASE_URL}/file-requests/public/${token}`),
 
-  uploadToRequest: (token: string, file: File, uploaderEmail?: string, uploaderName?: string) => {
+  uploadToRequest: (token: string, file: File, uploaderEmail?: string, uploaderName?: string, editorId?: string, comments?: string) => {
     const formData = new FormData();
     formData.append('file', file);
     if (uploaderEmail) formData.append('uploader_email', uploaderEmail);
     if (uploaderName) formData.append('uploader_name', uploaderName);
+    if (editorId) formData.append('editor_id', editorId);
+    if (comments) formData.append('comments', comments);
     return axios.post(`${API_BASE_URL}/file-requests/public/${token}/upload`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
@@ -600,6 +602,16 @@ export const fileRequestApi = {
   // Reassign file request (admin only)
   reassign: (id: string, data: { new_editor_ids: string[]; reason?: string }) =>
     api.post(`/file-requests/${id}/reassign`, data),
+
+  // Authenticated upload to file request (for editors)
+  uploadToRequestAuth: (id: string, file: File, comments?: string) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (comments) formData.append('comments', comments);
+    return api.post(`/file-requests/${id}/upload`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
 
   // Canvas/Product Brief endpoints
   canvas: {

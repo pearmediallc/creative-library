@@ -804,7 +804,7 @@ class FileRequestController {
   async uploadToRequest(req, res, next) {
     try {
       const { token } = req.params;
-      const { uploader_email, uploader_name } = req.body;
+      const { uploader_email, uploader_name, editor_id, comments } = req.body;
 
       if (!req.file) {
         return res.status(400).json({
@@ -856,36 +856,42 @@ class FileRequestController {
       }
 
       // Upload file to S3 (as the request creator)
-      // Use editor_id and assigned_buyer_id from file request if specified
+      // Use editor_id from form submission or fall back to request's editor_id
+      const uploadEditorId = editor_id || fileRequest.editor_id || null;
+
       const mediaFile = await mediaService.uploadMedia(
         req.file,
         fileRequest.creator_id,
-        fileRequest.editor_id || null, // Use editor from request if specified
+        uploadEditorId,
         {
           tags: ['file-request-upload'],
-          description: `Uploaded via file request: ${fileRequest.title}`,
+          description: comments || `Uploaded via file request: ${fileRequest.title}`,
           folder_id: fileRequest.folder_id,
           assigned_buyer_id: fileRequest.assigned_buyer_id || null // Assign to buyer if specified
         }
       );
 
-      // Track the upload
+      // Track the upload with comments and editor
       await query(
         `INSERT INTO file_request_uploads
-        (file_request_id, file_id, uploaded_by_email, uploaded_by_name)
-        VALUES ($1, $2, $3, $4)`,
+        (file_request_id, file_id, uploaded_by_email, uploaded_by_name, editor_id, comments)
+        VALUES ($1, $2, $3, $4, $5, $6)`,
         [
           fileRequest.id,
           mediaFile.id,
           uploader_email || null,
-          uploader_name || null
+          uploader_name || null,
+          uploadEditorId,
+          comments || null
         ]
       );
 
       logger.info('File uploaded via request', {
         fileRequestId: fileRequest.id,
         fileId: mediaFile.id,
-        uploaderEmail: uploader_email
+        uploaderEmail: uploader_email,
+        editorId: uploadEditorId,
+        hasComments: !!comments
       });
 
       res.status(201).json({
@@ -899,6 +905,116 @@ class FileRequestController {
       });
     } catch (error) {
       logger.error('Public upload error', { error: error.message });
+      next(error);
+    }
+  }
+
+  /**
+   * Upload file to request (authenticated - for editors)
+   * POST /api/file-requests/:id/upload
+   */
+  async uploadToRequestAuth(req, res, next) {
+    try {
+      const { id } = req.params;
+      const { comments } = req.body;
+      const userId = req.user.id;
+
+      if (!req.file) {
+        return res.status(400).json({
+          success: false,
+          error: 'No file provided'
+        });
+      }
+
+      // Get file request
+      const frResult = await query(
+        `SELECT fr.*, u.id as creator_id, u.email as creator_email, u.name as creator_name
+        FROM file_requests fr
+        JOIN users u ON fr.created_by = u.id
+        WHERE fr.id = $1`,
+        [id]
+      );
+
+      if (frResult.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          error: 'File request not found'
+        });
+      }
+
+      const fileRequest = frResult.rows[0];
+
+      // Validate request is active
+      if (!fileRequest.is_active) {
+        return res.status(400).json({
+          success: false,
+          error: 'This file request is no longer accepting uploads'
+        });
+      }
+
+      // Validate deadline
+      if (fileRequest.deadline && new Date(fileRequest.deadline) < new Date()) {
+        return res.status(400).json({
+          success: false,
+          error: 'This file request has expired'
+        });
+      }
+
+      // Get user's editor ID
+      const editorResult = await query(
+        'SELECT id FROM editors WHERE user_id = $1',
+        [userId]
+      );
+
+      const editorId = editorResult.rows.length > 0 ? editorResult.rows[0].id : null;
+
+      // Upload file to S3 (as the current user)
+      const mediaFile = await mediaService.uploadMedia(
+        req.file,
+        userId, // Upload as current user
+        editorId, // Link to editor if available
+        {
+          tags: ['file-request-upload'],
+          description: comments || `Uploaded via file request: ${fileRequest.title}`,
+          folder_id: fileRequest.folder_id,
+          assigned_buyer_id: fileRequest.assigned_buyer_id || null
+        }
+      );
+
+      // Track the upload with comments and editor
+      await query(
+        `INSERT INTO file_request_uploads
+        (file_request_id, file_id, uploaded_by_email, uploaded_by_name, editor_id, comments)
+        VALUES ($1, $2, $3, $4, $5, $6)`,
+        [
+          fileRequest.id,
+          mediaFile.id,
+          req.user.email,
+          req.user.name,
+          editorId,
+          comments || null
+        ]
+      );
+
+      logger.info('File uploaded via request (authenticated)', {
+        fileRequestId: fileRequest.id,
+        fileId: mediaFile.id,
+        userId,
+        editorId,
+        hasComments: !!comments
+      });
+
+      res.status(201).json({
+        success: true,
+        message: 'File uploaded successfully',
+        data: {
+          filename: mediaFile.original_filename,
+          file_type: mediaFile.file_type,
+          file_size: mediaFile.file_size
+        }
+      });
+    } catch (error) {
+      logger.error('Authenticated upload error', { error: error.message });
       next(error);
     }
   }

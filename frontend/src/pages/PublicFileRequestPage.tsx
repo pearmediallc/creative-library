@@ -1,12 +1,18 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
-import { fileRequestApi } from '../lib/api';
+import { fileRequestApi, editorApi } from '../lib/api';
 import { Upload, CheckCircle, AlertCircle, Calendar, Mail, User, X, FileText } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { formatDate } from '../lib/utils';
 import { CanvasRenderer } from '../components/CanvasRenderer';
 import type { Canvas } from '../lib/canvasTemplates';
+
+interface Editor {
+  id: string;
+  name: string;
+  display_name: string;
+}
 
 interface FileRequestInfo {
   id: string;
@@ -34,14 +40,19 @@ export function PublicFileRequestPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploaderEmail, setUploaderEmail] = useState('');
   const [uploaderName, setUploaderName] = useState('');
+  const [selectedEditorId, setSelectedEditorId] = useState('');
+  const [comments, setComments] = useState('');
   const [dragActive, setDragActive] = useState(false);
   const [canvas, setCanvas] = useState<Canvas | null>(null);
   const [showCanvas, setShowCanvas] = useState(false);
   const [loadingCanvas, setLoadingCanvas] = useState(false);
+  const [editors, setEditors] = useState<Editor[]>([]);
+  const [loadingEditors, setLoadingEditors] = useState(false);
 
   useEffect(() => {
     if (token) {
       fetchRequestInfo();
+      fetchEditors();
     }
   }, [token]);
 
@@ -80,6 +91,19 @@ export function PublicFileRequestPage() {
     }
   };
 
+  const fetchEditors = async () => {
+    try {
+      setLoadingEditors(true);
+      const response = await editorApi.getAll(false);
+      setEditors(response.data.data || []);
+    } catch (error: any) {
+      console.error('Failed to load editors:', error);
+      // Editors are optional for public upload
+    } finally {
+      setLoadingEditors(false);
+    }
+  };
+
   const handleDrag = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -114,6 +138,11 @@ export function PublicFileRequestPage() {
       return;
     }
 
+    if (!selectedEditorId) {
+      setError('Please select an editor');
+      return;
+    }
+
     if (request?.require_email && !uploaderEmail) {
       setError('Email is required for this file request');
       return;
@@ -132,7 +161,9 @@ export function PublicFileRequestPage() {
         token!,
         selectedFile,
         uploaderEmail || undefined,
-        uploaderName || undefined
+        uploaderName || undefined,
+        selectedEditorId,
+        comments || undefined
       );
 
       setUploadSuccess(true);
@@ -140,6 +171,8 @@ export function PublicFileRequestPage() {
       setSelectedFile(null);
       setUploaderEmail('');
       setUploaderName('');
+      setSelectedEditorId('');
+      setComments('');
 
       // Reset success message after 5 seconds
       setTimeout(() => {
@@ -301,6 +334,27 @@ export function PublicFileRequestPage() {
                 )}
               </div>
 
+              {/* Editor Selection - REQUIRED */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Select Editor *
+                </label>
+                <select
+                  value={selectedEditorId}
+                  onChange={(e) => setSelectedEditorId(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  disabled={uploading || loadingEditors}
+                  required
+                >
+                  <option value="">-- Select an editor --</option>
+                  {editors.map((editor) => (
+                    <option key={editor.id} value={editor.id}>
+                      {editor.display_name || editor.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               {/* Email Input */}
               {request.require_email && (
                 <div>
@@ -332,6 +386,21 @@ export function PublicFileRequestPage() {
                 />
               </div>
 
+              {/* Comments/Remarks */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Comments / Remarks (optional)
+                </label>
+                <textarea
+                  value={comments}
+                  onChange={(e) => setComments(e.target.value)}
+                  placeholder="Add any notes or comments about this upload..."
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                  disabled={uploading}
+                />
+              </div>
+
               {/* Error Message */}
               {error && (
                 <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
@@ -355,7 +424,7 @@ export function PublicFileRequestPage() {
               {/* Upload Button */}
               <Button
                 type="submit"
-                disabled={!selectedFile || uploading}
+                disabled={!selectedFile || !selectedEditorId || uploading}
                 className="w-full"
               >
                 {uploading ? 'Uploading...' : 'Upload File'}
