@@ -198,7 +198,7 @@ export function ShareDialog({
         try {
           const fileUrl = resourceType === 'file'
             ? `${window.location.origin}/media/${resourceId}`
-            : `${window.location.origin}/folders/${resourceId}`;
+            : `${window.location.origin}/media?folderId=${resourceId}`;
 
           await slackApi.sendManualNotification({
             userIds: [selectedId],
@@ -255,7 +255,7 @@ export function ShareDialog({
 
       const fileUrl = resourceType === 'file'
         ? `${window.location.origin}/media/${resourceId}`
-        : `${window.location.origin}/folders/${resourceId}`;
+        : `${window.location.origin}/media?folderId=${resourceId}`;
 
       console.log('📬 ShareDialog: Sending Slack notifications...', {
         userIds: Array.from(selectedSlackUsers),

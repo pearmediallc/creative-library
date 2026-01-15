@@ -186,6 +186,18 @@ export function MediaLibraryPage() {
   const canUpload = user?.role === 'admin' || user?.role === 'creative';
   const canDelete = user?.role === 'admin';
 
+  // Handle URL parameters on mount (for direct folder links from Slack, etc.)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const folderIdFromUrl = params.get('folderId');
+
+    if (folderIdFromUrl) {
+      setCurrentFolderId(folderIdFromUrl);
+      // Clean up URL after processing
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
+
   // Initial load: fetch buyers and tags
   useEffect(() => {
     const fetchInitialData = async () => {
@@ -226,7 +238,7 @@ export function MediaLibraryPage() {
       setLoading(true);
 
       if (currentFolderId) {
-        // Fetch folder contents
+        // Fetch folder contents and breadcrumb
         const [contentsRes, breadcrumbRes, editorsRes] = await Promise.all([
           folderApi.getContents(currentFolderId),
           folderApi.getBreadcrumb(currentFolderId),
