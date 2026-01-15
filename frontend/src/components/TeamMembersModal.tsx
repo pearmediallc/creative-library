@@ -58,7 +58,8 @@ export function TeamMembersModal({
 
   const fetchAllUsers = useCallback(async () => {
     try {
-      const response = await adminApi.getUsers();
+      // Use team-specific endpoint to get users not in team
+      const response = await teamApi.getAvailableUsers(teamId);
       const users = response.data.data || [];
       setAllUsers(users.map((u: any) => ({
         id: u.id,
@@ -66,9 +67,21 @@ export function TeamMembersModal({
         email: u.email
       })));
     } catch (err) {
-      console.error('Failed to fetch users:', err);
+      console.error('Failed to fetch available users:', err);
+      // Fallback to admin API if available
+      try {
+        const response = await adminApi.getUsers();
+        const users = response.data.data || [];
+        setAllUsers(users.map((u: any) => ({
+          id: u.id,
+          name: u.name,
+          email: u.email
+        })));
+      } catch (fallbackErr) {
+        console.error('Fallback also failed:', fallbackErr);
+      }
     }
-  }, []);
+  }, [teamId]);
 
   useEffect(() => {
     if (isOpen) {

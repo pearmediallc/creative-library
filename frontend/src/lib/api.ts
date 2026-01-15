@@ -839,6 +839,8 @@ export const teamApi = {
     api.delete(`/teams/${teamId}`),
 
   // Team members
+  getAvailableUsers: (teamId: string, params?: { search?: string }) =>
+    api.get(`/teams/${teamId}/available-users`, { params }),
   addMember: (teamId: string, data: { userId: string; teamRole: 'lead' | 'member' | 'guest' }) =>
     api.post(`/teams/${teamId}/members`, data),
   removeMember: (teamId: string, userId: string) =>
@@ -901,6 +903,32 @@ export const teamApi = {
     api.post(`/teams/${teamId}/messages/${messageId}/read`),
   getUnreadCount: (teamId: string) =>
     api.get(`/teams/${teamId}/messages/unread-count`),
+
+  // Smart Collections
+  createCollection: (data: { name: string; description?: string; teamId?: string; collectionType?: 'manual' | 'smart'; smartRules?: any[]; isPublic?: boolean }) =>
+    api.post('/teams/collections', data),
+  getCollections: (params?: { teamId?: string; collectionType?: string }) =>
+    api.get('/teams/collections', { params }),
+  getCollection: (collectionId: string) =>
+    api.get(`/teams/collections/${collectionId}`),
+  updateCollection: (collectionId: string, data: any) =>
+    api.put(`/teams/collections/${collectionId}`, data),
+  deleteCollection: (collectionId: string) =>
+    api.delete(`/teams/collections/${collectionId}`),
+  addItemToCollection: (collectionId: string, data: { fileRequestUploadId: string }) =>
+    api.post(`/teams/collections/${collectionId}/items`, data),
+  removeItemFromCollection: (collectionId: string, itemId: string) =>
+    api.delete(`/teams/collections/${collectionId}/items/${itemId}`),
+
+  // Team Shared Media
+  shareMediaWithTeam: (data: { teamId: string; fileRequestUploadId: string; shareMessage?: string }) =>
+    api.post(`/media/share`, data),
+  shareMediaWithMultipleTeams: (data: { teamIds: string[]; fileRequestUploadId: string; shareMessage?: string }) =>
+    api.post(`/media/share-multiple`, data),
+  getTeamSharedMedia: (teamId: string, params?: { limit?: number; offset?: number }) =>
+    api.get(`/teams/${teamId}/shared-media`, { params }),
+  removeSharedMedia: (teamId: string, fileId: string) =>
+    api.delete(`/teams/${teamId}/shared-media/${fileId}`),
 };
 
 export default api;

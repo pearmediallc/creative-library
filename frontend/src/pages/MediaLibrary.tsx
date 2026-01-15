@@ -6,7 +6,7 @@ import { Card } from '../components/ui/Card';
 import { mediaApi, editorApi, folderApi, adminApi, starredApi } from '../lib/api';
 import { MediaFile, Editor } from '../types';
 import { formatBytes, formatDate } from '../lib/utils';
-import { Image as ImageIcon, Video, X, Download, Trash2, Info, PackageOpen, Calendar, Filter, Clock, FolderInput, Share2, Star, LayoutGrid, List, FileText, Tag } from 'lucide-react';
+import { Image as ImageIcon, Video, X, Download, Trash2, Info, PackageOpen, Calendar, Filter, Clock, FolderInput, Share2, Star, LayoutGrid, List, FileText, Tag, FolderPlus } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { BulkMetadataEditor } from '../components/BulkMetadataEditor';
 import { MetadataViewer } from '../components/MetadataViewer';
@@ -28,6 +28,7 @@ import { ActivityTimeline } from '../components/ActivityTimeline';
 import { CommentsPanel } from '../components/CommentsPanel';
 import { FileTagsManager } from '../components/FileTagsManager';
 import { MediaLightbox } from '../components/MediaLightbox';
+import { AddToCollectionModal } from '../components/AddToCollectionModal';
 
 interface FolderNode {
   id: string;
@@ -179,6 +180,15 @@ export function MediaLibraryPage() {
     isOpen: false,
     mediaId: '',
     fileName: ''
+  });
+
+  // Add to collection modal state
+  const [addToCollectionModal, setAddToCollectionModal] = useState<{
+    isOpen: boolean;
+    fileRequestUploadId: string;
+  }>({
+    isOpen: false,
+    fileRequestUploadId: ''
   });
 
   // Role-based permissions
@@ -1051,6 +1061,21 @@ export function MediaLibraryPage() {
                                   </Button>
                                 </div>
                                 <div className="flex gap-2">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="flex-1"
+                                    onClick={() => setAddToCollectionModal({
+                                      isOpen: true,
+                                      fileRequestUploadId: file.id
+                                    })}
+                                    title="Add to collection"
+                                  >
+                                    <FolderPlus className="w-4 h-4 mr-1" />
+                                    Add to Collection
+                                  </Button>
+                                </div>
+                                <div className="flex gap-2">
                                   {canUpload && (
                                     <Button
                                       variant="outline"
@@ -1216,6 +1241,16 @@ export function MediaLibraryPage() {
                                         title="Manage tags"
                                       >
                                         <Tag className="w-4 h-4" />
+                                      </button>
+                                      <button
+                                        onClick={() => setAddToCollectionModal({
+                                          isOpen: true,
+                                          fileRequestUploadId: file.id
+                                        })}
+                                        className="p-1.5 hover:bg-accent rounded transition-colors"
+                                        title="Add to collection"
+                                      >
+                                        <FolderPlus className="w-4 h-4" />
                                       </button>
                                       <button
                                         onClick={() => handleDownload(file)}
@@ -1501,6 +1536,13 @@ export function MediaLibraryPage() {
           }}
         />
       )}
+
+      {/* Add to Collection Modal */}
+      <AddToCollectionModal
+        isOpen={addToCollectionModal.isOpen}
+        onClose={() => setAddToCollectionModal({ isOpen: false, fileRequestUploadId: '' })}
+        fileRequestUploadId={addToCollectionModal.fileRequestUploadId}
+      />
     </DashboardLayout>
   );
 }

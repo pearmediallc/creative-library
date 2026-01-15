@@ -6,6 +6,7 @@ import { TeamManagementDialog } from '../components/TeamManagementDialog';
 import { TeamActivityFeed } from '../components/TeamActivityFeed';
 import { RequestTemplateManager } from '../components/RequestTemplateManager';
 import { TeamDiscussionPanel } from '../components/TeamDiscussionPanel';
+import { TeamAnalyticsDashboard } from '../components/TeamAnalyticsDashboard';
 import { teamApi } from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
 import { Users, Plus, FolderOpen, Activity, FileText, BarChart3, MessageSquare } from 'lucide-react';
@@ -219,13 +220,7 @@ export function TeamsPageEnhanced() {
                 )}
 
                 {activeTab === 'analytics' && (
-                  <Card className="p-6">
-                    <h3 className="text-lg font-semibold mb-4">Team Analytics</h3>
-                    <p className="text-muted-foreground">
-                      Analytics dashboard coming soon. This will show team activity metrics,
-                      member contributions, and usage statistics.
-                    </p>
-                  </Card>
+                  <TeamAnalyticsDashboard teamId={selectedTeam.id} />
                 )}
 
                 {activeTab === 'discussion' && (
