@@ -12,7 +12,7 @@ import { AdminPage } from './pages/Admin';
 import { RBACAdminPanel } from './pages/RBACAdminPanel';
 import { ActivityLogsPage } from './pages/ActivityLogs';
 import { MetadataExtraction } from './pages/MetadataExtraction';
-import { TeamsPage } from './pages/TeamsPage';
+import { TeamsPageEnhanced as TeamsPage } from './pages/TeamsPageEnhanced';
 import { StarredPage } from './pages/StarredPage';
 import { DeletedFilesPage } from './pages/DeletedFilesPage';
 import { RecentsPage } from './pages/RecentsPage';

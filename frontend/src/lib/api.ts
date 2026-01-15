@@ -244,22 +244,8 @@ export const activityApi = {
   }) => api.get(`/media/${fileId}/activity`, { params }),
 };
 
-// Team endpoints
-export const teamApi = {
-  getAll: () => api.get('/teams'),
-  getById: (id: string) => api.get(`/teams/${id}`),
-  create: (data: { name: string; description?: string }) => api.post('/teams', data),
-  update: (id: string, data: { name?: string; description?: string }) =>
-    api.patch(`/teams/${id}`, data),
-  delete: (id: string) => api.delete(`/teams/${id}`),
-  getMembers: (id: string) => api.get(`/teams/${id}/members`),
-  addMember: (id: string, data: { user_id: string; role?: string }) =>
-    api.post(`/teams/${id}/members`, data),
-  removeMember: (id: string, userId: string) =>
-    api.delete(`/teams/${id}/members/${userId}`),
-  updateMemberRole: (id: string, userId: string, role: string) =>
-    api.patch(`/teams/${id}/members/${userId}/role`, { role }),
-};
+// Team endpoints - Phase 8 Teams Feature (comprehensive)
+// Note: This replaces the previous simple teamApi with full Phase 8 functionality
 
 // Permission endpoints
 export const permissionApi = {
@@ -814,6 +800,71 @@ export const workloadApi = {
   // Get workload recommendations
   getRecommendations: (requestId?: string) =>
     api.get('/workload/recommendations', { params: requestId ? { requestId } : {} }),
+};
+
+// Team endpoints
+export const teamApi = {
+  // Team management
+  createTeam: (data: { name: string; description?: string }) =>
+    api.post('/teams', data),
+  getUserTeams: () =>
+    api.get('/teams'),
+  getTeam: (teamId: string) =>
+    api.get(`/teams/${teamId}`),
+  updateTeam: (teamId: string, data: { name?: string; description?: string }) =>
+    api.put(`/teams/${teamId}`, data),
+  deleteTeam: (teamId: string) =>
+    api.delete(`/teams/${teamId}`),
+
+  // Team members
+  addMember: (teamId: string, data: { userId: string; teamRole: 'lead' | 'member' | 'guest' }) =>
+    api.post(`/teams/${teamId}/members`, data),
+  removeMember: (teamId: string, userId: string) =>
+    api.delete(`/teams/${teamId}/members/${userId}`),
+  updateMemberRole: (teamId: string, userId: string, data: { teamRole: 'lead' | 'member' | 'guest' }) =>
+    api.put(`/teams/${teamId}/members/${userId}/role`, data),
+
+  // Team folders
+  getTeamFolders: (teamId: string) =>
+    api.get(`/teams/${teamId}/folders`),
+
+  // Team activity
+  getActivity: (teamId: string, params?: { type?: string; userId?: string; limit?: number; offset?: number }) =>
+    api.get(`/teams/${teamId}/activity`, { params }),
+  logActivity: (teamId: string, data: { activityType: string; resourceType?: string; resourceId?: string; metadata?: any }) =>
+    api.post(`/teams/${teamId}/activity`, data),
+
+  // Request templates
+  createTemplate: (teamId: string, data: {
+    name: string;
+    description?: string;
+    defaultTitle?: string;
+    defaultInstructions?: string;
+    defaultPriority?: 'low' | 'normal' | 'high' | 'urgent';
+    defaultDueDays?: number;
+    requiredFields?: any[];
+  }) =>
+    api.post(`/teams/${teamId}/templates`, data),
+  getTemplates: (teamId: string, params?: { active?: boolean }) =>
+    api.get(`/teams/${teamId}/templates`, { params }),
+  getTemplate: (templateId: string) =>
+    api.get(`/templates/${templateId}`),
+  updateTemplate: (templateId: string, data: any) =>
+    api.put(`/templates/${templateId}`, data),
+  deleteTemplate: (templateId: string) =>
+    api.delete(`/templates/${templateId}`),
+  useTemplate: (templateId: string, overrides?: any) =>
+    api.post(`/templates/${templateId}/use`, overrides),
+
+  // Team analytics
+  getAnalyticsSummary: (teamId: string) =>
+    api.get(`/teams/${teamId}/analytics/summary`),
+  getAnalyticsTrends: (teamId: string, params?: { startDate?: string; endDate?: string; groupBy?: 'day' | 'week' | 'month' }) =>
+    api.get(`/teams/${teamId}/analytics/trends`, { params }),
+  getMemberAnalytics: (teamId: string) =>
+    api.get(`/teams/${teamId}/analytics/members`),
+  getRequestAnalytics: (teamId: string) =>
+    api.get(`/teams/${teamId}/analytics/requests`),
 };
 
 export default api;

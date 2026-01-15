@@ -125,6 +125,14 @@ class Folder extends BaseModel {
           AND (
             -- Owner
             f.owner_id = $2
+            -- Team member (for team-owned folders)
+            OR (
+              f.team_id IS NOT NULL
+              AND EXISTS (
+                SELECT 1 FROM team_members tm
+                WHERE tm.team_id = f.team_id AND tm.user_id = $2
+              )
+            )
             -- Has explicit permission
             OR EXISTS (
               SELECT 1 FROM file_permissions fp

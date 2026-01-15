@@ -9,7 +9,7 @@ interface RequestAccessButtonProps {
   resourceName?: string;
   requestedPermission?: 'view' | 'edit' | 'download' | 'delete';
   variant?: 'default' | 'outline' | 'ghost';
-  size?: 'default' | 'sm' | 'lg';
+  size?: 'sm' | 'md' | 'lg';
   className?: string;
 }
 
@@ -55,9 +55,12 @@ export function RequestAccessButton({
     }
   };
 
+  // Map 'md' to 'default' for Button component
+  const buttonSize = size === 'md' ? 'default' : size as 'default' | 'sm' | 'lg';
+
   if (requested) {
     return (
-      <Button variant="ghost" size={size} disabled className={className}>
+      <Button variant="ghost" size={buttonSize} disabled className={className}>
         <Key className="w-4 h-4 mr-2" />
         Request Pending
       </Button>
@@ -68,7 +71,7 @@ export function RequestAccessButton({
     <>
       <Button
         variant={variant}
-        size={size}
+        size={buttonSize}
         onClick={() => setShowModal(true)}
         className={className}
       >
