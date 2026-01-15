@@ -12,6 +12,7 @@ const teamMessageController = require('../controllers/teamMessageController');
 const smartCollectionController = require('../controllers/smartCollectionController');
 const mediaShareController = require('../controllers/mediaShareController');
 const teamActivityController = require('../controllers/teamActivityController');
+const teamAnalyticsController = require('../controllers/teamAnalyticsController');
 
 // Team management
 router.post('/', authenticateToken, teamController.createTeam);
@@ -21,6 +22,7 @@ router.put('/:teamId', authenticateToken, teamController.updateTeam);
 router.delete('/:teamId', authenticateToken, teamController.deleteTeam);
 
 // Team members
+router.get('/:teamId/available-users', authenticateToken, teamController.getAvailableUsers);
 router.post('/:teamId/members', authenticateToken, teamController.addTeamMember);
 router.delete('/:teamId/members/:userId', authenticateToken, teamController.removeTeamMember);
 router.put('/:teamId/members/:userId/role', authenticateToken, teamController.updateTeamMemberRole);
@@ -60,5 +62,11 @@ router.delete('/collections/:collectionId/items/:itemId', authenticateToken, sma
 router.post('/:teamId/shared-media', authenticateToken, mediaShareController.shareMediaWithTeam);
 router.get('/:teamId/shared-media', authenticateToken, mediaShareController.getTeamSharedMedia);
 router.delete('/:teamId/shared-media/:fileId', authenticateToken, mediaShareController.removeSharedMedia);
+
+// Team analytics
+router.get('/:teamId/analytics/summary', authenticateToken, teamAnalyticsController.getAnalyticsSummary);
+router.get('/:teamId/analytics/trends', authenticateToken, teamAnalyticsController.getAnalyticsTrends);
+router.get('/:teamId/analytics/members', authenticateToken, teamAnalyticsController.getMemberAnalytics);
+router.get('/:teamId/analytics/requests', authenticateToken, teamAnalyticsController.getRequestAnalytics);
 
 module.exports = router;

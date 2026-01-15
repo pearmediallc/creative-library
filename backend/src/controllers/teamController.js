@@ -580,6 +580,62 @@ async function getTeamFolders(req, res) {
   }
 }
 
+/**
+ * Get available users to add to team
+ * GET /api/teams/:teamId/available-users
+ */
+async function getAvailableUsers(req, res) {
+  try {
+    const { teamId } = req.params;
+    const { search = '' } = req.query;
+    const userId = req.user.id;
+
+    // Check if user can manage members
+    const teamResult = await query('SELECT * FROM teams WHERE id = $1', [teamId]);
+    if (teamResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Team not found' });
+    }
+
+    const team = teamResult.rows[0];
+    const isOwner = team.owner_id === userId;
+
+    const currentMemberResult = await query(
+      'SELECT can_manage_members FROM team_members WHERE team_id = $1 AND user_id = $2',
+      [teamId, userId]
+    );
+
+    if (!isOwner && (currentMemberResult.rows.length === 0 || !currentMemberResult.rows[0].can_manage_members)) {
+      return res.status(403).json({ error: 'You do not have permission to manage members' });
+    }
+
+    // Get users who are NOT in this team
+    let whereClause = `u.id NOT IN (SELECT user_id FROM team_members WHERE team_id = $1)`;
+    const params = [teamId];
+
+    if (search && search.trim().length > 0) {
+      whereClause += ` AND (u.name ILIKE $2 OR u.email ILIKE $2)`;
+      params.push(`%${search.trim()}%`);
+    }
+
+    const result = await query(
+      `SELECT u.id, u.name, u.email, u.role
+       FROM users u
+       WHERE ${whereClause}
+       ORDER BY u.name ASC
+       LIMIT 50`,
+      params
+    );
+
+    res.json({
+      success: true,
+      data: result.rows
+    });
+  } catch (error) {
+    logger.error('Get available users failed', { error: error.message, team_id: req.params.teamId });
+    res.status(500).json({ error: 'Failed to fetch available users' });
+  }
+}
+
 module.exports = {
   createTeam,
   getUserTeams,
@@ -589,5 +645,6 @@ module.exports = {
   addTeamMember,
   removeTeamMember,
   updateTeamMemberRole,
-  getTeamFolders
+  getTeamFolders,
+  getAvailableUsers
 };

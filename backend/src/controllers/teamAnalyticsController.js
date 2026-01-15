@@ -1,6 +1,6 @@
 /**
  * Team Analytics Controller
- * Handles team analytics and insights
+ * Handles team analytics and metrics
  */
 
 const { query } = require('../config/database');
@@ -17,7 +17,7 @@ async function getAnalyticsSummary(req, res) {
 
     // Check if user is a team member with analytics permission
     const memberCheck = await query(
-      'SELECT * FROM team_members WHERE team_id = $1 AND user_id = $2',
+      'SELECT can_view_analytics FROM team_members WHERE team_id = $1 AND user_id = $2',
       [teamId, userId]
     );
 
@@ -29,54 +29,60 @@ async function getAnalyticsSummary(req, res) {
       return res.status(403).json({ error: 'You do not have permission to view analytics' });
     }
 
-    // Get total files in team folders
-    const filesResult = await query(
-      `SELECT COUNT(*) as total
-       FROM files f
-       JOIN folders fold ON f.folder_id = fold.id
-       WHERE fold.team_id = $1`,
+    // Get member count
+    const memberCount = await query(
+      'SELECT COUNT(*) FROM team_members WHERE team_id = $1',
       [teamId]
     );
 
-    // Get total team folders
-    const foldersResult = await query(
-      'SELECT COUNT(*) as total FROM folders WHERE team_id = $1',
+    // Get folder count
+    const folderCount = await query(
+      'SELECT COUNT(*) FROM folders WHERE team_id = $1',
       [teamId]
     );
 
-    // Get active members count
-    const membersResult = await query(
-      'SELECT COUNT(*) as total FROM team_members WHERE team_id = $1',
+    // Get activity count (last 30 days)
+    const activityCount = await query(
+      `SELECT COUNT(*) FROM team_activity 
+       WHERE team_id = $1 AND created_at >= NOW() - INTERVAL '30 days'`,
       [teamId]
     );
 
-    // Get recent activity count (last 7 days)
-    const activityResult = await query(
-      `SELECT COUNT(*) as total
-       FROM team_activity
-       WHERE team_id = $1 AND created_at >= NOW() - INTERVAL '7 days'`,
+    // Get message count
+    const messageCount = await query(
+      `SELECT COUNT(*) FROM team_messages 
+       WHERE team_id = $1 AND is_deleted = false`,
       [teamId]
     );
 
-    // Get template usage count
-    const templatesResult = await query(
-      'SELECT COUNT(*) as total, SUM(usage_count) as total_uses FROM request_templates WHERE team_id = $1',
+    // Get shared media count
+    const sharedMediaCount = await query(
+      'SELECT COUNT(*) FROM team_shared_media WHERE team_id = $1',
+      [teamId]
+    );
+
+    // Get template count
+    const templateCount = await query(
+      'SELECT COUNT(*) FROM request_templates WHERE team_id = $1 AND is_active = true',
       [teamId]
     );
 
     res.json({
       success: true,
       data: {
-        totalFiles: parseInt(filesResult.rows[0].total),
-        totalFolders: parseInt(foldersResult.rows[0].total),
-        totalMembers: parseInt(membersResult.rows[0].total),
-        recentActivity: parseInt(activityResult.rows[0].total),
-        totalTemplates: parseInt(templatesResult.rows[0].total || 0),
-        totalTemplateUses: parseInt(templatesResult.rows[0].total_uses || 0)
+        members: parseInt(memberCount.rows[0].count),
+        folders: parseInt(folderCount.rows[0].count),
+        recentActivity: parseInt(activityCount.rows[0].count),
+        messages: parseInt(messageCount.rows[0].count),
+        sharedMedia: parseInt(sharedMediaCount.rows[0].count),
+        templates: parseInt(templateCount.rows[0].count)
       }
     });
   } catch (error) {
-    logger.error('Get analytics summary failed', { error: error.message, team_id: req.params.teamId });
+    logger.error('Get analytics summary failed', {
+      error: error.message,
+      team_id: req.params.teamId
+    });
     res.status(500).json({ error: 'Failed to fetch analytics summary' });
   }
 }
@@ -88,12 +94,12 @@ async function getAnalyticsSummary(req, res) {
 async function getAnalyticsTrends(req, res) {
   try {
     const { teamId } = req.params;
-    const { startDate, endDate, groupBy = 'day' } = req.query;
+    const { period = '30' } = req.query;
     const userId = req.user.id;
 
-    // Check permissions
+    // Check permission
     const memberCheck = await query(
-      'SELECT * FROM team_members WHERE team_id = $1 AND user_id = $2',
+      'SELECT can_view_analytics FROM team_members WHERE team_id = $1 AND user_id = $2',
       [teamId, userId]
     );
 
@@ -105,42 +111,42 @@ async function getAnalyticsTrends(req, res) {
       return res.status(403).json({ error: 'You do not have permission to view analytics' });
     }
 
-    const start = startDate || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-    const end = endDate || new Date().toISOString().split('T')[0];
-
     // Get activity trends
-    let dateGrouping;
-    switch (groupBy) {
-      case 'week':
-        dateGrouping = "DATE_TRUNC('week', created_at)";
-        break;
-      case 'month':
-        dateGrouping = "DATE_TRUNC('month', created_at)";
-        break;
-      default:
-        dateGrouping = "DATE_TRUNC('day', created_at)";
-    }
-
-    const trendsResult = await query(
-      `SELECT
-        ${dateGrouping} as date,
-        activity_type,
-        COUNT(*) as count
+    const activityTrends = await query(
+      `SELECT 
+         DATE(created_at) as date,
+         COUNT(*) as count
        FROM team_activity
-       WHERE team_id = $1
-         AND created_at >= $2::date
-         AND created_at <= $3::date
-       GROUP BY date, activity_type
+       WHERE team_id = $1 AND created_at >= NOW() - INTERVAL '${parseInt(period)} days'
+       GROUP BY DATE(created_at)
        ORDER BY date ASC`,
-      [teamId, start, end]
+      [teamId]
+    );
+
+    // Get message trends
+    const messageTrends = await query(
+      `SELECT 
+         DATE(created_at) as date,
+         COUNT(*) as count
+       FROM team_messages
+       WHERE team_id = $1 AND created_at >= NOW() - INTERVAL '${parseInt(period)} days'
+       GROUP BY DATE(created_at)
+       ORDER BY date ASC`,
+      [teamId]
     );
 
     res.json({
       success: true,
-      data: trendsResult.rows
+      data: {
+        activity: activityTrends.rows,
+        messages: messageTrends.rows
+      }
     });
   } catch (error) {
-    logger.error('Get analytics trends failed', { error: error.message, team_id: req.params.teamId });
+    logger.error('Get analytics trends failed', {
+      error: error.message,
+      team_id: req.params.teamId
+    });
     res.status(500).json({ error: 'Failed to fetch analytics trends' });
   }
 }
@@ -154,9 +160,9 @@ async function getMemberAnalytics(req, res) {
     const { teamId } = req.params;
     const userId = req.user.id;
 
-    // Check permissions
+    // Check permission
     const memberCheck = await query(
-      'SELECT * FROM team_members WHERE team_id = $1 AND user_id = $2',
+      'SELECT can_view_analytics FROM team_members WHERE team_id = $1 AND user_id = $2',
       [teamId, userId]
     );
 
@@ -168,36 +174,40 @@ async function getMemberAnalytics(req, res) {
       return res.status(403).json({ error: 'You do not have permission to view analytics' });
     }
 
-    // Get member activity counts
-    const result = await query(
-      `SELECT
-        tm.user_id,
-        u.username,
-        u.email,
-        tm.team_role,
-        COUNT(ta.id) as activity_count,
-        MAX(ta.created_at) as last_active
+    // Get member activity stats
+    const memberStats = await query(
+      `SELECT 
+         u.id,
+         u.name,
+         tm.team_role,
+         COUNT(DISTINCT ta.id) as activity_count,
+         COUNT(DISTINCT tmsg.id) as message_count,
+         MAX(ta.created_at) as last_active
        FROM team_members tm
        JOIN users u ON tm.user_id = u.id
-       LEFT JOIN team_activity ta ON ta.user_id = tm.user_id AND ta.team_id = tm.team_id
+       LEFT JOIN team_activity ta ON ta.team_id = tm.team_id AND ta.user_id = u.id
+       LEFT JOIN team_messages tmsg ON tmsg.team_id = tm.team_id AND tmsg.user_id = u.id
        WHERE tm.team_id = $1
-       GROUP BY tm.user_id, u.username, u.email, tm.team_role
+       GROUP BY u.id, u.name, tm.team_role
        ORDER BY activity_count DESC`,
       [teamId]
     );
 
     res.json({
       success: true,
-      data: result.rows
+      data: memberStats.rows
     });
   } catch (error) {
-    logger.error('Get member analytics failed', { error: error.message, team_id: req.params.teamId });
+    logger.error('Get member analytics failed', {
+      error: error.message,
+      team_id: req.params.teamId
+    });
     res.status(500).json({ error: 'Failed to fetch member analytics' });
   }
 }
 
 /**
- * Get request analytics (placeholder for future file_requests integration)
+ * Get request analytics
  * GET /api/teams/:teamId/analytics/requests
  */
 async function getRequestAnalytics(req, res) {
@@ -205,9 +215,9 @@ async function getRequestAnalytics(req, res) {
     const { teamId } = req.params;
     const userId = req.user.id;
 
-    // Check permissions
+    // Check permission
     const memberCheck = await query(
-      'SELECT * FROM team_members WHERE team_id = $1 AND user_id = $2',
+      'SELECT can_view_analytics FROM team_members WHERE team_id = $1 AND user_id = $2',
       [teamId, userId]
     );
 
@@ -219,18 +229,30 @@ async function getRequestAnalytics(req, res) {
       return res.status(403).json({ error: 'You do not have permission to view analytics' });
     }
 
-    // Placeholder - would integrate with file_requests table in future
+    // Get template usage stats
+    const templateUsage = await query(
+      `SELECT 
+         rt.name,
+         rt.usage_count,
+         rt.created_at
+       FROM request_templates rt
+       WHERE rt.team_id = $1 AND rt.is_active = true
+       ORDER BY rt.usage_count DESC
+       LIMIT 10`,
+      [teamId]
+    );
+
     res.json({
       success: true,
       data: {
-        message: 'Request analytics will be available when file_requests are linked to teams',
-        totalRequests: 0,
-        completedRequests: 0,
-        avgTurnaroundHours: 0
+        topTemplates: templateUsage.rows
       }
     });
   } catch (error) {
-    logger.error('Get request analytics failed', { error: error.message, team_id: req.params.teamId });
+    logger.error('Get request analytics failed', {
+      error: error.message,
+      team_id: req.params.teamId
+    });
     res.status(500).json({ error: 'Failed to fetch request analytics' });
   }
 }

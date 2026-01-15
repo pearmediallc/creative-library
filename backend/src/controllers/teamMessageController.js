@@ -13,7 +13,11 @@ const logger = require('../utils/logger');
 async function sendMessage(req, res) {
   try {
     const { teamId } = req.params;
-    const { messageText, parentMessageId, mentions = [], attachments = [] } = req.body;
+    // Accept both camelCase and snake_case for compatibility
+    const messageText = req.body.messageText || req.body.message_text;
+    const parentMessageId = req.body.parentMessageId || req.body.parent_message_id;
+    const mentions = req.body.mentions || [];
+    const attachments = req.body.attachments || [];
     const userId = req.user.id;
 
     if (!messageText || messageText.trim().length === 0) {
