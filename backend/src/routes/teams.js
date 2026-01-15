@@ -11,6 +11,7 @@ const requestTemplateController = require('../controllers/requestTemplateControl
 const teamMessageController = require('../controllers/teamMessageController');
 const smartCollectionController = require('../controllers/smartCollectionController');
 const mediaShareController = require('../controllers/mediaShareController');
+const teamActivityController = require('../controllers/teamActivityController');
 
 // Team management
 router.post('/', authenticateToken, teamController.createTeam);
@@ -26,6 +27,10 @@ router.put('/:teamId/members/:userId/role', authenticateToken, teamController.up
 
 // Team folders
 router.get('/:teamId/folders', authenticateToken, teamController.getTeamFolders);
+
+// Team activity
+router.get('/:teamId/activity', authenticateToken, teamActivityController.getTeamActivity);
+router.post('/:teamId/activity', authenticateToken, teamActivityController.logTeamActivity);
 
 // Request templates
 router.post('/:teamId/templates', authenticateToken, requestTemplateController.createTemplate);

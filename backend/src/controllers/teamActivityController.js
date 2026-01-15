@@ -1,61 +1,49 @@
 /**
  * Team Activity Controller
- * Handles team activity feed and logging
+ * Handles team activity logs
  */
 
 const { query } = require('../config/database');
 const logger = require('../utils/logger');
 
 /**
- * Get team activity feed
+ * Get team activity
  * GET /api/teams/:teamId/activity
  */
 async function getTeamActivity(req, res) {
   try {
     const { teamId } = req.params;
-    const { type, userId, limit = 50, offset = 0 } = req.query;
-    const currentUserId = req.user.id;
+    const { limit = 20, offset = 0, activityType } = req.query;
+    const userId = req.user.id;
 
     // Check if user is a team member
     const memberCheck = await query(
       'SELECT * FROM team_members WHERE team_id = $1 AND user_id = $2',
-      [teamId, currentUserId]
+      [teamId, userId]
     );
 
     if (memberCheck.rows.length === 0) {
       return res.status(403).json({ error: 'You are not a member of this team' });
     }
 
-    // Build query with optional filters
-    let whereConditions = ['ta.team_id = $1'];
-    let params = [teamId];
-    let paramIndex = 2;
+    let whereClause = 'ta.team_id = $1';
+    const params = [teamId];
 
-    if (type) {
-      whereConditions.push(`ta.activity_type = $${paramIndex}`);
-      params.push(type);
-      paramIndex++;
+    if (activityType) {
+      whereClause += ' AND ta.activity_type = $2';
+      params.push(activityType);
     }
-
-    if (userId) {
-      whereConditions.push(`ta.user_id = $${paramIndex}`);
-      params.push(userId);
-      paramIndex++;
-    }
-
-    params.push(parseInt(limit), parseInt(offset));
 
     const result = await query(
       `SELECT
         ta.*,
-        u.username,
-        u.email
+        u.name as user_name
        FROM team_activity ta
-       JOIN users u ON ta.user_id = u.id
-       WHERE ${whereConditions.join(' AND ')}
+       LEFT JOIN users u ON ta.user_id = u.id
+       WHERE ${whereClause}
        ORDER BY ta.created_at DESC
-       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
-      params
+       LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+      [...params, parseInt(limit), parseInt(offset)]
     );
 
     res.json({
@@ -63,19 +51,22 @@ async function getTeamActivity(req, res) {
       data: result.rows
     });
   } catch (error) {
-    logger.error('Get team activity failed', { error: error.message, team_id: req.params.teamId });
+    logger.error('Get team activity failed', {
+      error: error.message,
+      team_id: req.params.teamId
+    });
     res.status(500).json({ error: 'Failed to fetch team activity' });
   }
 }
 
 /**
- * Log team activity (internal use or webhooks)
+ * Log team activity
  * POST /api/teams/:teamId/activity
  */
 async function logTeamActivity(req, res) {
   try {
     const { teamId } = req.params;
-    const { activityType, resourceType, resourceId, metadata } = req.body;
+    const { activityType, activityData } = req.body;
     const userId = req.user.id;
 
     if (!activityType) {
@@ -93,18 +84,27 @@ async function logTeamActivity(req, res) {
     }
 
     const result = await query(
-      `INSERT INTO team_activity (team_id, user_id, activity_type, resource_type, resource_id, metadata)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO team_activity (team_id, user_id, activity_type, activity_data)
+       VALUES ($1, $2, $3, $4)
        RETURNING *`,
-      [teamId, userId, activityType, resourceType || null, resourceId || null, metadata || {}]
+      [teamId, userId, activityType, JSON.stringify(activityData || {})]
     );
+
+    logger.info('Team activity logged', {
+      team_id: teamId,
+      activity_type: activityType,
+      user_id: userId
+    });
 
     res.status(201).json({
       success: true,
       data: result.rows[0]
     });
   } catch (error) {
-    logger.error('Log team activity failed', { error: error.message, team_id: req.params.teamId });
+    logger.error('Log team activity failed', {
+      error: error.message,
+      team_id: req.params.teamId
+    });
     res.status(500).json({ error: 'Failed to log team activity' });
   }
 }
