@@ -80,16 +80,31 @@ export function AddToCollectionModal({
         await teamApi.addItemToCollection(selectedCollectionId, {
           fileRequestUploadId
         });
+        alert('Added to team collection successfully');
       } else {
-        // For personal collections (saved searches), we need to add the file to the saved search
-        // This might require a different API endpoint or approach
-        // For now, show a message that this feature is coming soon
-        alert('Adding files to personal smart collections is coming soon. Please use Team Collections for now.');
-        setAdding(false);
-        return;
-      }
+        // For personal collections: Add file ID to the collection's manual file list
+        // We'll use the savedSearchApi to update the collection with the file ID
+        const collection = personalCollections.find(c => c.id === selectedCollectionId);
+        if (collection) {
+          // Get current filters
+          const currentFilters = collection.filters || {};
 
-      alert('Added to collection successfully');
+          // Add file ID to manual_file_ids array
+          const manualFileIds = currentFilters.manual_file_ids || [];
+          if (!manualFileIds.includes(fileRequestUploadId)) {
+            manualFileIds.push(fileRequestUploadId);
+          }
+
+          // Update the collection with new filters
+          await savedSearchApi.update(selectedCollectionId, {
+            filters: {
+              ...currentFilters,
+              manual_file_ids: manualFileIds
+            }
+          });
+          alert('Added to personal collection successfully');
+        }
+      }
       onClose();
     } catch (err: any) {
       console.error('Failed to add to collection:', err);

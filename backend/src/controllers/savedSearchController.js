@@ -469,6 +469,12 @@ class SavedSearchController {
     }
 
     // Apply filters
+    // Manual file IDs - if present, show only these files (OR with other filters)
+    if (filters.manual_file_ids && filters.manual_file_ids.length > 0) {
+      query += ` AND mf.id = ANY($${paramCount++})`;
+      params.push(filters.manual_file_ids);
+    }
+
     if (filters.search_term) {
       query += ` AND (
         mf.original_filename ILIKE $${paramCount}
@@ -575,6 +581,12 @@ class SavedSearchController {
     }
 
     // Apply same filters as media query
+    // Manual file IDs
+    if (filters.manual_file_ids && filters.manual_file_ids.length > 0) {
+      query += ` AND mf.id = ANY($${paramCount++})`;
+      params.push(filters.manual_file_ids);
+    }
+
     if (filters.search_term) {
       query += ` AND (
         mf.original_filename ILIKE $${paramCount}
