@@ -877,6 +877,20 @@ export const teamApi = {
     api.get(`/teams/${teamId}/analytics/members`),
   getRequestAnalytics: (teamId: string) =>
     api.get(`/teams/${teamId}/analytics/requests`),
+
+  // Team messages/discussion
+  getMessages: (teamId: string, params?: { limit?: number; offset?: number; parent_id?: string }) =>
+    api.get(`/teams/${teamId}/messages`, { params }),
+  postMessage: (teamId: string, data: { message_text: string; parent_message_id?: string; mentions?: string[]; attachments?: any[] }) =>
+    api.post(`/teams/${teamId}/messages`, data),
+  editMessage: (teamId: string, messageId: string, data: { message_text: string }) =>
+    api.put(`/teams/${teamId}/messages/${messageId}`, data),
+  deleteMessage: (teamId: string, messageId: string) =>
+    api.delete(`/teams/${teamId}/messages/${messageId}`),
+  markMessageAsRead: (teamId: string, messageId: string) =>
+    api.post(`/teams/${teamId}/messages/${messageId}/read`),
+  getUnreadCount: (teamId: string) =>
+    api.get(`/teams/${teamId}/messages/unread-count`),
 };
 
 export default api;

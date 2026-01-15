@@ -10,6 +10,7 @@ const teamController = require('../controllers/teamController');
 const teamActivityController = require('../controllers/teamActivityController');
 const requestTemplateController = require('../controllers/requestTemplateController');
 const teamAnalyticsController = require('../controllers/teamAnalyticsController');
+const teamMessagesController = require('../controllers/teamMessagesController');
 const { checkTeamPermission } = require('../middleware/teamPermissions');
 
 // Team management
@@ -44,5 +45,13 @@ router.get('/:teamId/analytics/summary', authenticateToken, teamAnalyticsControl
 router.get('/:teamId/analytics/trends', authenticateToken, teamAnalyticsController.getAnalyticsTrends);
 router.get('/:teamId/analytics/members', authenticateToken, teamAnalyticsController.getMemberAnalytics);
 router.get('/:teamId/analytics/requests', authenticateToken, teamAnalyticsController.getRequestAnalytics);
+
+// Team messages/discussion
+router.get('/:teamId/messages', authenticateToken, teamMessagesController.getMessages);
+router.post('/:teamId/messages', authenticateToken, teamMessagesController.postMessage);
+router.put('/:teamId/messages/:messageId', authenticateToken, teamMessagesController.editMessage);
+router.delete('/:teamId/messages/:messageId', authenticateToken, teamMessagesController.deleteMessage);
+router.post('/:teamId/messages/:messageId/read', authenticateToken, teamMessagesController.markAsRead);
+router.get('/:teamId/messages/unread-count', authenticateToken, teamMessagesController.getUnreadCount);
 
 module.exports = router;

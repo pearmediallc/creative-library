@@ -5,6 +5,7 @@ import { Card } from '../components/ui/Card';
 import { TeamManagementDialog } from '../components/TeamManagementDialog';
 import { TeamActivityFeed } from '../components/TeamActivityFeed';
 import { RequestTemplateManager } from '../components/RequestTemplateManager';
+import { TeamDiscussionPanel } from '../components/TeamDiscussionPanel';
 import { teamApi } from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
 import { Users, Plus, FolderOpen, Activity, FileText, BarChart3, MessageSquare } from 'lucide-react';
@@ -228,13 +229,9 @@ export function TeamsPageEnhanced() {
                 )}
 
                 {activeTab === 'discussion' && (
-                  <Card className="p-6">
-                    <h3 className="text-lg font-semibold mb-4">Team Discussion</h3>
-                    <p className="text-muted-foreground">
-                      Team chat and discussion feature coming soon. Members will be able to
-                      share ideas, files, and collaborate in real-time.
-                    </p>
-                  </Card>
+                  <div className="h-[600px]">
+                    <TeamDiscussionPanel teamId={selectedTeam.id} />
+                  </div>
                 )}
               </div>
             </div>
