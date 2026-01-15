@@ -80,6 +80,7 @@ export function SmartCollectionsManager({ teamId }: SmartCollectionsManagerProps
   };
 
   const handleDeleteCollection = async (collectionId: string) => {
+    // eslint-disable-next-line no-restricted-globals
     if (!confirm('Are you sure you want to delete this collection?')) {
       return;
     }
