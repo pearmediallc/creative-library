@@ -872,13 +872,13 @@ export const teamApi = {
   getTemplates: (teamId: string, params?: { active?: boolean }) =>
     api.get(`/teams/${teamId}/templates`, { params }),
   getTemplate: (templateId: string) =>
-    api.get(`/templates/${templateId}`),
+    api.get(`/teams/templates/${templateId}`),
   updateTemplate: (templateId: string, data: any) =>
-    api.put(`/templates/${templateId}`, data),
+    api.put(`/teams/templates/${templateId}`, data),
   deleteTemplate: (templateId: string) =>
-    api.delete(`/templates/${templateId}`),
+    api.delete(`/teams/templates/${templateId}`),
   useTemplate: (templateId: string, overrides?: any) =>
-    api.post(`/templates/${templateId}/use`, overrides),
+    api.post(`/teams/templates/${templateId}/use`, overrides),
 
   // Team analytics
   getAnalyticsSummary: (teamId: string) =>

@@ -187,7 +187,11 @@ export function AddToCollectionModal({
             </p>
             <Button
               onClick={() => {
-                window.location.href = '/collections';
+                if (collectionType === 'team') {
+                  window.location.href = '/teams';
+                } else {
+                  window.location.href = '/collections';
+                }
               }}
             >
               Go to Collections
