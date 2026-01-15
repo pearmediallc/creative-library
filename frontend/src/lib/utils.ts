@@ -14,11 +14,36 @@ export function formatBytes(bytes: number): string {
 }
 
 export function formatDate(date: string | Date): string {
-  return new Date(date).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  });
+  if (!date) return 'N/A';
+  try {
+    return new Date(date).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+  } catch (error) {
+    return 'Invalid Date';
+  }
+}
+
+export function formatDateTime(date: string | Date): string {
+  if (!date) return 'N/A';
+  try {
+    const dateObj = new Date(date);
+    const formattedDate = dateObj.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+    const formattedTime = dateObj.toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    });
+    return `${formattedDate} at ${formattedTime}`;
+  } catch (error) {
+    return 'Invalid Date';
+  }
 }
 
 export function formatNumber(num: number): string {

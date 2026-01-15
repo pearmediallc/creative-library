@@ -3,7 +3,7 @@ import { DashboardLayout } from '../components/layout/DashboardLayout';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { fileRequestApi } from '../lib/api';
-import { formatDate } from '../lib/utils';
+import { formatDate, formatDateTime } from '../lib/utils';
 import { Inbox, Plus, Link as LinkIcon, Copy, XCircle, Trash2, CheckCircle, UserPlus, Search, Filter, List, Grid } from 'lucide-react';
 import { CreateFileRequestModal } from '../components/CreateFileRequestModal';
 import { FileRequestDetailsModal } from '../components/FileRequestDetailsModal';
@@ -340,7 +340,7 @@ export function FileRequestsPage() {
                 <tbody>
                   {filteredRequests.map((request) => (
                     <tr key={request.id} className="border-b hover:bg-muted/50">
-                      <td className="p-4 text-sm">{formatDate(request.created_at)}</td>
+                      <td className="p-4 text-sm">{formatDateTime(request.created_at)}</td>
                       <td className="p-4 text-sm">
                         {request.buyer_name || request.created_by_name || '-'}
                       </td>
@@ -492,7 +492,7 @@ export function FileRequestsPage() {
                       {request.deadline && (
                         <p>Deadline: {formatDate(request.deadline)}</p>
                       )}
-                      <p>Created: {formatDate(request.created_at)}</p>
+                      <p>Created: {formatDateTime(request.created_at)}</p>
                     </div>
 
                     {/* Actions */}

@@ -1273,6 +1273,18 @@ class FileRequestController {
         });
       }
 
+      // Get current editor assignments to compare
+      const currentEditorsResult = await query(
+        'SELECT editor_id FROM file_request_editors WHERE request_id = $1',
+        [id]
+      );
+      const currentEditorIds = currentEditorsResult.rows.map(row => row.editor_id);
+
+      // Find which editors are actually new (not previously assigned)
+      const newlyAssignedEditors = new_editor_ids.filter(
+        editorId => !currentEditorIds.includes(editorId)
+      );
+
       // Remove old editor assignments
       await query(
         'DELETE FROM file_request_editors WHERE request_id = $1',
@@ -1296,6 +1308,8 @@ class FileRequestController {
         resourceId: id,
         details: {
           new_editor_ids,
+          newly_assigned_editor_ids: newlyAssignedEditors,
+          previous_editor_ids: currentEditorIds,
           reason
         },
         status: 'success'
@@ -1304,13 +1318,15 @@ class FileRequestController {
       logger.info('File request reassigned', {
         requestId: id,
         newEditorIds: new_editor_ids,
+        newlyAssignedEditors: newlyAssignedEditors,
         userId
       });
 
       res.json({
         success: true,
         message: 'File request reassigned successfully',
-        assigned_count: new_editor_ids.length
+        assigned_count: new_editor_ids.length,
+        newly_assigned_count: newlyAssignedEditors.length
       });
     } catch (error) {
       logger.error('Reassign request error', { error: error.message });

@@ -76,7 +76,7 @@ async function getUserTeams(req, res) {
       `SELECT
         t.*,
         tm.team_role,
-        u.username as owner_username,
+        u.name as owner_username,
         (SELECT COUNT(*) FROM team_members WHERE team_id = t.id) as member_count,
         (SELECT COUNT(*) FROM folders WHERE team_id = t.id) as folder_count
        FROM teams t
@@ -120,7 +120,7 @@ async function getTeam(req, res) {
     const teamResult = await query(
       `SELECT
         t.*,
-        u.username as owner_username,
+        u.name as owner_username,
         u.email as owner_email
        FROM teams t
        LEFT JOIN users u ON t.owner_id = u.id
@@ -136,7 +136,7 @@ async function getTeam(req, res) {
     const membersResult = await query(
       `SELECT
         tm.*,
-        u.username,
+        u.name,
         u.email,
         u.role as user_role
        FROM team_members tm
@@ -561,7 +561,7 @@ async function getTeamFolders(req, res) {
     const result = await query(
       `SELECT
         f.*,
-        u.username as owner_username,
+        u.name as owner_username,
         (SELECT COUNT(*) FROM files WHERE folder_id = f.id) as file_count
        FROM folders f
        LEFT JOIN users u ON f.owner_id = u.id
