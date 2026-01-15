@@ -7,11 +7,10 @@ const express = require('express');
 const router = express.Router();
 const { authenticateToken } = require('../middleware/auth');
 const teamController = require('../controllers/teamController');
-const teamActivityController = require('../controllers/teamActivityController');
 const requestTemplateController = require('../controllers/requestTemplateController');
-const teamAnalyticsController = require('../controllers/teamAnalyticsController');
-const teamMessagesController = require('../controllers/teamMessagesController');
-const { checkTeamPermission } = require('../middleware/teamPermissions');
+const teamMessageController = require('../controllers/teamMessageController');
+const smartCollectionController = require('../controllers/smartCollectionController');
+const mediaShareController = require('../controllers/mediaShareController');
 
 // Team management
 router.post('/', authenticateToken, teamController.createTeam);
@@ -28,30 +27,33 @@ router.put('/:teamId/members/:userId/role', authenticateToken, teamController.up
 // Team folders
 router.get('/:teamId/folders', authenticateToken, teamController.getTeamFolders);
 
-// Team activity
-router.get('/:teamId/activity', authenticateToken, teamActivityController.getTeamActivity);
-router.post('/:teamId/activity', authenticateToken, teamActivityController.logTeamActivity);
-
 // Request templates
-router.post('/:teamId/templates', authenticateToken, checkTeamPermission('can_manage_templates'), requestTemplateController.createTemplate);
+router.post('/:teamId/templates', authenticateToken, requestTemplateController.createTemplate);
 router.get('/:teamId/templates', authenticateToken, requestTemplateController.getTeamTemplates);
 router.get('/templates/:templateId', authenticateToken, requestTemplateController.getTemplate);
 router.put('/templates/:templateId', authenticateToken, requestTemplateController.updateTemplate);
 router.delete('/templates/:templateId', authenticateToken, requestTemplateController.deleteTemplate);
 router.post('/templates/:templateId/use', authenticateToken, requestTemplateController.useTemplate);
 
-// Team analytics
-router.get('/:teamId/analytics/summary', authenticateToken, teamAnalyticsController.getAnalyticsSummary);
-router.get('/:teamId/analytics/trends', authenticateToken, teamAnalyticsController.getAnalyticsTrends);
-router.get('/:teamId/analytics/members', authenticateToken, teamAnalyticsController.getMemberAnalytics);
-router.get('/:teamId/analytics/requests', authenticateToken, teamAnalyticsController.getRequestAnalytics);
-
 // Team messages/discussion
-router.get('/:teamId/messages', authenticateToken, teamMessagesController.getMessages);
-router.post('/:teamId/messages', authenticateToken, teamMessagesController.postMessage);
-router.put('/:teamId/messages/:messageId', authenticateToken, teamMessagesController.editMessage);
-router.delete('/:teamId/messages/:messageId', authenticateToken, teamMessagesController.deleteMessage);
-router.post('/:teamId/messages/:messageId/read', authenticateToken, teamMessagesController.markAsRead);
-router.get('/:teamId/messages/unread-count', authenticateToken, teamMessagesController.getUnreadCount);
+router.post('/:teamId/messages', authenticateToken, teamMessageController.sendMessage);
+router.get('/:teamId/messages', authenticateToken, teamMessageController.getMessages);
+router.get('/:teamId/messages/:messageId', authenticateToken, teamMessageController.getMessage);
+router.delete('/:teamId/messages/:messageId', authenticateToken, teamMessageController.deleteMessage);
+router.post('/:teamId/messages/:messageId/read', authenticateToken, teamMessageController.markAsRead);
+
+// Smart collections
+router.post('/collections', authenticateToken, smartCollectionController.createCollection);
+router.get('/collections', authenticateToken, smartCollectionController.getCollections);
+router.get('/collections/:collectionId', authenticateToken, smartCollectionController.getCollection);
+router.put('/collections/:collectionId', authenticateToken, smartCollectionController.updateCollection);
+router.delete('/collections/:collectionId', authenticateToken, smartCollectionController.deleteCollection);
+router.post('/collections/:collectionId/items', authenticateToken, smartCollectionController.addItemToCollection);
+router.delete('/collections/:collectionId/items/:itemId', authenticateToken, smartCollectionController.removeItemFromCollection);
+
+// Team shared media
+router.post('/:teamId/shared-media', authenticateToken, mediaShareController.shareMediaWithTeam);
+router.get('/:teamId/shared-media', authenticateToken, mediaShareController.getTeamSharedMedia);
+router.delete('/:teamId/shared-media/:fileId', authenticateToken, mediaShareController.removeSharedMedia);
 
 module.exports = router;

@@ -358,9 +358,9 @@ async function addTeamMember(req, res) {
 
     // Log activity
     await query(
-      `INSERT INTO team_activity (team_id, user_id, activity_type, resource_type, resource_id, metadata)
-       VALUES ($1, $2, 'member_joined', 'user', $3, $4)`,
-      [teamId, currentUserId, newMemberId, JSON.stringify({ added_by: currentUserId, role: teamRole })]
+      `INSERT INTO team_activity (team_id, user_id, activity_type, activity_data)
+       VALUES ($1, $2, 'member_joined', $3)`,
+      [teamId, currentUserId, JSON.stringify({ new_member_id: newMemberId, added_by: currentUserId, role: teamRole })]
     );
 
     logger.info('Team member added', { team_id: teamId, new_member_id: newMemberId, role: teamRole });
@@ -425,9 +425,9 @@ async function removeTeamMember(req, res) {
 
     // Log activity
     await query(
-      `INSERT INTO team_activity (team_id, user_id, activity_type, resource_type, resource_id, metadata)
-       VALUES ($1, $2, 'member_left', 'user', $3, $4)`,
-      [teamId, currentUserId, memberToRemove, JSON.stringify({ removed_by: currentUserId, is_self_removal: isSelf })]
+      `INSERT INTO team_activity (team_id, user_id, activity_type, activity_data)
+       VALUES ($1, $2, 'member_left', $3)`,
+      [teamId, currentUserId, JSON.stringify({ removed_member_id: memberToRemove, removed_by: currentUserId, is_self_removal: isSelf })]
     );
 
     logger.info('Team member removed', { team_id: teamId, removed_member_id: memberToRemove });
@@ -520,9 +520,9 @@ async function updateTeamMemberRole(req, res) {
 
     // Log activity
     await query(
-      `INSERT INTO team_activity (team_id, user_id, activity_type, resource_type, resource_id, metadata)
-       VALUES ($1, $2, 'member_role_changed', 'user', $3, $4)`,
-      [teamId, currentUserId, memberToUpdate, JSON.stringify({ new_role: teamRole, changed_by: currentUserId })]
+      `INSERT INTO team_activity (team_id, user_id, activity_type, activity_data)
+       VALUES ($1, $2, 'member_role_changed', $3)`,
+      [teamId, currentUserId, JSON.stringify({ member_id: memberToUpdate, new_role: teamRole, changed_by: currentUserId })]
     );
 
     logger.info('Team member role updated', { team_id: teamId, member_id: memberToUpdate, new_role: teamRole });

@@ -12,6 +12,7 @@ const express = require('express');
 const router = express.Router();
 const mediaController = require('../controllers/mediaController');
 const versionController = require('../controllers/versionController');
+const mediaShareController = require('../controllers/mediaShareController');
 const { validate, schemas } = require('../middleware/validate');
 const { authenticateToken, requireRole, requireAdmin } = require('../middleware/auth');
 const { upload } = require('../middleware/upload');
@@ -207,6 +208,17 @@ router.delete('/:id/versions/:versionId',
   authenticateToken,
   requireRole('admin', 'creative'),
   versionController.deleteVersion.bind(versionController)
+);
+
+// ✨ NEW: Media sharing with teams
+router.post('/share',
+  authenticateToken,
+  mediaShareController.shareMediaWithTeam
+);
+
+router.post('/share-multiple',
+  authenticateToken,
+  mediaShareController.shareMediaWithMultipleTeams
 );
 
 module.exports = router;
