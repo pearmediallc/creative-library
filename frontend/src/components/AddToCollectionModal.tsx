@@ -93,9 +93,16 @@ export function AddToCollectionModal({
           <div className="text-center py-8">
             <FolderPlus size={48} className="mx-auto text-gray-400 mb-4" />
             <p className="text-muted-foreground mb-4">No collections available</p>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-muted-foreground mb-4">
               Create a collection first to organize your media
             </p>
+            <Button
+              onClick={() => {
+                window.location.href = '/collections';
+              }}
+            >
+              Go to Collections
+            </Button>
           </div>
         ) : (
           <div className="space-y-4">
