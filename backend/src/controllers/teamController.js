@@ -328,13 +328,33 @@ async function addTeamMember(req, res) {
       return res.status(400).json({ error: 'User is already a team member' });
     }
 
-    // Get role preset permissions
-    const presetResult = await query(
-      'SELECT permissions FROM team_role_presets WHERE role_name = $1',
-      [teamRole]
-    );
-
-    const permissions = presetResult.rows[0]?.permissions || {};
+    // Define role-based permissions without database lookup
+    let permissions = {};
+    if (teamRole === 'lead') {
+      permissions = {
+        can_manage_members: true,
+        can_create_folders: true,
+        can_delete_files: true,
+        can_manage_templates: true,
+        can_view_analytics: true
+      };
+    } else if (teamRole === 'member') {
+      permissions = {
+        can_manage_members: false,
+        can_create_folders: true,
+        can_delete_files: false,
+        can_manage_templates: false,
+        can_view_analytics: true
+      };
+    } else if (teamRole === 'guest') {
+      permissions = {
+        can_manage_members: false,
+        can_create_folders: false,
+        can_delete_files: false,
+        can_manage_templates: false,
+        can_view_analytics: false
+      };
+    }
 
     // Add member
     const result = await query(
@@ -348,11 +368,11 @@ async function addTeamMember(req, res) {
         teamId,
         newMemberId,
         teamRole,
-        permissions.can_manage_members || false,
-        permissions.can_create_folders !== false,
-        permissions.can_delete_files || false,
-        permissions.can_manage_templates || false,
-        permissions.can_view_analytics !== false
+        permissions.can_manage_members,
+        permissions.can_create_folders,
+        permissions.can_delete_files,
+        permissions.can_manage_templates,
+        permissions.can_view_analytics
       ]
     );
 
