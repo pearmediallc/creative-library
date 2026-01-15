@@ -5,7 +5,6 @@
 
 const { query } = require('../config/database');
 const logger = require('../utils/logger');
-const { sendNotification } = require('../services/notificationService');
 
 /**
  * Send a message in team discussion
@@ -96,18 +95,6 @@ async function sendMessage(req, res) {
             false
           ]
         );
-
-        // Send real-time notification if service is available
-        if (sendNotification) {
-          await sendNotification(member.user_id, {
-            type: 'team_message',
-            teamId,
-            teamName,
-            messageId: message.id,
-            senderName,
-            messagePreview: messageText.substring(0, 100)
-          });
-        }
       } catch (error) {
         logger.error('Failed to send notification', {
           error: error.message,
@@ -140,17 +127,6 @@ async function sendMessage(req, res) {
                 false
               ]
             );
-
-            if (sendNotification) {
-              await sendNotification(mentionedUserId, {
-                type: 'team_mention',
-                teamId,
-                teamName,
-                messageId: message.id,
-                senderName,
-                messagePreview: messageText.substring(0, 100)
-              });
-            }
           }
         } catch (error) {
           logger.error('Failed to send mention notification', {
