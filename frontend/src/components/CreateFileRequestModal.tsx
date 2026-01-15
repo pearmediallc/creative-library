@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Inbox, FolderPlus, FileText } from 'lucide-react';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
-import { fileRequestApi, folderApi, editorApi, adminApi } from '../lib/api';
+import { fileRequestApi, folderApi, editorApi, adminApi, teamApi } from '../lib/api';
 import { FILE_REQUEST_TYPES } from '../constants/fileRequestTypes';
 import { PLATFORMS } from '../constants/platforms';
 import { VERTICALS } from '../constants/verticals';
@@ -11,6 +11,7 @@ import { CanvasEditor } from './CanvasEditor';
 interface CreateFileRequestModalProps {
   onClose: () => void;
   onSuccess: () => void;
+  teamId?: string;
 }
 
 interface Folder {
@@ -30,7 +31,23 @@ interface Buyer {
   email: string;
 }
 
-export function CreateFileRequestModal({ onClose, onSuccess }: CreateFileRequestModalProps) {
+interface Team {
+  id: string;
+  name: string;
+}
+
+interface Template {
+  id: string;
+  name: string;
+  description: string | null;
+  default_title: string | null;
+  default_instructions: string | null;
+  default_priority: 'low' | 'normal' | 'high' | 'urgent' | null;
+  default_due_days: number | null;
+  is_active?: boolean;
+}
+
+export function CreateFileRequestModal({ onClose, onSuccess, teamId }: CreateFileRequestModalProps) {
   const [requestType, setRequestType] = useState('');
   const [platform, setPlatform] = useState('');
   const [vertical, setVertical] = useState('');
@@ -46,6 +63,10 @@ export function CreateFileRequestModal({ onClose, onSuccess }: CreateFileRequest
   const [folders, setFolders] = useState<Folder[]>([]);
   const [editors, setEditors] = useState<Editor[]>([]);
   const [buyers, setBuyers] = useState<Buyer[]>([]);
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [templates, setTemplates] = useState<Template[]>([]);
+  const [selectedTeamId, setSelectedTeamId] = useState(teamId || '');
+  const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState('');
   const [showCreateFolder, setShowCreateFolder] = useState(false);
@@ -54,12 +75,6 @@ export function CreateFileRequestModal({ onClose, onSuccess }: CreateFileRequest
   const [showCanvas, setShowCanvas] = useState(false);
   const [hasCanvas, setHasCanvas] = useState(false);
   const [createdRequestId, setCreatedRequestId] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetchFolders();
-    fetchEditors();
-    fetchBuyers();
-  }, []);
 
   const fetchFolders = async () => {
     try {
@@ -110,6 +125,69 @@ export function CreateFileRequestModal({ onClose, onSuccess }: CreateFileRequest
       console.error('Failed to fetch buyers:', error);
     }
   };
+
+  const fetchTeams = async () => {
+    try {
+      const response = await teamApi.getUserTeams();
+      setTeams(response.data.data || []);
+    } catch (error: any) {
+      console.error('Failed to fetch teams:', error);
+    }
+  };
+
+  const fetchTemplates = async (teamId: string) => {
+    try {
+      const response = await teamApi.getTemplates(teamId);
+      const activeTemplates = (response.data.data || []).filter((t: Template) => t.is_active !== false);
+      setTemplates(activeTemplates);
+    } catch (error: any) {
+      console.error('Failed to fetch templates:', error);
+      setTemplates([]);
+    }
+  };
+
+  const handleTemplateSelect = async (templateId: string) => {
+    setSelectedTemplateId(templateId);
+
+    if (!templateId) return;
+
+    const template = templates.find(t => t.id === templateId);
+    if (!template) return;
+
+    // Auto-fill form fields from template
+    if (template.default_title) {
+      setRequestType(template.default_title);
+    }
+    if (template.default_instructions) {
+      setConceptNotes(template.default_instructions);
+    }
+    if (template.default_due_days) {
+      // Calculate deadline from default_due_days
+      const futureDate = new Date();
+      futureDate.setDate(futureDate.getDate() + template.default_due_days);
+      const formattedDate = futureDate.toISOString().slice(0, 16);
+      setDeadline(formattedDate);
+    }
+  };
+
+  // Effects
+  useEffect(() => {
+    fetchFolders();
+    fetchEditors();
+    fetchBuyers();
+    fetchTeams();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (selectedTeamId) {
+      fetchTemplates(selectedTeamId);
+    } else {
+      setTemplates([]);
+      setSelectedTemplateId('');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedTeamId]);
 
   const handleCreateFolder = async () => {
     if (!newFolderName.trim()) {
@@ -245,6 +323,65 @@ export function CreateFileRequestModal({ onClose, onSuccess }: CreateFileRequest
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          {/* Team Selection (Optional) */}
+          {teams.length > 0 && (
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Use Team Template (Optional)
+              </label>
+              <select
+                value={selectedTeamId}
+                onChange={(e) => {
+                  setSelectedTeamId(e.target.value);
+                  setSelectedTemplateId('');
+                }}
+                disabled={creating}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white mb-3"
+              >
+                <option value="">No team template</option>
+                {teams.map((team) => (
+                  <option key={team.id} value={team.id}>
+                    {team.name}
+                  </option>
+                ))}
+              </select>
+
+              {/* Template Selection */}
+              {selectedTeamId && templates.length > 0 && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Select Template to Auto-Fill Form
+                  </label>
+                  <select
+                    value={selectedTemplateId}
+                    onChange={(e) => handleTemplateSelect(e.target.value)}
+                    disabled={creating}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                  >
+                    <option value="">Choose a template...</option>
+                    {templates.map((template) => (
+                      <option key={template.id} value={template.id}>
+                        {template.name}
+                        {template.description ? ` - ${template.description}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  {selectedTemplateId && (
+                    <p className="text-xs text-blue-600 dark:text-blue-400 mt-2">
+                      Form fields have been auto-filled from template. You can still modify any field.
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {selectedTeamId && templates.length === 0 && (
+                <p className="text-sm text-gray-600 dark:text-gray-400 italic">
+                  No templates available for this team yet.
+                </p>
+              )}
+            </div>
+          )}
+
           {/* Request Type */}
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">

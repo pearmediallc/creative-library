@@ -28,6 +28,12 @@ interface AddToCollectionModalProps {
   teamId?: string;
 }
 
+interface Team {
+  id: string;
+  name: string;
+  description?: string;
+}
+
 type CollectionType = 'personal' | 'team';
 
 export function AddToCollectionModal({
@@ -39,21 +45,38 @@ export function AddToCollectionModal({
   const [collectionType, setCollectionType] = useState<CollectionType>('personal');
   const [teamCollections, setTeamCollections] = useState<TeamCollection[]>([]);
   const [personalCollections, setPersonalCollections] = useState<PersonalCollection[]>([]);
+  const [userTeams, setUserTeams] = useState<Team[]>([]);
+  const [selectedTeamId, setSelectedTeamId] = useState(teamId || '');
   const [loading, setLoading] = useState(true);
   const [selectedCollectionId, setSelectedCollectionId] = useState('');
   const [adding, setAdding] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
+      fetchUserTeams();
       fetchCollections();
     }
-  }, [isOpen, collectionType, teamId]);
+  }, [isOpen, collectionType, selectedTeamId]);
+
+  const fetchUserTeams = async () => {
+    try {
+      const response = await teamApi.getUserTeams();
+      setUserTeams(response.data.data || []);
+      // If no teamId was provided and we have teams, select the first one
+      if (!teamId && response.data.data && response.data.data.length > 0) {
+        setSelectedTeamId(response.data.data[0].id);
+      }
+    } catch (err) {
+      console.error('Failed to fetch user teams:', err);
+    }
+  };
 
   const fetchCollections = async () => {
     try {
       setLoading(true);
       if (collectionType === 'team') {
-        const params = teamId ? { teamId } : {};
+        // Use selected team ID for filtering
+        const params = selectedTeamId ? { teamId: selectedTeamId } : {};
         const response = await teamApi.getCollections(params);
         setTeamCollections(response.data.data || []);
       } else {
@@ -171,6 +194,29 @@ export function AddToCollectionModal({
             : 'Team collections shared with your team members'
           }
         </p>
+
+        {/* Team Selector - Only show when in Team Collections mode */}
+        {collectionType === 'team' && userTeams.length > 0 && (
+          <div className="mb-4">
+            <label className="block text-sm font-medium mb-2">
+              Select Team
+            </label>
+            <select
+              className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-800 dark:border-gray-700"
+              value={selectedTeamId}
+              onChange={(e) => {
+                setSelectedTeamId(e.target.value);
+                setSelectedCollectionId(''); // Reset collection selection when team changes
+              }}
+            >
+              {userTeams.map((team) => (
+                <option key={team.id} value={team.id}>
+                  {team.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {loading ? (
           <div className="flex items-center justify-center h-32">
