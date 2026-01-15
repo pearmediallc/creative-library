@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { teamApi } from '../lib/api';
 import { X, Users, Plus, Trash2, Edit2, UserPlus, Shield } from 'lucide-react';
 import { Button } from './ui/Button';
+import { TeamMembersModal } from './TeamMembersModal';
 
 interface Team {
   id: string;
@@ -41,6 +42,9 @@ export function TeamManagementDialog({ isOpen, onClose, onTeamCreated }: TeamMan
   const [teamName, setTeamName] = useState('');
   const [teamDescription, setTeamDescription] = useState('');
   const [error, setError] = useState('');
+
+  // Team members modal state
+  const [showMembersModal, setShowMembersModal] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -285,6 +289,14 @@ export function TeamManagementDialog({ isOpen, onClose, onTeamCreated }: TeamMan
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="font-semibold">Team Members ({teamMembers.length})</h3>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowMembersModal(true)}
+                  >
+                    <UserPlus className="w-4 h-4 mr-2" />
+                    Add Member
+                  </Button>
                 </div>
                 <div className="space-y-2">
                   {teamMembers.map((member) => (
@@ -360,6 +372,20 @@ export function TeamManagementDialog({ isOpen, onClose, onTeamCreated }: TeamMan
           </div>
         </div>
       </div>
+
+      {/* Team Members Modal */}
+      {showMembersModal && selectedTeam && (
+        <TeamMembersModal
+          isOpen={showMembersModal}
+          onClose={() => {
+            setShowMembersModal(false);
+            fetchTeamDetails(selectedTeam.id);
+          }}
+          teamId={selectedTeam.id}
+          teamName={selectedTeam.name}
+          isAdmin={true}
+        />
+      )}
     </div>
   );
 }
