@@ -1,15 +1,24 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from './ui/Button';
 import { Card } from './ui/Card';
-import { teamApi } from '../lib/api';
-import { FolderPlus, X } from 'lucide-react';
+import { teamApi, savedSearchApi } from '../lib/api';
+import { FolderPlus, X, Users, User } from 'lucide-react';
 
-interface Collection {
+interface TeamCollection {
   id: string;
   name: string;
   description?: string;
   collection_type: 'manual' | 'smart';
   item_count?: number;
+  team_id?: string;
+}
+
+interface PersonalCollection {
+  id: string;
+  name: string;
+  description?: string;
+  filters: any;
+  file_count?: number;
 }
 
 interface AddToCollectionModalProps {
@@ -19,13 +28,17 @@ interface AddToCollectionModalProps {
   teamId?: string;
 }
 
+type CollectionType = 'personal' | 'team';
+
 export function AddToCollectionModal({
   isOpen,
   onClose,
   fileRequestUploadId,
   teamId
 }: AddToCollectionModalProps) {
-  const [collections, setCollections] = useState<Collection[]>([]);
+  const [collectionType, setCollectionType] = useState<CollectionType>('personal');
+  const [teamCollections, setTeamCollections] = useState<TeamCollection[]>([]);
+  const [personalCollections, setPersonalCollections] = useState<PersonalCollection[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedCollectionId, setSelectedCollectionId] = useState('');
   const [adding, setAdding] = useState(false);
@@ -34,14 +47,19 @@ export function AddToCollectionModal({
     if (isOpen) {
       fetchCollections();
     }
-  }, [isOpen, teamId]);
+  }, [isOpen, collectionType, teamId]);
 
   const fetchCollections = async () => {
     try {
       setLoading(true);
-      const params = teamId ? { teamId } : {};
-      const response = await teamApi.getCollections(params);
-      setCollections(response.data.data || []);
+      if (collectionType === 'team') {
+        const params = teamId ? { teamId } : {};
+        const response = await teamApi.getCollections(params);
+        setTeamCollections(response.data.data || []);
+      } else {
+        const response = await savedSearchApi.getAll();
+        setPersonalCollections(response.data.data || []);
+      }
     } catch (err) {
       console.error('Failed to fetch collections:', err);
     } finally {
@@ -57,9 +75,20 @@ export function AddToCollectionModal({
 
     try {
       setAdding(true);
-      await teamApi.addItemToCollection(selectedCollectionId, {
-        fileRequestUploadId
-      });
+
+      if (collectionType === 'team') {
+        await teamApi.addItemToCollection(selectedCollectionId, {
+          fileRequestUploadId
+        });
+      } else {
+        // For personal collections (saved searches), we need to add the file to the saved search
+        // This might require a different API endpoint or approach
+        // For now, show a message that this feature is coming soon
+        alert('Adding files to personal smart collections is coming soon. Please use Team Collections for now.');
+        setAdding(false);
+        return;
+      }
+
       alert('Added to collection successfully');
       onClose();
     } catch (err: any) {
@@ -72,6 +101,9 @@ export function AddToCollectionModal({
 
   if (!isOpen) return null;
 
+  const collections = collectionType === 'team' ? teamCollections : personalCollections;
+  const hasCollections = collections.length > 0;
+
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
       <Card className="w-full max-w-md p-6 m-4">
@@ -79,20 +111,62 @@ export function AddToCollectionModal({
           <h3 className="text-xl font-semibold">Add to Collection</h3>
           <button
             onClick={onClose}
-            className="p-1 hover:bg-gray-100 rounded-lg transition-colors"
+            className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
           >
             <X size={20} />
           </button>
         </div>
 
+        {/* Collection Type Tabs */}
+        <div className="flex gap-2 mb-4 p-1 bg-gray-100 dark:bg-gray-800 rounded-lg">
+          <button
+            onClick={() => {
+              setCollectionType('personal');
+              setSelectedCollectionId('');
+            }}
+            className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-md transition-colors ${
+              collectionType === 'personal'
+                ? 'bg-white dark:bg-gray-700 shadow-sm text-primary font-medium'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+            }`}
+          >
+            <User size={16} />
+            Personal Collections
+          </button>
+          <button
+            onClick={() => {
+              setCollectionType('team');
+              setSelectedCollectionId('');
+            }}
+            className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-md transition-colors ${
+              collectionType === 'team'
+                ? 'bg-white dark:bg-gray-700 shadow-sm text-primary font-medium'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+            }`}
+          >
+            <Users size={16} />
+            Team Collections
+          </button>
+        </div>
+
+        {/* Collection Type Description */}
+        <p className="text-sm text-muted-foreground mb-4">
+          {collectionType === 'personal'
+            ? 'Your personal smart collections based on saved search filters'
+            : 'Team collections shared with your team members'
+          }
+        </p>
+
         {loading ? (
           <div className="flex items-center justify-center h-32">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
           </div>
-        ) : collections.length === 0 ? (
+        ) : !hasCollections ? (
           <div className="text-center py-8">
             <FolderPlus size={48} className="mx-auto text-gray-400 mb-4" />
-            <p className="text-muted-foreground mb-4">No collections available</p>
+            <p className="text-muted-foreground mb-4">
+              No {collectionType === 'personal' ? 'personal' : 'team'} collections available
+            </p>
             <p className="text-sm text-muted-foreground mb-4">
               Create a collection first to organize your media
             </p>
@@ -111,16 +185,23 @@ export function AddToCollectionModal({
                 Select Collection
               </label>
               <select
-                className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-800 dark:border-gray-700"
                 value={selectedCollectionId}
                 onChange={(e) => setSelectedCollectionId(e.target.value)}
               >
                 <option value="">Choose a collection...</option>
-                {collections.map((collection) => (
-                  <option key={collection.id} value={collection.id}>
-                    {collection.name} ({collection.item_count || 0} items)
-                  </option>
-                ))}
+                {collectionType === 'team'
+                  ? teamCollections.map((collection) => (
+                      <option key={collection.id} value={collection.id}>
+                        {collection.name} ({collection.item_count || 0} items)
+                      </option>
+                    ))
+                  : personalCollections.map((collection) => (
+                      <option key={collection.id} value={collection.id}>
+                        {collection.name} ({collection.file_count || 0} files)
+                      </option>
+                    ))
+                }
               </select>
             </div>
 
