@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Bell } from 'lucide-react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
+import { notificationSound } from '../utils/notificationSound';
 
 interface Notification {
   id: string;
@@ -25,7 +26,15 @@ export const NotificationBell: React.FC = () => {
   const [showDropdown, setShowDropdown] = useState(false);
   const [loading, setLoading] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const previousUnreadCountRef = useRef(0);
   const navigate = useNavigate();
+
+  // Request browser notification permission on mount
+  useEffect(() => {
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+  }, []);
 
   // Fetch notifications
   const fetchNotifications = async () => {
@@ -41,8 +50,38 @@ export const NotificationBell: React.FC = () => {
         })
       ]);
 
-      setNotifications(notifResponse.data.notifications || []);
-      setUnreadCount(countResponse.data.count || 0);
+      const newNotifications = notifResponse.data.notifications || [];
+      const newUnreadCount = countResponse.data.count || 0;
+      const previousUnreadCount = previousUnreadCountRef.current;
+
+      setNotifications(newNotifications);
+      setUnreadCount(newUnreadCount);
+
+      // If there are new unread notifications (and not initial load)
+      if (newUnreadCount > previousUnreadCount && previousUnreadCount > 0) {
+        // Get the latest unread notification
+        const latestNotification = newNotifications.find((n: Notification) => !n.is_read);
+
+        if (latestNotification) {
+          // Play sound based on notification type
+          const soundType = latestNotification.type === 'mention' ? 'mention' :
+                           latestNotification.type === 'file_request_assigned' ? 'request' :
+                           latestNotification.type === 'file_request_completed' ? 'success' :
+                           'default';
+          notificationSound.playNotificationSound(soundType);
+
+          // Show browser notification
+          if ('Notification' in window && Notification.permission === 'granted') {
+            new Notification(latestNotification.title, {
+              body: latestNotification.message,
+              icon: '/logo192.png',
+              tag: latestNotification.id
+            });
+          }
+        }
+      }
+
+      previousUnreadCountRef.current = newUnreadCount;
     } catch (error) {
       console.error('Failed to fetch notifications:', error);
     }
