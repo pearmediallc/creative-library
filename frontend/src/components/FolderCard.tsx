@@ -1,6 +1,7 @@
 import React from 'react';
 import { Folder, MoreVertical } from 'lucide-react';
 import { formatDate } from '../lib/utils';
+import { TeamFolderBadge } from './TeamFolderBadge';
 
 interface FolderCardProps {
   folder: {
@@ -9,6 +10,8 @@ interface FolderCardProps {
     file_count?: number;
     created_at: string;
     color?: string;
+    team_id?: string;
+    team_name?: string;
   };
   onClick: () => void;
   onContextMenu: (e: React.MouseEvent) => void;
@@ -48,6 +51,13 @@ export function FolderCard({ folder, onClick, onContextMenu }: FolderCardProps) 
         <h3 className="text-center font-medium text-gray-900 dark:text-white mb-1 truncate w-full px-2">
           {folder.name}
         </h3>
+
+        {/* Team badge */}
+        {folder.team_id && (
+          <div className="mb-2">
+            <TeamFolderBadge teamName={folder.team_name} size="sm" />
+          </div>
+        )}
 
         {/* File count */}
         <p className="text-sm text-gray-500 dark:text-gray-400">

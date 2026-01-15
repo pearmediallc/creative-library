@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { folderApi } from '../lib/api';
 import { Folder, FolderOpen, ChevronRight, ChevronDown, Plus, MoreVertical } from 'lucide-react';
 import { Button } from './ui/Button';
+import { TeamFolderBadge } from './TeamFolderBadge';
 
 interface FolderNode {
   id: string;
@@ -12,6 +13,8 @@ interface FolderNode {
   path: string[];
   s3_path: string;
   created_at: string;
+  team_id?: string;
+  team_name?: string;
 }
 
 interface FolderTreeProps {
@@ -96,13 +99,16 @@ export function FolderTree({
           )}
 
           {/* Folder Icon */}
-          <div onClick={() => onFolderSelect(folder.id)} className="flex items-center gap-2 flex-1">
+          <div onClick={() => onFolderSelect(folder.id)} className="flex items-center gap-2 flex-1 min-w-0">
             {isExpanded ? (
-              <FolderOpen className="w-4 h-4 text-yellow-500" />
+              <FolderOpen className="w-4 h-4 text-yellow-500 flex-shrink-0" />
             ) : (
-              <Folder className="w-4 h-4 text-yellow-500" />
+              <Folder className="w-4 h-4 text-yellow-500 flex-shrink-0" />
             )}
             <span className="text-sm truncate flex-1">{folder.name}</span>
+            {folder.team_id && (
+              <TeamFolderBadge teamName={folder.team_name} size="sm" />
+            )}
           </div>
 
           {/* Context Menu Button */}

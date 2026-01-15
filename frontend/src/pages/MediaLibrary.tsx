@@ -36,6 +36,8 @@ interface FolderNode {
   color?: string;
   is_locked?: boolean;
   locked_by?: string;
+  team_id?: string;
+  team_name?: string;
 }
 
 interface BreadcrumbItem {
