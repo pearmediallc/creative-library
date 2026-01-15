@@ -50,7 +50,7 @@ export function TeamsPage() {
       if (members.length > 0) {
         await Promise.all(
           members.map(member =>
-            teamApi.addMember(teamId, { user_id: member.userId, role: member.role })
+            teamApi.addMember(teamId, { userId: member.userId, teamRole: member.role as 'lead' | 'member' | 'guest' })
           )
         );
       }

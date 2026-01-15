@@ -98,8 +98,8 @@ export function TeamMembersModal({
 
     try {
       await teamApi.addMember(teamId, {
-        user_id: selectedUserId,
-        role: selectedRole
+        userId: selectedUserId,
+        teamRole: selectedRole as 'lead' | 'member' | 'guest'
       });
 
       // Reset form

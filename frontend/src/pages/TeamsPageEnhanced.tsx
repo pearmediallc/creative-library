@@ -13,7 +13,7 @@ import { Users, Plus, FolderOpen, Activity, FileText, BarChart3, MessageSquare }
 interface Team {
   id: string;
   name: string;
-  description?: string;
+  description?: string | null;
   owner_id: string;
   member_count?: number;
   folder_count?: number;

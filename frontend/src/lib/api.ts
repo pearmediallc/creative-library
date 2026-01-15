@@ -310,6 +310,8 @@ export const folderApi = {
     parent_folder_id?: string;
     description?: string;
     color?: string;
+    team_id?: string;
+    ownership_type?: 'user' | 'team';
   }) => api.post('/folders', data),
 
   // Get folder tree (hierarchical structure)
@@ -819,13 +821,21 @@ export const teamApi = {
   // Team management
   createTeam: (data: { name: string; description?: string }) =>
     api.post('/teams', data),
+  create: (data: { name: string; description?: string }) =>
+    api.post('/teams', data),
   getUserTeams: () =>
     api.get('/teams'),
+  getAll: () =>
+    api.get('/teams'),
   getTeam: (teamId: string) =>
+    api.get(`/teams/${teamId}`),
+  getById: (teamId: string) =>
     api.get(`/teams/${teamId}`),
   updateTeam: (teamId: string, data: { name?: string; description?: string }) =>
     api.put(`/teams/${teamId}`, data),
   deleteTeam: (teamId: string) =>
+    api.delete(`/teams/${teamId}`),
+  delete: (teamId: string) =>
     api.delete(`/teams/${teamId}`),
 
   // Team members

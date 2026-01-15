@@ -108,6 +108,7 @@ export function TeamManagementDialog({ isOpen, onClose, onTeamCreated }: TeamMan
   };
 
   const handleDeleteTeam = async (teamId: string, teamName: string) => {
+    // eslint-disable-next-line no-restricted-globals
     if (!confirm(`Are you sure you want to delete "${teamName}"? This cannot be undone.`)) {
       return;
     }
@@ -127,6 +128,7 @@ export function TeamManagementDialog({ isOpen, onClose, onTeamCreated }: TeamMan
   };
 
   const handleRemoveMember = async (memberId: string, username: string) => {
+    // eslint-disable-next-line no-restricted-globals
     if (!selectedTeam || !confirm(`Remove ${username} from the team?`)) {
       return;
     }

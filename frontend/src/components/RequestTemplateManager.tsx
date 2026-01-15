@@ -150,6 +150,7 @@ export function RequestTemplateManager({
   };
 
   const handleDelete = async (templateId: string, templateName: string) => {
+    // eslint-disable-next-line no-restricted-globals
     if (!confirm(`Are you sure you want to delete "${templateName}"? This cannot be undone.`)) {
       return;
     }

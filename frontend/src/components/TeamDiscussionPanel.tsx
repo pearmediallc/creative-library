@@ -107,6 +107,7 @@ export function TeamDiscussionPanel({ teamId }: TeamDiscussionPanelProps) {
   };
 
   const handleDeleteMessage = async (messageId: string) => {
+    // eslint-disable-next-line no-restricted-globals
     if (!confirm('Are you sure you want to delete this message?')) return;
 
     try {
