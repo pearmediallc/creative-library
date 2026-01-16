@@ -27,6 +27,7 @@ import { ActivityLogExportPage } from './pages/ActivityLogExport';
 import { WorkloadDashboardPage } from './pages/WorkloadDashboardPage';
 import { AccessRequestsPage } from './pages/AccessRequestsPage';
 import { UploadStatusSidebar } from './components/UploadStatusSidebar';
+import { UploadNotifications } from './components/UploadNotifications';
 
 function PrivateRoute({ children }: { children: React.ReactElement }) {
   const { user, loading } = useAuth();
@@ -273,6 +274,7 @@ function App() {
         <PermissionsProvider>
           <AppRoutes />
           <UploadStatusSidebar />
+          <UploadNotifications />
         </PermissionsProvider>
       </AuthProvider>
     </BrowserRouter>
