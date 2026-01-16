@@ -213,10 +213,13 @@ class MediaFile extends BaseModel {
         mf.*,
         u.name as uploader_name,
         u.email as uploader_email,
-        e.display_name as editor_display_name
+        e.display_name as editor_display_name,
+        f.name as folder_name,
+        f.s3_path as folder_path
       FROM ${this.tableName} mf
       LEFT JOIN users u ON u.id = mf.uploaded_by
       LEFT JOIN editors e ON e.id = mf.editor_id
+      LEFT JOIN folders f ON f.id = mf.folder_id
       ${whereClause}
       ORDER BY mf.created_at DESC
       LIMIT $${paramIndex++} OFFSET $${paramIndex}
