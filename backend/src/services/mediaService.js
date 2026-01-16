@@ -257,11 +257,15 @@ class MediaService {
    */
   async getMediaFiles(filters = {}, userId = null, userRole = null) {
     try {
-      // IMPORTANT: Creative users can only see their own uploads
-      // Buyers and Admins can see all content
-      if (userRole === 'creative') {
+      // IMPORTANT: Role-based access control for media files
+      // - Admins can see all content (for system management)
+      // - Buyers can see all content (they need to review all submissions)
+      // - All other users (editors, creatives, etc.) can only see their own uploads
+      if (userRole !== 'admin' && userRole !== 'buyer') {
         filters.uploaded_by = userId;
-        logger.info('Creative user - restricting to own uploads', { userId });
+        logger.info('Non-admin/buyer user - restricting to own uploads', { userId, userRole });
+      } else {
+        logger.info('Admin/Buyer user - showing all files', { userId, userRole });
       }
 
       // Get media files

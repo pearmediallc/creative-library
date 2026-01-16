@@ -295,6 +295,7 @@ class FileRequestController {
 
       // Check if user is an editor (creative role)
       const isEditor = userRole === 'creative';
+      const isAdminOrBuyer = userRole === 'admin' || userRole === 'buyer';
 
       let whereClause;
       let params;
@@ -354,9 +355,18 @@ class FileRequestController {
           data: result.rows
         });
       } else {
-        // For non-editors (admin, buyer): show requests they created
-        whereClause = 'WHERE fr.created_by = $1';
-        params = [userId];
+        // For non-editors: differentiate between admin/buyer and regular users
+        if (isAdminOrBuyer) {
+          // Admins and Buyers see ALL requests
+          whereClause = 'WHERE 1=1';
+          params = [];
+          logger.info('Admin/Buyer viewing all file requests', { userId, userRole });
+        } else {
+          // Regular users see only requests they created
+          whereClause = 'WHERE fr.created_by = $1';
+          params = [userId];
+          logger.info('Regular user viewing own file requests', { userId, userRole });
+        }
 
         if (status === 'active') {
           whereClause += ' AND fr.is_active = TRUE';
@@ -445,22 +455,44 @@ class FileRequestController {
           [id, editorId]
         );
       } else {
-        // For non-editors: check if they created the request
-        result = await query(
-          `SELECT
-            fr.*,
-            f.name as folder_name,
-            COUNT(DISTINCT fru.id) as upload_count,
-            u.name as creator_name,
-            u.email as creator_email
-          FROM file_requests fr
-          LEFT JOIN folders f ON fr.folder_id = f.id
-          LEFT JOIN file_request_uploads fru ON fr.id = fru.file_request_id
-          LEFT JOIN users u ON fr.created_by = u.id
-          WHERE fr.id = $1 AND fr.created_by = $2
-          GROUP BY fr.id, f.name, u.name, u.email`,
-          [id, userId]
-        );
+        // For non-editors: differentiate between admin/buyer and regular users
+        const isAdminOrBuyer = userRole === 'admin' || userRole === 'buyer';
+
+        if (isAdminOrBuyer) {
+          // Admins and Buyers can view any request
+          result = await query(
+            `SELECT
+              fr.*,
+              f.name as folder_name,
+              COUNT(DISTINCT fru.id) as upload_count,
+              u.name as creator_name,
+              u.email as creator_email
+            FROM file_requests fr
+            LEFT JOIN folders f ON fr.folder_id = f.id
+            LEFT JOIN file_request_uploads fru ON fr.id = fru.file_request_id
+            LEFT JOIN users u ON fr.created_by = u.id
+            WHERE fr.id = $1
+            GROUP BY fr.id, f.name, u.name, u.email`,
+            [id]
+          );
+        } else {
+          // Regular users can only view requests they created
+          result = await query(
+            `SELECT
+              fr.*,
+              f.name as folder_name,
+              COUNT(DISTINCT fru.id) as upload_count,
+              u.name as creator_name,
+              u.email as creator_email
+            FROM file_requests fr
+            LEFT JOIN folders f ON fr.folder_id = f.id
+            LEFT JOIN file_request_uploads fru ON fr.id = fru.file_request_id
+            LEFT JOIN users u ON fr.created_by = u.id
+            WHERE fr.id = $1 AND fr.created_by = $2
+            GROUP BY fr.id, f.name, u.name, u.email`,
+            [id, userId]
+          );
+        }
       }
 
       if (result.rows.length === 0) {
