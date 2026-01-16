@@ -119,24 +119,36 @@ class UploadQueueManager {
 
         xhr.addEventListener('load', () => {
           if (xhr.status >= 200 && xhr.status < 300) {
+            task.uploadedBytes = task.totalBytes;
+            task.progress = 100;
             resolve(xhr.response);
           } else {
-            reject(new Error(`Upload failed with status ${xhr.status}`));
+            const errorMsg = `Upload failed with status ${xhr.status}`;
+            console.error('Upload error:', errorMsg, xhr.responseText);
+            reject(new Error(errorMsg));
           }
         });
 
-        xhr.addEventListener('error', () => reject(new Error('Network error')));
-        xhr.addEventListener('abort', () => reject(new Error('Upload cancelled')));
+        xhr.addEventListener('error', () => {
+          console.error('Network error during upload');
+          reject(new Error('Network error'));
+        });
+
+        xhr.addEventListener('abort', () => {
+          console.log('Upload cancelled');
+          reject(new Error('Upload cancelled'));
+        });
 
         abortController.signal.addEventListener('abort', () => xhr.abort());
 
         xhr.open('POST', `/api/file-requests/${task.requestId}/upload`);
         xhr.setRequestHeader('Authorization', `Bearer ${localStorage.getItem('token')}`);
+
+        console.log(`Starting upload for file: ${task.file.name} to request: ${task.requestId}`);
         xhr.send(formData);
       });
 
-      task.uploadedBytes = task.totalBytes;
-      task.progress = 100;
+      // Only save/notify after successful upload (inside the load handler above)
       this.saveToStorage();
       this.notifyListeners();
     } finally {
