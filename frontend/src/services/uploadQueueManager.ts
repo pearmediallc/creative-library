@@ -264,9 +264,9 @@ class UploadQueueManager {
       const queueData = this.queue.map(task => ({
         ...task,
         file: undefined, // Don't store File object
-        fileName: task.file.name,
-        fileSize: task.file.size,
-        fileType: task.file.type
+        fileName: task.file?.name || 'Unknown',
+        fileSize: task.file?.size || task.totalBytes,
+        fileType: task.file?.type || 'unknown'
       }));
       localStorage.setItem('uploadQueue', JSON.stringify(queueData));
     } catch (error) {
