@@ -7,6 +7,7 @@ import React, { useState } from 'react';
 import { Download, Eye, Plus, Play, X } from 'lucide-react';
 import { Button } from './ui/Button';
 import { formatBytes, formatDate } from '../lib/utils';
+import { VideoPlayer } from './VideoPlayer';
 
 interface FileUpload {
   id: string;
@@ -144,39 +145,44 @@ export function UploadedFileCard({ upload, onDownload, onAddToLibrary }: Uploade
 
       {/* Preview Modal */}
       {showPreview && (
-        <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-[100]">
-          <div className="relative max-w-6xl w-full max-h-screen p-4">
+        <div
+          className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-[100]"
+          onClick={() => setShowPreview(false)}
+        >
+          <div
+            className="relative w-full h-full flex items-center justify-center p-8"
+            onClick={(e) => e.stopPropagation()}
+          >
             {/* Close Button */}
             <button
               onClick={() => setShowPreview(false)}
-              className="absolute top-6 right-6 text-white hover:text-gray-300 z-10"
+              className="absolute top-4 right-4 text-white hover:text-gray-300 z-20 bg-black/50 rounded-full p-2"
             >
-              <X className="w-8 h-8" />
+              <X className="w-6 h-6" />
             </button>
 
             {/* Content */}
-            <div className="flex items-center justify-center h-full">
-              {isVideo ? (
-                <video
+            {isVideo ? (
+              <div className="w-full h-full max-w-[90vw] max-h-[80vh] flex items-center justify-center">
+                <VideoPlayer
                   src={upload.cloudfront_url}
-                  controls
-                  autoPlay
-                  className="max-w-full max-h-[90vh] rounded-lg"
-                >
-                  Your browser does not support the video tag.
-                </video>
-              ) : isImage ? (
-                <img
-                  src={upload.cloudfront_url}
-                  alt={upload.original_filename}
-                  className="max-w-full max-h-[90vh] rounded-lg object-contain"
+                  poster={upload.thumbnail_url}
+                  autoPlay={true}
+                  className="w-full h-full"
                 />
-              ) : null}
-            </div>
+              </div>
+            ) : isImage ? (
+              <img
+                src={upload.cloudfront_url}
+                alt={upload.original_filename}
+                className="max-w-full max-h-full rounded-lg object-contain shadow-2xl"
+                style={{ maxHeight: '90vh', maxWidth: '90vw' }}
+              />
+            ) : null}
 
             {/* File Info Overlay */}
-            <div className="absolute bottom-6 left-6 right-6 bg-black/70 text-white p-4 rounded-lg">
-              <p className="font-medium">{upload.original_filename}</p>
+            <div className="absolute bottom-4 left-4 right-4 bg-black/70 text-white p-4 rounded-lg max-w-2xl mx-auto">
+              <p className="font-medium truncate">{upload.original_filename}</p>
               <p className="text-sm text-gray-300 mt-1">
                 {formatBytes(upload.file_size)} • {formatDate(upload.created_at)}
               </p>

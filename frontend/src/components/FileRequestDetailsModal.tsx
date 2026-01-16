@@ -84,6 +84,32 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
     fetchRequestDetails();
   }, [requestId]);
 
+  // Subscribe to upload queue to refresh when uploads complete
+  useEffect(() => {
+    let unsubscribe: (() => void) | null = null;
+
+    const setupQueueSubscription = async () => {
+      const { uploadQueueManager } = await import('../services/uploadQueueManager');
+
+      unsubscribe = uploadQueueManager.subscribe((queue) => {
+        // Check if any uploads for this request just completed
+        const requestUploads = queue.filter(task => task.requestId === requestId);
+        const hasCompletedUploads = requestUploads.some(task => task.status === 'completed');
+
+        if (hasCompletedUploads) {
+          // Refresh request details to show newly uploaded files
+          fetchRequestDetails();
+        }
+      });
+    };
+
+    setupQueueSubscription();
+
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
+  }, [requestId]);
+
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();

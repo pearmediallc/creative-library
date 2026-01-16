@@ -3,6 +3,7 @@ const logger = require('../utils/logger');
 const crypto = require('crypto');
 const mediaService = require('../services/mediaService');
 const { logActivity } = require('../middleware/activityLogger');
+const Notification = require('../models/Notification');
 
 class FileRequestController {
   /**
@@ -239,6 +240,31 @@ class FileRequestController {
              ON CONFLICT (request_id, editor_id) DO NOTHING`,
             [fileRequest.id, edId]
           );
+
+          // Get editor's user_id to send notification
+          const editorUserResult = await query(
+            'SELECT user_id FROM editors WHERE id = $1',
+            [edId]
+          );
+
+          if (editorUserResult.rows && editorUserResult.rows.length > 0) {
+            const editorUserId = editorUserResult.rows[0].user_id;
+
+            // Create notification for assigned editor
+            await Notification.create({
+              userId: editorUserId,
+              type: 'file_request_assigned',
+              title: 'New File Request Assigned',
+              message: `You have been assigned to "${fileRequest.title}" by ${req.user.name || req.user.email}`,
+              referenceType: 'file_request',
+              referenceId: fileRequest.id,
+              metadata: {
+                request_title: fileRequest.title,
+                deadline: fileRequest.deadline,
+                assigned_by: req.user.name || req.user.email
+              }
+            });
+          }
         }
       }
 
@@ -942,6 +968,22 @@ class FileRequestController {
         }
       });
 
+      // Create notification for request creator
+      await Notification.create({
+        userId: fileRequest.creator_id,
+        type: 'file_request_upload',
+        title: 'New File Uploaded',
+        message: `${uploader_name || uploader_email || 'Someone'} uploaded "${mediaFile.original_filename}" to your request "${fileRequest.title}"`,
+        referenceType: 'file_request',
+        referenceId: fileRequest.id,
+        metadata: {
+          file_id: mediaFile.id,
+          file_name: mediaFile.original_filename,
+          uploaded_by: uploader_name || uploader_email || 'Anonymous',
+          public_upload: true
+        }
+      });
+
       res.status(201).json({
         success: true,
         message: 'File uploaded successfully',
@@ -1068,6 +1110,23 @@ class FileRequestController {
           request_creator: fileRequest.creator_id
         }
       });
+
+      // Create notification for request creator (if uploader is not the creator)
+      if (userId !== fileRequest.creator_id) {
+        await Notification.create({
+          userId: fileRequest.creator_id,
+          type: 'file_request_upload',
+          title: 'New File Uploaded',
+          message: `${req.user.name || req.user.email} uploaded "${mediaFile.original_filename}" to your request "${fileRequest.title}"`,
+          referenceType: 'file_request',
+          referenceId: fileRequest.id,
+          metadata: {
+            file_id: mediaFile.id,
+            file_name: mediaFile.original_filename,
+            uploaded_by: req.user.name || req.user.email
+          }
+        });
+      }
 
       res.status(201).json({
         success: true,
