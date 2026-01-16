@@ -78,10 +78,66 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
   const [uploadSuccess, setUploadSuccess] = useState(false);
   const [uploadError, setUploadError] = useState('');
   const [uploadProgress, setUploadProgress] = useState<{[key: string]: string}>({});
+  const [isDragging, setIsDragging] = useState(false);
 
   useEffect(() => {
     fetchRequestDetails();
   }, [requestId]);
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+
+    const items = Array.from(e.dataTransfer.items);
+    const files: File[] = [];
+
+    // Process all dropped items (files and folders)
+    const processItems = async () => {
+      for (const item of items) {
+        if (item.kind === 'file') {
+          const entry = item.webkitGetAsEntry();
+          if (entry) {
+            await traverseFileTree(entry, files);
+          }
+        }
+      }
+      setSelectedFiles(files);
+    };
+
+    processItems();
+  };
+
+  const traverseFileTree = async (item: any, files: File[]): Promise<void> => {
+    return new Promise((resolve) => {
+      if (item.isFile) {
+        item.file((file: File) => {
+          files.push(file);
+          resolve();
+        });
+      } else if (item.isDirectory) {
+        const dirReader = item.createReader();
+        dirReader.readEntries(async (entries: any[]) => {
+          for (const entry of entries) {
+            await traverseFileTree(entry, files);
+          }
+          resolve();
+        });
+      }
+    });
+  };
 
   const fetchRequestDetails = async () => {
     try {
@@ -542,22 +598,73 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
 
               {showUploadForm && (
                 <form onSubmit={handleFileUpload} className="space-y-4 p-4 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700">
-                  {/* File Selection */}
+                  {/* File Selection with Drag & Drop */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Select Files * {request.allow_multiple_uploads && '(Multiple files allowed)'}
+                      Select Files or Folder * {request.allow_multiple_uploads && '(Multiple files/folders allowed)'}
                     </label>
-                    <input
-                      type="file"
-                      multiple={request.allow_multiple_uploads}
-                      onChange={(e) => {
-                        const files = Array.from(e.target.files || []);
-                        setSelectedFiles(files);
-                      }}
-                      className="w-full text-sm text-gray-700 dark:text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 dark:file:bg-blue-900 dark:file:text-blue-200"
-                      disabled={uploading}
-                      required
-                    />
+
+                    {/* Drag & Drop Zone */}
+                    <div
+                      onDragOver={handleDragOver}
+                      onDragLeave={handleDragLeave}
+                      onDrop={handleDrop}
+                      className={`relative space-y-2 p-4 border-2 border-dashed rounded-lg transition-colors ${
+                        isDragging
+                          ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                          : 'border-gray-300 dark:border-gray-600'
+                      }`}
+                    >
+                      {isDragging && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-blue-50/90 dark:bg-blue-900/40 rounded-lg pointer-events-none z-10">
+                          <div className="text-center">
+                            <UploadIcon className="w-12 h-12 mx-auto mb-2 text-blue-600 dark:text-blue-400" />
+                            <p className="text-lg font-medium text-blue-700 dark:text-blue-300">
+                              Drop files or folders here
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Regular file upload */}
+                      <input
+                        type="file"
+                        multiple={request.allow_multiple_uploads}
+                        onChange={(e) => {
+                          const files = Array.from(e.target.files || []);
+                          setSelectedFiles(files);
+                        }}
+                        className="w-full text-sm text-gray-700 dark:text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 dark:file:bg-blue-900 dark:file:text-blue-200"
+                        disabled={uploading}
+                      />
+
+                      {/* Folder upload */}
+                      {request.allow_multiple_uploads && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-gray-600 dark:text-gray-400">Or select entire folder:</span>
+                          <input
+                            type="file"
+                            // @ts-ignore - webkitdirectory is not in TypeScript types but works in all modern browsers
+                            webkitdirectory="true"
+                            directory="true"
+                            onChange={(e) => {
+                              const files = Array.from(e.target.files || []);
+                              setSelectedFiles(files);
+                            }}
+                            className="text-sm text-gray-700 dark:text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-green-50 file:text-green-700 hover:file:bg-green-100 dark:file:bg-green-900 dark:file:text-green-200"
+                            disabled={uploading}
+                          />
+                        </div>
+                      )}
+
+                      {/* Drag & Drop Hint */}
+                      {request.allow_multiple_uploads && !isDragging && selectedFiles.length === 0 && (
+                        <div className="text-center py-2 text-sm text-gray-500 dark:text-gray-400">
+                          <UploadIcon className="w-8 h-8 mx-auto mb-1 opacity-50" />
+                          <p>Or drag and drop files/folders here</p>
+                        </div>
+                      )}
+                    </div>
                     {selectedFiles.length > 0 && (
                       <div className="mt-2 space-y-1">
                         <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -615,7 +722,7 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
                   <div className="flex gap-2">
                     <Button
                       type="submit"
-                      disabled={!selectedFile || uploading}
+                      disabled={selectedFiles.length === 0 || uploading}
                     >
                       {uploading ? 'Uploading...' : 'Upload'}
                     </Button>
@@ -624,7 +731,7 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
                       variant="outline"
                       onClick={() => {
                         setShowUploadForm(false);
-                        setSelectedFile(null);
+                        setSelectedFiles([]);
                         setUploadComments('');
                         setUploadError('');
                       }}
