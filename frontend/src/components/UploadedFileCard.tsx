@@ -144,7 +144,7 @@ export function UploadedFileCard({ upload, onDownload, onAddToLibrary }: Uploade
 
       {/* Preview Modal */}
       {showPreview && (
-        <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-[70]">
+        <div className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-[100]">
           <div className="relative max-w-6xl w-full max-h-screen p-4">
             {/* Close Button */}
             <button

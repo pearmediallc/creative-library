@@ -3,6 +3,7 @@ const logger = require('../utils/logger');
 const { logActivity } = require('../middleware/activityLogger');
 const { v4: uuidv4 } = require('uuid');
 const bulkMetadataService = require('../services/bulkMetadataService');
+const { query } = require('../config/database');
 
 class MediaController {
   /**

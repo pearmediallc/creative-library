@@ -355,17 +355,17 @@ class FileRequestController {
           data: result.rows
         });
       } else {
-        // For non-editors: differentiate between admin/buyer and regular users
-        if (isAdminOrBuyer) {
-          // Admins and Buyers see ALL requests
+        // For non-editors: differentiate between admin and buyers/regular users
+        if (userRole === 'admin') {
+          // Only admins see ALL requests
           whereClause = 'WHERE 1=1';
           params = [];
-          logger.info('Admin/Buyer viewing all file requests', { userId, userRole });
+          logger.info('Admin viewing all file requests', { userId, userRole });
         } else {
-          // Regular users see only requests they created
+          // Buyers and regular users see only requests they created
           whereClause = 'WHERE fr.created_by = $1';
           params = [userId];
-          logger.info('Regular user viewing own file requests', { userId, userRole });
+          logger.info('Buyer/User viewing own file requests', { userId, userRole });
         }
 
         if (status === 'active') {
@@ -455,11 +455,9 @@ class FileRequestController {
           [id, editorId]
         );
       } else {
-        // For non-editors: differentiate between admin/buyer and regular users
-        const isAdminOrBuyer = userRole === 'admin' || userRole === 'buyer';
-
-        if (isAdminOrBuyer) {
-          // Admins and Buyers can view any request
+        // For non-editors: differentiate between admin and buyers/regular users
+        if (userRole === 'admin') {
+          // Only admins can view any request
           result = await query(
             `SELECT
               fr.*,
@@ -476,7 +474,7 @@ class FileRequestController {
             [id]
           );
         } else {
-          // Regular users can only view requests they created
+          // Buyers and regular users can only view requests they created
           result = await query(
             `SELECT
               fr.*,
@@ -926,6 +924,24 @@ class FileRequestController {
         hasComments: !!comments
       });
 
+      // Log activity for the file upload (log as request creator since this is public upload)
+      await logActivity({
+        userId: fileRequest.creator_id,
+        action: 'file_request_upload',
+        details: `File "${mediaFile.original_filename}" uploaded to file request "${fileRequest.title}"${uploader_email ? ` by ${uploader_email}` : ''}`,
+        metadata: {
+          file_request_id: fileRequest.id,
+          file_id: mediaFile.id,
+          file_name: mediaFile.original_filename,
+          file_size: mediaFile.file_size,
+          file_type: mediaFile.file_type,
+          uploader_email: uploader_email || null,
+          uploader_name: uploader_name || null,
+          has_comments: !!comments,
+          public_upload: true
+        }
+      });
+
       res.status(201).json({
         success: true,
         message: 'File uploaded successfully',
@@ -1035,6 +1051,22 @@ class FileRequestController {
         userId,
         editorId,
         hasComments: !!comments
+      });
+
+      // Log activity for the file upload
+      await logActivity({
+        userId,
+        action: 'file_request_upload',
+        details: `Uploaded "${mediaFile.original_filename}" to file request "${fileRequest.title}"`,
+        metadata: {
+          file_request_id: fileRequest.id,
+          file_id: mediaFile.id,
+          file_name: mediaFile.original_filename,
+          file_size: mediaFile.file_size,
+          file_type: mediaFile.file_type,
+          has_comments: !!comments,
+          request_creator: fileRequest.creator_id
+        }
       });
 
       res.status(201).json({

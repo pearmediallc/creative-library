@@ -156,7 +156,7 @@ export function UploadStatusSidebar() {
                       />
                     </div>
                     <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                      {task.progress}% • {task.uploadedChunks.length} / {task.totalChunks} chunks
+                      {task.progress}% • {formatBytes(task.uploadedBytes)} / {formatBytes(task.totalBytes)}
                     </p>
                   </div>
                 )}

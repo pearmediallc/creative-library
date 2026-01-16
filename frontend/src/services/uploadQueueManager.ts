@@ -9,8 +9,6 @@ export interface UploadTask {
   requestId: string;
   status: 'pending' | 'uploading' | 'paused' | 'completed' | 'failed';
   progress: number;
-  uploadedChunks: number[];
-  totalChunks: number;
   uploadedBytes: number;
   totalBytes: number;
   error?: string;
@@ -19,18 +17,10 @@ export interface UploadTask {
   comments?: string;
 }
 
-export interface UploadChunk {
-  index: number;
-  start: number;
-  end: number;
-  blob: Blob;
-}
-
 class UploadQueueManager {
   private queue: UploadTask[] = [];
   private activeUploads = 0;
   private maxConcurrent = 3; // Upload 3 files in parallel
-  private chunkSize = 10 * 1024 * 1024; // 10MB chunks
   private listeners: ((queue: UploadTask[]) => void)[] = [];
   private abortControllers: Map<string, AbortController> = new Map();
 
@@ -46,7 +36,6 @@ class UploadQueueManager {
 
     for (const file of files) {
       const taskId = this.generateTaskId();
-      const totalChunks = Math.ceil(file.size / this.chunkSize);
 
       const task: UploadTask = {
         id: taskId,
@@ -54,8 +43,6 @@ class UploadQueueManager {
         requestId,
         status: 'pending',
         progress: 0,
-        uploadedChunks: [],
-        totalChunks,
         uploadedBytes: 0,
         totalBytes: file.size,
         comments,
@@ -105,124 +92,58 @@ class UploadQueueManager {
   }
 
   /**
-   * Upload a single task with chunking and resumability
+   * Upload a single task (direct upload, no chunking for now)
    */
   private async uploadTask(task: UploadTask): Promise<void> {
-    const chunks = this.createChunks(task.file);
     const abortController = new AbortController();
     this.abortControllers.set(task.id, abortController);
 
     try {
-      // Upload chunks sequentially (for single file)
-      for (let i = 0; i < chunks.length; i++) {
-        // Skip already uploaded chunks (resumability)
-        if (task.uploadedChunks.includes(i)) {
-          continue;
-        }
-
-        if (abortController.signal.aborted) {
-          throw new Error('Upload cancelled');
-        }
-
-        await this.uploadChunk(task, chunks[i], i, abortController.signal);
-
-        // Update progress
-        task.uploadedChunks.push(i);
-        task.uploadedBytes = task.uploadedChunks.length * this.chunkSize;
-        task.progress = Math.round((task.uploadedChunks.length / task.totalChunks) * 100);
-
-        this.saveToStorage();
-        this.notifyListeners();
+      const formData = new FormData();
+      formData.append('file', task.file);
+      if (task.comments) {
+        formData.append('comments', task.comments);
       }
 
-      // Finalize upload
-      await this.finalizeUpload(task);
+      // Use XMLHttpRequest for progress tracking
+      await new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+
+        xhr.upload.addEventListener('progress', (e) => {
+          if (e.lengthComputable) {
+            task.uploadedBytes = e.loaded;
+            task.progress = Math.round((e.loaded / e.total) * 100);
+            this.notifyListeners();
+          }
+        });
+
+        xhr.addEventListener('load', () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            resolve(xhr.response);
+          } else {
+            reject(new Error(`Upload failed with status ${xhr.status}`));
+          }
+        });
+
+        xhr.addEventListener('error', () => reject(new Error('Network error')));
+        xhr.addEventListener('abort', () => reject(new Error('Upload cancelled')));
+
+        abortController.signal.addEventListener('abort', () => xhr.abort());
+
+        xhr.open('POST', `/api/file-requests/${task.requestId}/upload`);
+        xhr.setRequestHeader('Authorization', `Bearer ${localStorage.getItem('token')}`);
+        xhr.send(formData);
+      });
+
+      task.uploadedBytes = task.totalBytes;
+      task.progress = 100;
+      this.saveToStorage();
+      this.notifyListeners();
     } finally {
       this.abortControllers.delete(task.id);
     }
   }
 
-  /**
-   * Upload a single chunk
-   */
-  private async uploadChunk(
-    task: UploadTask,
-    chunk: UploadChunk,
-    index: number,
-    signal: AbortSignal
-  ): Promise<void> {
-    const formData = new FormData();
-    formData.append('file', chunk.blob, task.file.name);
-    formData.append('chunkIndex', index.toString());
-    formData.append('totalChunks', task.totalChunks.toString());
-    formData.append('fileName', task.file.name);
-    formData.append('fileSize', task.totalBytes.toString());
-
-    if (task.comments) {
-      formData.append('comments', task.comments);
-    }
-
-    const response = await fetch(`/api/file-requests/${task.requestId}/upload-chunk`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
-      },
-      body: formData,
-      signal
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || 'Chunk upload failed');
-    }
-  }
-
-  /**
-   * Finalize upload after all chunks are uploaded
-   */
-  private async finalizeUpload(task: UploadTask): Promise<void> {
-    const response = await fetch(`/api/file-requests/${task.requestId}/finalize-upload`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token')}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        fileName: task.file.name,
-        fileSize: task.totalBytes,
-        totalChunks: task.totalChunks,
-        comments: task.comments
-      })
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || 'Failed to finalize upload');
-    }
-  }
-
-  /**
-   * Create chunks from file
-   */
-  private createChunks(file: File): UploadChunk[] {
-    const chunks: UploadChunk[] = [];
-    let start = 0;
-    let index = 0;
-
-    while (start < file.size) {
-      const end = Math.min(start + this.chunkSize, file.size);
-      chunks.push({
-        index,
-        start,
-        end,
-        blob: file.slice(start, end)
-      });
-      start = end;
-      index++;
-    }
-
-    return chunks;
-  }
 
   /**
    * Pause an upload
