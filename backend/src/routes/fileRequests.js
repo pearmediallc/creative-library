@@ -94,6 +94,19 @@ router.post('/:id/upload',
   fileRequestController.uploadToRequestAuth.bind(fileRequestController)
 );
 
+// Chunked upload - Upload single chunk
+router.post('/:id/upload-chunk',
+  authenticateToken,
+  upload.single('file'),
+  fileRequestController.uploadChunk.bind(fileRequestController)
+);
+
+// Finalize chunked upload - Merge chunks into final file
+router.post('/:id/finalize-upload',
+  authenticateToken,
+  fileRequestController.finalizeChunkedUpload.bind(fileRequestController)
+);
+
 // ============================================
 // CANVAS ROUTES (Product Brief Feature)
 // ============================================

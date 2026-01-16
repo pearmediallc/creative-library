@@ -77,7 +77,6 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
   const [uploading, setUploading] = useState(false);
   const [uploadSuccess, setUploadSuccess] = useState(false);
   const [uploadError, setUploadError] = useState('');
-  const [uploadProgress, setUploadProgress] = useState<{[key: string]: string}>({});
   const [isDragging, setIsDragging] = useState(false);
 
   useEffect(() => {
@@ -215,48 +214,32 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
     setUploading(true);
     setUploadError('');
     setUploadSuccess(false);
-    setUploadProgress({});
 
     try {
-      let successCount = 0;
-      let failCount = 0;
+      // Import upload queue manager dynamically
+      const { uploadQueueManager } = await import('../services/uploadQueueManager');
 
-      // Upload files sequentially to avoid overwhelming the server
-      for (const file of selectedFiles) {
-        try {
-          setUploadProgress(prev => ({ ...prev, [file.name]: 'Uploading...' }));
+      // Add files to upload queue (will handle parallel uploads automatically)
+      const taskIds = uploadQueueManager.addToQueue(
+        selectedFiles,
+        requestId,
+        uploadComments || undefined
+      );
 
-          await fileRequestApi.uploadToRequestAuth(requestId, file, uploadComments || undefined);
+      console.log(`Added ${selectedFiles.length} files to upload queue`, taskIds);
 
-          setUploadProgress(prev => ({ ...prev, [file.name]: 'Success' }));
-          successCount++;
-        } catch (error: any) {
-          console.error(`Upload failed for ${file.name}:`, error);
-          setUploadProgress(prev => ({ ...prev, [file.name]: 'Failed' }));
-          failCount++;
-        }
-      }
+      // Show success message
+      setUploadSuccess(true);
+      setSelectedFiles([]);
+      setUploadComments('');
 
-      if (successCount > 0) {
-        setUploadSuccess(true);
-        setSelectedFiles([]);
-        setUploadComments('');
-        setUploadProgress({});
-
-        // Refresh the request details to show the new uploads
-        setTimeout(() => {
-          fetchRequestDetails();
-          onUpdate();
-          setUploadSuccess(false);
-          if (failCount === 0) {
-            setShowUploadForm(false);
-          }
-        }, 2000);
-      }
-
-      if (failCount > 0) {
-        setUploadError(`${failCount} file(s) failed to upload. ${successCount} file(s) uploaded successfully.`);
-      }
+      // Close form and refresh after short delay
+      setTimeout(() => {
+        setUploadSuccess(false);
+        setShowUploadForm(false);
+        fetchRequestDetails();
+        onUpdate();
+      }, 1500);
     } catch (error: any) {
       console.error('Upload failed:', error);
       setUploadError(error.response?.data?.error || 'Failed to upload files. Please try again.');
@@ -672,12 +655,8 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
                         </p>
                         {selectedFiles.map((file, idx) => (
                           <div key={idx} className="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded">
-                            <span>{file.name}</span>
-                            {uploadProgress[file.name] && (
-                              <span className={`text-xs ${uploadProgress[file.name] === 'Success' ? 'text-green-600' : uploadProgress[file.name] === 'Failed' ? 'text-red-600' : 'text-blue-600'}`}>
-                                {uploadProgress[file.name]}
-                              </span>
-                            )}
+                            <span className="truncate">{file.name}</span>
+                            <span className="text-xs text-gray-500 ml-2">{(file.size / 1024 / 1024).toFixed(2)} MB</span>
                           </div>
                         ))}
                       </div>

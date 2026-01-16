@@ -1431,6 +1431,273 @@ class FileRequestController {
       next(error);
     }
   }
+
+  /**
+   * Upload chunk for large file uploads
+   * POST /api/file-requests/:id/upload-chunk
+   */
+  async uploadChunk(req, res, next) {
+    const fs = require('fs');
+    const path = require('path');
+
+    try {
+      const { id } = req.params;
+      const { chunkIndex, totalChunks, fileName, fileSize } = req.body;
+      const userId = req.user.id;
+
+      logger.info('Uploading chunk', {
+        requestId: id,
+        chunkIndex,
+        totalChunks,
+        fileName,
+        userId
+      });
+
+      // Verify request exists
+      const requestCheck = await query(
+        'SELECT id, is_active FROM file_requests WHERE id = $1',
+        [id]
+      );
+
+      if (requestCheck.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          error: 'File request not found'
+        });
+      }
+
+      if (!requestCheck.rows[0].is_active) {
+        return res.status(400).json({
+          success: false,
+          error: 'File request is not active'
+        });
+      }
+
+      // Create temp directory for chunks if it doesn't exist
+      const tempDir = path.join(__dirname, '../../temp/chunks', id, fileName);
+      if (!fs.existsSync(tempDir)) {
+        fs.mkdirSync(tempDir, { recursive: true });
+      }
+
+      // Save chunk to temp directory
+      const chunkPath = path.join(tempDir, `chunk_${chunkIndex}`);
+
+      if (req.file && req.file.buffer) {
+        fs.writeFileSync(chunkPath, req.file.buffer);
+      } else if (req.file && req.file.path) {
+        fs.copyFileSync(req.file.path, chunkPath);
+        fs.unlinkSync(req.file.path); // Delete original temp file
+      } else {
+        return res.status(400).json({
+          success: false,
+          error: 'No file chunk received'
+        });
+      }
+
+      logger.info('Chunk saved successfully', {
+        chunkIndex,
+        chunkPath
+      });
+
+      res.json({
+        success: true,
+        message: `Chunk ${chunkIndex} uploaded successfully`,
+        data: {
+          chunkIndex,
+          totalChunks
+        }
+      });
+    } catch (error) {
+      logger.error('Upload chunk error', { error: error.message, stack: error.stack });
+      next(error);
+    }
+  }
+
+  /**
+   * Finalize chunked upload - merge chunks and upload to S3
+   * POST /api/file-requests/:id/finalize-upload
+   */
+  async finalizeChunkedUpload(req, res, next) {
+    const fs = require('fs');
+    const path = require('path');
+
+    try {
+      const { id } = req.params;
+      const { fileName, fileSize, totalChunks, comments } = req.body;
+      const userId = req.user.id;
+
+      logger.info('Finalizing chunked upload', {
+        requestId: id,
+        fileName,
+        fileSize,
+        totalChunks,
+        userId
+      });
+
+      // Verify request exists
+      const requestResult = await query(
+        'SELECT id, is_active, folder_id FROM file_requests WHERE id = $1',
+        [id]
+      );
+
+      if (requestResult.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          error: 'File request not found'
+        });
+      }
+
+      const request = requestResult.rows[0];
+
+      if (!request.is_active) {
+        return res.status(400).json({
+          success: false,
+          error: 'File request is not active'
+        });
+      }
+
+      // Get chunks directory
+      const tempDir = path.join(__dirname, '../../temp/chunks', id, fileName);
+
+      if (!fs.existsSync(tempDir)) {
+        return res.status(400).json({
+          success: false,
+          error: 'No chunks found for this file'
+        });
+      }
+
+      // Verify all chunks exist
+      const missingChunks = [];
+      for (let i = 0; i < totalChunks; i++) {
+        const chunkPath = path.join(tempDir, `chunk_${i}`);
+        if (!fs.existsSync(chunkPath)) {
+          missingChunks.push(i);
+        }
+      }
+
+      if (missingChunks.length > 0) {
+        return res.status(400).json({
+          success: false,
+          error: `Missing chunks: ${missingChunks.join(', ')}`
+        });
+      }
+
+      // Merge chunks into single file
+      const mergedFilePath = path.join(__dirname, '../../temp', `${Date.now()}_${fileName}`);
+      const writeStream = fs.createWriteStream(mergedFilePath);
+
+      for (let i = 0; i < totalChunks; i++) {
+        const chunkPath = path.join(tempDir, `chunk_${i}`);
+        const chunkBuffer = fs.readFileSync(chunkPath);
+        writeStream.write(chunkBuffer);
+      }
+
+      writeStream.end();
+
+      // Wait for write to complete
+      await new Promise((resolve, reject) => {
+        writeStream.on('finish', resolve);
+        writeStream.on('error', reject);
+      });
+
+      logger.info('Chunks merged successfully', { mergedFilePath });
+
+      // Get user info for uploader name
+      const userResult = await query('SELECT name FROM users WHERE id = $1', [userId]);
+      const uploaderName = userResult.rows[0]?.name || 'Unknown';
+
+      // Upload merged file to S3 using mediaService
+      const uploadResult = await mediaService.uploadFile({
+        file: {
+          path: mergedFilePath,
+          originalname: fileName,
+          size: fileSize,
+          mimetype: this.getMimeType(fileName)
+        },
+        userId,
+        uploaderName,
+        folderId: request.folder_id,
+        uploadType: 'file-request',
+        requestId: id,
+        comments
+      });
+
+      // Clean up temp files
+      fs.unlinkSync(mergedFilePath);
+      for (let i = 0; i < totalChunks; i++) {
+        const chunkPath = path.join(tempDir, `chunk_${i}`);
+        if (fs.existsSync(chunkPath)) {
+          fs.unlinkSync(chunkPath);
+        }
+      }
+      fs.rmdirSync(tempDir);
+
+      // Log activity
+      await logActivity({
+        userId,
+        action: 'file_request.upload',
+        resourceType: 'file_request',
+        resourceId: id,
+        details: {
+          fileName,
+          fileSize,
+          comments,
+          uploadMethod: 'chunked'
+        }
+      });
+
+      logger.info('Chunked upload completed successfully', {
+        requestId: id,
+        fileName,
+        fileId: uploadResult.id
+      });
+
+      res.json({
+        success: true,
+        message: 'File uploaded successfully',
+        data: uploadResult
+      });
+    } catch (error) {
+      logger.error('Finalize chunked upload error', { error: error.message, stack: error.stack });
+      next(error);
+    }
+  }
+
+  /**
+   * Get MIME type from filename
+   */
+  getMimeType(filename) {
+    const ext = filename.split('.').pop()?.toLowerCase();
+    const mimeTypes = {
+      // Images
+      jpg: 'image/jpeg',
+      jpeg: 'image/jpeg',
+      png: 'image/png',
+      gif: 'image/gif',
+      webp: 'image/webp',
+      svg: 'image/svg+xml',
+      // Videos
+      mp4: 'video/mp4',
+      mov: 'video/quicktime',
+      avi: 'video/x-msvideo',
+      webm: 'video/webm',
+      mkv: 'video/x-matroska',
+      // Documents
+      pdf: 'application/pdf',
+      doc: 'application/msword',
+      docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      xls: 'application/vnd.ms-excel',
+      xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      ppt: 'application/vnd.ms-powerpoint',
+      pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      txt: 'text/plain',
+      // Archives
+      zip: 'application/zip',
+      rar: 'application/x-rar-compressed',
+      '7z': 'application/x-7z-compressed'
+    };
+    return mimeTypes[ext] || 'application/octet-stream';
+  }
 }
 
 module.exports = new FileRequestController();

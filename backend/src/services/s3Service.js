@@ -329,8 +329,8 @@ class S3Service {
   validateFileSize(fileSize, mediaType) {
     const limits = {
       image: 10 * 1024 * 1024,  // 10MB for images
-      video: 500 * 1024 * 1024, // 500MB for videos
-      other: 50 * 1024 * 1024   // 50MB for other files
+      video: 1024 * 1024 * 1024, // 1GB for videos
+      other: 100 * 1024 * 1024   // 100MB for other files
     };
 
     const limit = limits[mediaType] || limits.other;
