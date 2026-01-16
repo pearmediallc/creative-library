@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { X, Copy, Download, Calendar, Folder, Mail, CheckCircle, Clock, FileText, Upload as UploadIcon } from 'lucide-react';
+import { X, Copy, Calendar, Folder, Mail, CheckCircle, Clock, FileText, Upload as UploadIcon } from 'lucide-react';
 import { Button } from './ui/Button';
-import { fileRequestApi } from '../lib/api';
-import { formatDate, formatBytes } from '../lib/utils';
+import { fileRequestApi, mediaApi } from '../lib/api';
+import { formatDate } from '../lib/utils';
 import { CanvasEditor } from './CanvasEditor';
 import { CanvasRenderer } from './CanvasRenderer';
+import { UploadedFileCard } from './UploadedFileCard';
 import type { Canvas } from '../lib/canvasTemplates';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -71,7 +72,7 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
   const [canvasMode, setCanvasMode] = useState<'view' | 'edit'>('view');
 
   // Upload state
-  const [showUploadForm, setShowUploadForm] = useState(false);
+  const [showUploadForm, setShowUploadForm] = useState(true); // Show by default for better UX
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [uploadComments, setUploadComments] = useState('');
   const [uploading, setUploading] = useState(false);
@@ -182,6 +183,17 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  const handleAddToLibrary = async (upload: FileUpload) => {
+    try {
+      // Add file to media library
+      await mediaApi.addFileRequestUploadToLibrary(upload.file_id);
+      alert(`"${upload.original_filename}" has been added to your Media Library!`);
+    } catch (error: any) {
+      console.error('Failed to add to library:', error);
+      alert(error.response?.data?.error || 'Failed to add file to Media Library');
+    }
   };
 
   const formatDuration = (startDate: string, endDate: string) => {
@@ -563,21 +575,9 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
           {/* Direct Upload for Editors */}
           {request.is_active && (
             <div>
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Upload File Directly
-                </h3>
-                {!showUploadForm && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setShowUploadForm(true)}
-                  >
-                    <UploadIcon className="w-4 h-4 mr-2" />
-                    Upload File
-                  </Button>
-                )}
-              </div>
+              <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Upload Files {request.allow_multiple_uploads && '(Multiple files/folders allowed)'}
+              </h3>
 
               {showUploadForm && (
                 <form onSubmit={handleFileUpload} className="space-y-4 p-4 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700">
@@ -733,58 +733,12 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
             {request.uploads.length > 0 ? (
               <div className="space-y-2">
                 {request.uploads.map((upload) => (
-                  <div
+                  <UploadedFileCard
                     key={upload.id}
-                    className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-900 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                  >
-                    {/* Thumbnail */}
-                    {upload.thumbnail_url ? (
-                      <img
-                        src={upload.thumbnail_url}
-                        alt={upload.original_filename}
-                        className="w-12 h-12 object-cover rounded"
-                      />
-                    ) : (
-                      <div className="w-12 h-12 bg-gray-200 dark:bg-gray-700 rounded flex items-center justify-center">
-                        <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
-                          {upload.file_type.toUpperCase()}
-                        </span>
-                      </div>
-                    )}
-
-                    {/* File Info */}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                        {upload.original_filename}
-                      </p>
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <span>{formatBytes(upload.file_size)}</span>
-                        <span>•</span>
-                        <span>{formatDate(upload.created_at)}</span>
-                        {upload.uploaded_by_email && (
-                          <>
-                            <span>•</span>
-                            <span>{upload.uploaded_by_email}</span>
-                          </>
-                        )}
-                        {upload.uploaded_by_name && (
-                          <>
-                            <span>•</span>
-                            <span>{upload.uploaded_by_name}</span>
-                          </>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Download Button */}
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleDownload(upload)}
-                    >
-                      <Download className="w-4 h-4" />
-                    </Button>
-                  </div>
+                    upload={upload}
+                    onDownload={handleDownload}
+                    onAddToLibrary={user?.role !== 'creative' ? handleAddToLibrary : undefined}
+                  />
                 ))}
               </div>
             ) : (

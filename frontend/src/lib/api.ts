@@ -166,6 +166,10 @@ export const mediaApi = {
   restore: (fileId: string) => api.post(`/media/${fileId}/restore`),
   permanentDelete: (fileId: string) => api.delete(`/media/${fileId}/permanent`),
   emptyTrash: () => api.delete('/media/deleted/empty'),
+
+  // ✨ NEW: Add file request upload to media library
+  addFileRequestUploadToLibrary: (fileId: string) =>
+    api.post(`/media/add-from-file-request/${fileId}`),
 };
 
 // Facebook endpoints

@@ -1765,6 +1765,62 @@ class MediaController {
       next(error);
     }
   }
+
+  /**
+   * Add file request upload to media library
+   * POST /api/media/add-from-file-request/:fileId
+   */
+  async addFileRequestUploadToLibrary(req, res, next) {
+    try {
+      const { fileId } = req.params;
+      const userId = req.user.id;
+
+      logger.info('Adding file request upload to media library', { fileId, userId });
+
+      // File should already exist in media_files table
+      // We just need to verify it exists and belongs to a file request
+      const file = await query(
+        `SELECT mf.*, fr.created_by as request_creator
+         FROM media_files mf
+         LEFT JOIN file_request_uploads fru ON fru.file_id = mf.id
+         LEFT JOIN file_requests fr ON fr.id = fru.request_id
+         WHERE mf.id = $1`,
+        [fileId]
+      );
+
+      if (file.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          error: 'File not found'
+        });
+      }
+
+      const fileData = file.rows[0];
+
+      // Verify user has permission (request creator or admin/buyer)
+      if (fileData.request_creator !== userId && req.user.role !== 'admin' && req.user.role !== 'buyer') {
+        return res.status(403).json({
+          success: false,
+          error: 'You do not have permission to add this file to your library'
+        });
+      }
+
+      // File is already in media_files table, just confirm it's accessible
+      logger.info('File added to media library successfully', {
+        fileId,
+        filename: fileData.original_filename
+      });
+
+      res.json({
+        success: true,
+        message: `"${fileData.original_filename}" is now in your Media Library`,
+        data: fileData
+      });
+    } catch (error) {
+      logger.error('Add file request upload to library error', { error: error.message, stack: error.stack });
+      next(error);
+    }
+  }
 }
 
 module.exports = new MediaController();

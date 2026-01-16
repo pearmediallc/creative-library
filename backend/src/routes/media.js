@@ -53,6 +53,12 @@ router.get('/deleted',
   mediaController.getDeletedFiles.bind(mediaController)
 );
 
+// ✨ NEW: Add file request upload to media library
+router.post('/add-from-file-request/:fileId',
+  authenticateToken,
+  mediaController.addFileRequestUploadToLibrary.bind(mediaController)
+);
+
 // Download file (proxy from S3/CloudFront with CORS headers)
 router.get('/:id/download',
   authenticateToken,
