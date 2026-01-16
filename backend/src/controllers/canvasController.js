@@ -370,7 +370,8 @@ class CanvasController {
         {
           tags: ['canvas-attachment', `request-${requestId}`],
           description: `Canvas attachment for request ${requestId}`,
-          folder_id: fileRequest.folder_id
+          folder_id: fileRequest.folder_id,
+          request_id: requestId  // ✨ Store in file request folder structure
         }
       );
 
