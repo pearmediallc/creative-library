@@ -72,11 +72,12 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
 
   // Upload state
   const [showUploadForm, setShowUploadForm] = useState(false);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [uploadComments, setUploadComments] = useState('');
   const [uploading, setUploading] = useState(false);
   const [uploadSuccess, setUploadSuccess] = useState(false);
   const [uploadError, setUploadError] = useState('');
+  const [uploadProgress, setUploadProgress] = useState<{[key: string]: string}>({});
 
   useEffect(() => {
     fetchRequestDetails();
@@ -150,32 +151,59 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
   const handleFileUpload = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!selectedFile) {
-      setUploadError('Please select a file');
+    if (selectedFiles.length === 0) {
+      setUploadError('Please select at least one file');
       return;
     }
 
     setUploading(true);
     setUploadError('');
     setUploadSuccess(false);
+    setUploadProgress({});
 
     try {
-      await fileRequestApi.uploadToRequestAuth(requestId, selectedFile, uploadComments || undefined);
+      let successCount = 0;
+      let failCount = 0;
 
-      setUploadSuccess(true);
-      setSelectedFile(null);
-      setUploadComments('');
+      // Upload files sequentially to avoid overwhelming the server
+      for (const file of selectedFiles) {
+        try {
+          setUploadProgress(prev => ({ ...prev, [file.name]: 'Uploading...' }));
 
-      // Refresh the request details to show the new upload
-      setTimeout(() => {
-        fetchRequestDetails();
-        onUpdate();
-        setUploadSuccess(false);
-        setShowUploadForm(false);
-      }, 2000);
+          await fileRequestApi.uploadToRequestAuth(requestId, file, uploadComments || undefined);
+
+          setUploadProgress(prev => ({ ...prev, [file.name]: 'Success' }));
+          successCount++;
+        } catch (error: any) {
+          console.error(`Upload failed for ${file.name}:`, error);
+          setUploadProgress(prev => ({ ...prev, [file.name]: 'Failed' }));
+          failCount++;
+        }
+      }
+
+      if (successCount > 0) {
+        setUploadSuccess(true);
+        setSelectedFiles([]);
+        setUploadComments('');
+        setUploadProgress({});
+
+        // Refresh the request details to show the new uploads
+        setTimeout(() => {
+          fetchRequestDetails();
+          onUpdate();
+          setUploadSuccess(false);
+          if (failCount === 0) {
+            setShowUploadForm(false);
+          }
+        }, 2000);
+      }
+
+      if (failCount > 0) {
+        setUploadError(`${failCount} file(s) failed to upload. ${successCount} file(s) uploaded successfully.`);
+      }
     } catch (error: any) {
       console.error('Upload failed:', error);
-      setUploadError(error.response?.data?.error || 'Failed to upload file. Please try again.');
+      setUploadError(error.response?.data?.error || 'Failed to upload files. Please try again.');
     } finally {
       setUploading(false);
     }
@@ -517,19 +545,35 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
                   {/* File Selection */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Select File *
+                      Select Files * {request.allow_multiple_uploads && '(Multiple files allowed)'}
                     </label>
                     <input
                       type="file"
-                      onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
+                      multiple={request.allow_multiple_uploads}
+                      onChange={(e) => {
+                        const files = Array.from(e.target.files || []);
+                        setSelectedFiles(files);
+                      }}
                       className="w-full text-sm text-gray-700 dark:text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 dark:file:bg-blue-900 dark:file:text-blue-200"
                       disabled={uploading}
                       required
                     />
-                    {selectedFile && (
-                      <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                        Selected: {selectedFile.name}
-                      </p>
+                    {selectedFiles.length > 0 && (
+                      <div className="mt-2 space-y-1">
+                        <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                          Selected {selectedFiles.length} file(s):
+                        </p>
+                        {selectedFiles.map((file, idx) => (
+                          <div key={idx} className="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded">
+                            <span>{file.name}</span>
+                            {uploadProgress[file.name] && (
+                              <span className={`text-xs ${uploadProgress[file.name] === 'Success' ? 'text-green-600' : uploadProgress[file.name] === 'Failed' ? 'text-red-600' : 'text-blue-600'}`}>
+                                {uploadProgress[file.name]}
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
                     )}
                   </div>
 

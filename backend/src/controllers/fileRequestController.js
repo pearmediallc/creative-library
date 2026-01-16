@@ -977,7 +977,8 @@ class FileRequestController {
           tags: ['file-request-upload'],
           description: comments || `Uploaded via file request: ${fileRequest.title}`,
           folder_id: fileRequest.folder_id,
-          assigned_buyer_id: fileRequest.assigned_buyer_id || null
+          assigned_buyer_id: fileRequest.assigned_buyer_id || null,
+          request_id: fileRequest.id  // ✨ Pass request ID for proper S3 structure
         }
       );
 

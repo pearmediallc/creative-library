@@ -18,11 +18,13 @@ class S3Service {
    * @param {string} folder - S3 folder (default: 'originals')
    * @param {string|null} editorName - Editor name for new structure (optional)
    * @param {string|null} mediaType - Media type for new structure (optional)
-   * @param {string|null} folderPath - Folder path from database (optional, e.g., "jan2024/15-jan")
+   * @param {Object} options - Additional options (folderPath, requestId, etc.)
    * @returns {Promise<Object>} Upload result with s3Key
    */
-  async uploadFile(fileBuffer, filename, mimeType, folder = 'originals', editorName = null, mediaType = null, folderPath = null) {
+  async uploadFile(fileBuffer, filename, mimeType, folder = 'originals', editorName = null, mediaType = null, options = {}) {
     try {
+      const { folderPath, requestId } = options;
+
       console.log('📤 S3Service.uploadFile called with:');
       console.log(`  └─ Filename: ${filename}`);
       console.log(`  └─ MIME Type: ${mimeType}`);
@@ -30,9 +32,10 @@ class S3Service {
       console.log(`  └─ Editor Name: ${editorName || 'NOT PROVIDED (will use old structure)'}`);
       console.log(`  └─ Media Type: ${mediaType || 'NOT PROVIDED (will use old structure)'}`);
       console.log(`  └─ Folder Path: ${folderPath || 'NOT PROVIDED'}`);
+      console.log(`  └─ Request ID: ${requestId || 'NOT PROVIDED'}`);
 
       // Generate S3 key using hybrid structure with folder path support
-      const s3Key = generateS3Key(filename, folder, editorName, mediaType, folderPath);
+      const s3Key = generateS3Key(filename, folder, editorName, mediaType, options);
 
       console.log(`🔑 Generated S3 Key: ${s3Key}`);
 

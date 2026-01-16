@@ -14,7 +14,7 @@ class MediaService {
    * @param {Object} file - File object from multer
    * @param {string} userId - User ID
    * @param {string} editorId - Selected editor ID
-   * @param {Object} metadata - Additional metadata (tags, description, folder_id, organize_by_date, assigned_buyer_id)
+   * @param {Object} metadata - Additional metadata (tags, description, folder_id, organize_by_date, assigned_buyer_id, request_id)
    * @returns {Promise<Object>} Created media file record
    */
   async uploadMedia(file, userId, editorId, metadata = {}) {
@@ -126,7 +126,10 @@ class MediaService {
         'originals',
         editor?.name || 'public-upload',  // ✨ NEW: Pass editor name for hybrid structure (or 'public-upload' if no editor)
         mediaType,    // ✨ NEW: Pass media type for hybrid structure
-        folderPath    // ✨ NEW: Pass folder path for organized storage
+        {
+          folderPath,           // ✨ NEW: Pass folder path for organized storage
+          requestId: metadata.request_id  // ✨ NEW: Pass request ID for file request uploads
+        }
       );
 
       // Generate S3 URL
