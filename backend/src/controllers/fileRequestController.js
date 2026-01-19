@@ -537,14 +537,18 @@ class FileRequestController {
           mf.file_type,
           mf.file_size,
           mf.thumbnail_url,
-          mf.s3_url,
-          mf.cloudfront_url
+          mf.s3_url
         FROM file_request_uploads fru
         JOIN media_files mf ON fru.file_id = mf.id
         WHERE fru.file_request_id = $1
         ORDER BY fru.created_at DESC`,
         [id]
       );
+
+      // Add cloudfront_url to each upload (s3_url is already the CloudFront URL)
+      uploadsResult.rows.forEach(upload => {
+        upload.cloudfront_url = upload.s3_url;
+      });
 
       logger.info('File request uploads fetched', { count: uploadsResult.rows.length });
 
