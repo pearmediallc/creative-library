@@ -537,7 +537,8 @@ class FileRequestController {
           mf.file_type,
           mf.file_size,
           mf.thumbnail_url,
-          mf.s3_url
+          mf.s3_url,
+          mf.cloudfront_url
         FROM file_request_uploads fru
         JOIN media_files mf ON fru.file_id = mf.id
         WHERE fru.file_request_id = $1

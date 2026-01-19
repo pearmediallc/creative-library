@@ -5,6 +5,7 @@
 
 const { query } = require('../config/database');
 const logger = require('../utils/logger');
+const Notification = require('../models/Notification');
 
 class TeamMessagesController {
   /**
@@ -153,6 +154,56 @@ class TeamMessagesController {
           })
         ]
       );
+
+      // Create notifications for team members (except the sender)
+      try {
+        const teamMembersResult = await query(
+          `SELECT user_id FROM team_members WHERE team_id = $1 AND user_id != $2`,
+          [teamId, userId]
+        );
+
+        const messageType = parent_message_id ? 'reply' : 'message';
+        const notificationTitle = parent_message_id
+          ? `New reply in team discussion`
+          : `New message in team discussion`;
+
+        const notificationMessage = parent_message_id
+          ? `${userResult.rows[0].name} replied to a discussion`
+          : `${userResult.rows[0].name} posted a new message`;
+
+        // Create notification for each team member
+        for (const member of teamMembersResult.rows) {
+          await Notification.create({
+            userId: member.user_id,
+            type: 'team_message',
+            title: notificationTitle,
+            message: notificationMessage,
+            referenceType: 'team_message',
+            referenceId: message.id,
+            metadata: {
+              teamId,
+              messageId: message.id,
+              senderId: userId,
+              senderName: userResult.rows[0].name,
+              isReply: !!parent_message_id,
+              parentMessageId: parent_message_id
+            }
+          });
+        }
+
+        logger.info('Team message notifications created', {
+          teamId,
+          messageId: message.id,
+          recipientCount: teamMembersResult.rows.length
+        });
+      } catch (notifError) {
+        logger.error('Failed to create team message notifications', {
+          error: notifError.message,
+          teamId,
+          messageId: message.id
+        });
+        // Don't fail the request if notifications fail
+      }
 
       logger.info('Team message posted', {
         teamId,
