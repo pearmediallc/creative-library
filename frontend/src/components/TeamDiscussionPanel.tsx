@@ -5,6 +5,7 @@ import { teamApi } from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
 import { Send, Edit2, Trash2, Reply, MoreVertical } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+import { TeamMentionInput } from './TeamMentionInput';
 
 interface Message {
   id: string;
@@ -288,17 +289,18 @@ export function TeamDiscussionPanel({ teamId }: TeamDiscussionPanelProps) {
       {/* Message Input */}
       <form onSubmit={handleSendMessage} className="p-4 border-t">
         <div className="flex gap-2">
-          <textarea
+          <TeamMentionInput
+            teamId={teamId}
             value={messageText}
-            onChange={(e) => setMessageText(e.target.value)}
-            placeholder={replyingTo ? 'Write a reply...' : 'Type your message...'}
-            className="flex-1 px-3 py-2 border rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-primary"
+            onChange={setMessageText}
+            placeholder={replyingTo ? 'Write a reply... (use @ to mention team members)' : 'Type your message... (use @ to mention team members)'}
+            className="flex-1 px-3 py-2 border rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-800 dark:border-gray-600 dark:text-white"
             rows={3}
             disabled={sending}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
-                handleSendMessage(e);
+                handleSendMessage(e as any);
               }
             }}
           />
@@ -306,7 +308,9 @@ export function TeamDiscussionPanel({ teamId }: TeamDiscussionPanelProps) {
             <Send size={16} />
           </Button>
         </div>
-        <p className="text-xs text-muted-foreground mt-1">Press Enter to send, Shift+Enter for new line</p>
+        <p className="text-xs text-muted-foreground mt-1">
+          Press Enter to send, Shift+Enter for new line • Use @ to mention team members
+        </p>
       </form>
     </div>
   );

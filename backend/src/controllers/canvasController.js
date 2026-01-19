@@ -173,9 +173,14 @@ class CanvasController {
 
       const fileRequest = fileRequestResult.rows[0];
 
-      // Check if user is creator or assigned editor
-      const hasAccess = fileRequest.creator_id === userId ||
-                       fileRequest.editor_id === userId;
+      // Check if user is creator or assigned editor (check both legacy editor_id and new file_request_editors table)
+      const editorCheckResult = await query(
+        'SELECT 1 FROM file_request_editors WHERE request_id = $1 AND editor_id = $2',
+        [requestId, userId]
+      );
+
+      const isAssignedEditor = editorCheckResult.rows.length > 0 || fileRequest.editor_id === userId;
+      const hasAccess = fileRequest.creator_id === userId || isAssignedEditor;
 
       if (!hasAccess) {
         return res.status(403).json({

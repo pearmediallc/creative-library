@@ -1784,7 +1784,7 @@ class MediaController {
         `SELECT mf.*, fr.created_by as request_creator
          FROM media_files mf
          LEFT JOIN file_request_uploads fru ON fru.file_id = mf.id
-         LEFT JOIN file_requests fr ON fr.id = fru.request_id
+         LEFT JOIN file_requests fr ON fr.id = fru.file_request_id
          WHERE mf.id = $1`,
         [fileId]
       );
