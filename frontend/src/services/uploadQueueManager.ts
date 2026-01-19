@@ -3,6 +3,9 @@
  * Manages parallel uploads, resumability, and persistent tracking
  */
 
+// Get API base URL from environment
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
+
 export interface UploadTask {
   id: string;
   file: File;
@@ -152,7 +155,7 @@ class UploadQueueManager {
 
         abortController.signal.addEventListener('abort', () => xhr.abort());
 
-        const uploadUrl = `/api/file-requests/${task.requestId}/upload`;
+        const uploadUrl = `${API_BASE_URL}/file-requests/${task.requestId}/upload`;
         console.log(`📤 Opening XHR POST to: ${uploadUrl}`);
         xhr.open('POST', uploadUrl);
 
