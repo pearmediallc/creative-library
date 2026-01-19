@@ -40,43 +40,45 @@ export const NotificationBell: React.FC = () => {
   const fetchNotifications = async () => {
     try {
       const token = localStorage.getItem('token');
-      const [notifResponse, countResponse] = await Promise.all([
-        axios.get(`${process.env.REACT_APP_API_URL}/notifications`, {
-          headers: { Authorization: `Bearer ${token}` },
-          params: { limit: 20 }
-        }),
-        axios.get(`${process.env.REACT_APP_API_URL}/notifications/unread-count`, {
-          headers: { Authorization: `Bearer ${token}` }
-        })
-      ]);
+      const response = await axios.get(`${process.env.REACT_APP_API_URL}/notifications`, {
+        headers: { Authorization: `Bearer ${token}` },
+        params: { limit: 20 }
+      });
 
-      const newNotifications = notifResponse.data.notifications || [];
-      const newUnreadCount = countResponse.data.count || 0;
+      const newNotifications = response.data.notifications || [];
+      const newUnreadCount = response.data.unreadCount || 0;
       const previousUnreadCount = previousUnreadCountRef.current;
 
       setNotifications(newNotifications);
       setUnreadCount(newUnreadCount);
 
-      // If there are new unread notifications (and not initial load)
-      if (newUnreadCount > previousUnreadCount && previousUnreadCount > 0) {
+      // If there are new unread notifications (changed from > 0 to >= 0 to trigger on first notification)
+      if (newUnreadCount > previousUnreadCount && previousUnreadCount >= 0) {
         // Get the latest unread notification
         const latestNotification = newNotifications.find((n: Notification) => !n.is_read);
 
         if (latestNotification) {
+          console.log('🔔 New notification received:', latestNotification);
+
           // Play sound based on notification type
           const soundType = latestNotification.type === 'mention' ? 'mention' :
                            latestNotification.type === 'file_request_assigned' ? 'request' :
                            latestNotification.type === 'file_request_completed' ? 'success' :
                            'default';
+
+          console.log('🔊 Playing notification sound:', soundType);
           notificationSound.playNotificationSound(soundType);
 
           // Show browser notification
           if ('Notification' in window && Notification.permission === 'granted') {
+            console.log('📬 Showing browser notification');
             new Notification(latestNotification.title, {
               body: latestNotification.message,
               icon: '/logo192.png',
               tag: latestNotification.id
             });
+          } else {
+            console.log('❌ Browser notifications not permitted. Permission:', Notification.permission);
           }
         }
       }

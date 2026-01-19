@@ -38,12 +38,13 @@ export const MentionInput: React.FC<MentionInputProps> = ({
     const fetchUsers = async () => {
       try {
         const token = localStorage.getItem('token');
-        const response = await axios.get(`${process.env.REACT_APP_API_URL}/admin/users`, {
+        const response = await axios.get(`${process.env.REACT_APP_API_URL}/auth/users`, {
           headers: { Authorization: `Bearer ${token}` }
         });
+        console.log('📋 Fetched users for mentions:', response.data.data?.length || 0, 'users');
         setUsers(response.data.data || []);
       } catch (error) {
-        console.error('Failed to fetch users for mentions:', error);
+        console.error('❌ Failed to fetch users for mentions:', error);
       }
     };
     fetchUsers();
@@ -73,6 +74,7 @@ export const MentionInput: React.FC<MentionInputProps> = ({
           user.email.toLowerCase().includes(textAfterAt.toLowerCase())
         );
 
+        console.log(`🔍 Mention query: "@${textAfterAt}" -> Found ${filtered.length} users out of ${users.length} total`);
         setFilteredUsers(filtered);
         setShowDropdown(filtered.length > 0);
         setSelectedIndex(0);

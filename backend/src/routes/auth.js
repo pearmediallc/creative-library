@@ -30,4 +30,10 @@ router.get('/me',
   authController.me.bind(authController)
 );
 
+// Get all users (for mentions dropdown) - authenticated users only
+router.get('/users',
+  authenticateToken,
+  authController.getAllUsers.bind(authController)
+);
+
 module.exports = router;

@@ -112,6 +112,23 @@ class AuthController {
       next(error);
     }
   }
+
+  /**
+   * GET /api/auth/users
+   * Get all active users (for mentions dropdown)
+   */
+  async getAllUsers(req, res, next) {
+    try {
+      const result = await authService.getAllActiveUsers();
+      res.json({
+        success: true,
+        data: result
+      });
+    } catch (error) {
+      logger.error('Get all users error', { error: error.message });
+      next(error);
+    }
+  }
 }
 
 module.exports = new AuthController();
