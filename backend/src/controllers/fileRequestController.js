@@ -1009,7 +1009,24 @@ class FileRequestController {
       const { comments } = req.body;
       const userId = req.user.id;
 
+      logger.info('🚀 ====== UPLOAD TO REQUEST (AUTH) - START ======', {
+        requestId: id,
+        userId,
+        userEmail: req.user?.email,
+        userName: req.user?.name,
+        hasFile: !!req.file,
+        fileName: req.file?.originalname,
+        fileSize: req.file?.size,
+        fileType: req.file?.mimetype,
+        comments: comments || 'none',
+        headers: {
+          contentType: req.headers['content-type'],
+          authorization: req.headers['authorization'] ? 'present' : 'MISSING'
+        }
+      });
+
       if (!req.file) {
+        logger.error('❌ No file provided in upload request', { requestId: id, userId });
         return res.status(400).json({
           success: false,
           error: 'No file provided'
@@ -1128,6 +1145,16 @@ class FileRequestController {
         });
       }
 
+      logger.info('✅ ====== UPLOAD TO REQUEST (AUTH) - SUCCESS ======', {
+        requestId: fileRequest.id,
+        fileId: mediaFile.id,
+        filename: mediaFile.original_filename,
+        fileSize: mediaFile.file_size,
+        userId,
+        editorId,
+        notificationSent: userId !== fileRequest.creator_id
+      });
+
       res.status(201).json({
         success: true,
         message: 'File uploaded successfully',
@@ -1138,7 +1165,12 @@ class FileRequestController {
         }
       });
     } catch (error) {
-      logger.error('Authenticated upload error', { error: error.message });
+      logger.error('❌ ====== UPLOAD TO REQUEST (AUTH) - ERROR ======', {
+        error: error.message,
+        stack: error.stack,
+        requestId: req.params.id,
+        userId: req.user?.id
+      });
       next(error);
     }
   }
