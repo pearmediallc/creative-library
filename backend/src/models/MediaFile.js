@@ -88,11 +88,11 @@ class MediaFile extends BaseModel {
     const params = [];
     let paramIndex = 1;
 
-    // Only active files (use is_deleted column)
-    conditions.push(`is_deleted = FALSE`);
+    // Only active files (use is_deleted column with table prefix to avoid ambiguity)
+    conditions.push(`mf.is_deleted = FALSE`);
 
     if (filters.uploaded_by) {
-      conditions.push(`uploaded_by = $${paramIndex++}`);
+      conditions.push(`mf.uploaded_by = $${paramIndex++}`);
       params.push(filters.uploaded_by);
     }
 
@@ -100,10 +100,10 @@ class MediaFile extends BaseModel {
     if (filters.editor_id) {
       const editorIds = filters.editor_id.split(',').filter(id => id.trim());
       if (editorIds.length === 1) {
-        conditions.push(`editor_id = $${paramIndex++}`);
+        conditions.push(`mf.editor_id = $${paramIndex++}`);
         params.push(editorIds[0]);
       } else if (editorIds.length > 1) {
-        conditions.push(`editor_id = ANY($${paramIndex++})`);
+        conditions.push(`mf.editor_id = ANY($${paramIndex++})`);
         params.push(editorIds);
       }
     }
@@ -112,23 +112,23 @@ class MediaFile extends BaseModel {
     if (filters.media_type) {
       const mediaTypes = filters.media_type.split(',').filter(t => t.trim());
       if (mediaTypes.length === 1) {
-        conditions.push(`file_type = $${paramIndex++}`);
+        conditions.push(`mf.file_type = $${paramIndex++}`);
         params.push(mediaTypes[0]);
       } else if (mediaTypes.length > 1) {
-        conditions.push(`file_type = ANY($${paramIndex++})`);
+        conditions.push(`mf.file_type = ANY($${paramIndex++})`);
         params.push(mediaTypes);
       }
     }
 
     if (filters.tags && filters.tags.length > 0) {
-      conditions.push(`tags && $${paramIndex++}`);
+      conditions.push(`mf.tags && $${paramIndex++}`);
       params.push(filters.tags);
     }
 
     if (filters.search) {
       conditions.push(`(
-        original_filename ILIKE $${paramIndex} OR
-        description ILIKE $${paramIndex}
+        mf.original_filename ILIKE $${paramIndex} OR
+        mf.description ILIKE $${paramIndex}
       )`);
       params.push(`%${filters.search}%`);
       paramIndex++;
@@ -137,13 +137,13 @@ class MediaFile extends BaseModel {
     // ✨ FIXED: Date range filters with proper day boundaries
     if (filters.date_from) {
       // Start of day for date_from
-      conditions.push(`created_at >= $${paramIndex++}::date`);
+      conditions.push(`mf.created_at >= $${paramIndex++}::date`);
       params.push(filters.date_from);
     }
 
     if (filters.date_to) {
       // End of day for date_to (include full day)
-      conditions.push(`created_at < ($${paramIndex++}::date + interval '1 day')`);
+      conditions.push(`mf.created_at < ($${paramIndex++}::date + interval '1 day')`);
       params.push(filters.date_to);
     }
 
@@ -151,10 +151,10 @@ class MediaFile extends BaseModel {
     if (filters.buyer_id) {
       const buyerIds = filters.buyer_id.split(',').filter(id => id.trim());
       if (buyerIds.length === 1) {
-        conditions.push(`assigned_buyer_id = $${paramIndex++}`);
+        conditions.push(`mf.assigned_buyer_id = $${paramIndex++}`);
         params.push(buyerIds[0]);
       } else if (buyerIds.length > 1) {
-        conditions.push(`assigned_buyer_id = ANY($${paramIndex++})`);
+        conditions.push(`mf.assigned_buyer_id = ANY($${paramIndex++})`);
         params.push(buyerIds);
       }
     }
@@ -163,44 +163,44 @@ class MediaFile extends BaseModel {
     if (filters.folder_id) {
       const folderIds = filters.folder_id.split(',').filter(id => id.trim());
       if (folderIds.length === 1) {
-        conditions.push(`folder_id = $${paramIndex++}`);
+        conditions.push(`mf.folder_id = $${paramIndex++}`);
         params.push(folderIds[0]);
       } else if (folderIds.length > 1) {
-        conditions.push(`folder_id = ANY($${paramIndex++})`);
+        conditions.push(`mf.folder_id = ANY($${paramIndex++})`);
         params.push(folderIds);
       }
     }
 
     // ✨ NEW: File size filters
     if (filters.size_min !== undefined && filters.size_min !== null) {
-      conditions.push(`file_size >= $${paramIndex++}`);
+      conditions.push(`mf.file_size >= $${paramIndex++}`);
       params.push(filters.size_min);
     }
 
     if (filters.size_max !== undefined && filters.size_max !== null) {
-      conditions.push(`file_size <= $${paramIndex++}`);
+      conditions.push(`mf.file_size <= $${paramIndex++}`);
       params.push(filters.size_max);
     }
 
     // ✨ NEW: Resolution filters (width)
     if (filters.width_min !== undefined && filters.width_min !== null) {
-      conditions.push(`width >= $${paramIndex++}`);
+      conditions.push(`mf.width >= $${paramIndex++}`);
       params.push(filters.width_min);
     }
 
     if (filters.width_max !== undefined && filters.width_max !== null) {
-      conditions.push(`width <= $${paramIndex++}`);
+      conditions.push(`mf.width <= $${paramIndex++}`);
       params.push(filters.width_max);
     }
 
     // ✨ NEW: Resolution filters (height)
     if (filters.height_min !== undefined && filters.height_min !== null) {
-      conditions.push(`height >= $${paramIndex++}`);
+      conditions.push(`mf.height >= $${paramIndex++}`);
       params.push(filters.height_min);
     }
 
     if (filters.height_max !== undefined && filters.height_max !== null) {
-      conditions.push(`height <= $${paramIndex++}`);
+      conditions.push(`mf.height <= $${paramIndex++}`);
       params.push(filters.height_max);
     }
 
@@ -241,11 +241,11 @@ class MediaFile extends BaseModel {
     const params = [];
     let paramIndex = 1;
 
-    // Only active files (use is_deleted column)
-    conditions.push(`is_deleted = FALSE`);
+    // Only active files (use is_deleted column with table prefix to avoid ambiguity)
+    conditions.push(`mf.is_deleted = FALSE`);
 
     if (filters.uploaded_by) {
-      conditions.push(`uploaded_by = $${paramIndex++}`);
+      conditions.push(`mf.uploaded_by = $${paramIndex++}`);
       params.push(filters.uploaded_by);
     }
 
@@ -253,10 +253,10 @@ class MediaFile extends BaseModel {
     if (filters.editor_id) {
       const editorIds = filters.editor_id.split(',').filter(id => id.trim());
       if (editorIds.length === 1) {
-        conditions.push(`editor_id = $${paramIndex++}`);
+        conditions.push(`mf.editor_id = $${paramIndex++}`);
         params.push(editorIds[0]);
       } else if (editorIds.length > 1) {
-        conditions.push(`editor_id = ANY($${paramIndex++})`);
+        conditions.push(`mf.editor_id = ANY($${paramIndex++})`);
         params.push(editorIds);
       }
     }
@@ -265,23 +265,23 @@ class MediaFile extends BaseModel {
     if (filters.media_type) {
       const mediaTypes = filters.media_type.split(',').filter(t => t.trim());
       if (mediaTypes.length === 1) {
-        conditions.push(`file_type = $${paramIndex++}`);
+        conditions.push(`mf.file_type = $${paramIndex++}`);
         params.push(mediaTypes[0]);
       } else if (mediaTypes.length > 1) {
-        conditions.push(`file_type = ANY($${paramIndex++})`);
+        conditions.push(`mf.file_type = ANY($${paramIndex++})`);
         params.push(mediaTypes);
       }
     }
 
     if (filters.tags && filters.tags.length > 0) {
-      conditions.push(`tags && $${paramIndex++}`);
+      conditions.push(`mf.tags && $${paramIndex++}`);
       params.push(filters.tags);
     }
 
     if (filters.search) {
       conditions.push(`(
-        original_filename ILIKE $${paramIndex} OR
-        description ILIKE $${paramIndex}
+        mf.original_filename ILIKE $${paramIndex} OR
+        mf.description ILIKE $${paramIndex}
       )`);
       params.push(`%${filters.search}%`);
       paramIndex++;
@@ -289,12 +289,12 @@ class MediaFile extends BaseModel {
 
     // Date range filters with proper day boundaries
     if (filters.date_from) {
-      conditions.push(`created_at >= $${paramIndex++}::date`);
+      conditions.push(`mf.created_at >= $${paramIndex++}::date`);
       params.push(filters.date_from);
     }
 
     if (filters.date_to) {
-      conditions.push(`created_at < ($${paramIndex++}::date + interval '1 day')`);
+      conditions.push(`mf.created_at < ($${paramIndex++}::date + interval '1 day')`);
       params.push(filters.date_to);
     }
 
@@ -302,10 +302,10 @@ class MediaFile extends BaseModel {
     if (filters.buyer_id) {
       const buyerIds = filters.buyer_id.split(',').filter(id => id.trim());
       if (buyerIds.length === 1) {
-        conditions.push(`assigned_buyer_id = $${paramIndex++}`);
+        conditions.push(`mf.assigned_buyer_id = $${paramIndex++}`);
         params.push(buyerIds[0]);
       } else if (buyerIds.length > 1) {
-        conditions.push(`assigned_buyer_id = ANY($${paramIndex++})`);
+        conditions.push(`mf.assigned_buyer_id = ANY($${paramIndex++})`);
         params.push(buyerIds);
       }
     }
@@ -314,44 +314,44 @@ class MediaFile extends BaseModel {
     if (filters.folder_id) {
       const folderIds = filters.folder_id.split(',').filter(id => id.trim());
       if (folderIds.length === 1) {
-        conditions.push(`folder_id = $${paramIndex++}`);
+        conditions.push(`mf.folder_id = $${paramIndex++}`);
         params.push(folderIds[0]);
       } else if (folderIds.length > 1) {
-        conditions.push(`folder_id = ANY($${paramIndex++})`);
+        conditions.push(`mf.folder_id = ANY($${paramIndex++})`);
         params.push(folderIds);
       }
     }
 
     // File size filters
     if (filters.size_min !== undefined && filters.size_min !== null) {
-      conditions.push(`file_size >= $${paramIndex++}`);
+      conditions.push(`mf.file_size >= $${paramIndex++}`);
       params.push(filters.size_min);
     }
 
     if (filters.size_max !== undefined && filters.size_max !== null) {
-      conditions.push(`file_size <= $${paramIndex++}`);
+      conditions.push(`mf.file_size <= $${paramIndex++}`);
       params.push(filters.size_max);
     }
 
     // Resolution filters (width)
     if (filters.width_min !== undefined && filters.width_min !== null) {
-      conditions.push(`width >= $${paramIndex++}`);
+      conditions.push(`mf.width >= $${paramIndex++}`);
       params.push(filters.width_min);
     }
 
     if (filters.width_max !== undefined && filters.width_max !== null) {
-      conditions.push(`width <= $${paramIndex++}`);
+      conditions.push(`mf.width <= $${paramIndex++}`);
       params.push(filters.width_max);
     }
 
     // Resolution filters (height)
     if (filters.height_min !== undefined && filters.height_min !== null) {
-      conditions.push(`height >= $${paramIndex++}`);
+      conditions.push(`mf.height >= $${paramIndex++}`);
       params.push(filters.height_min);
     }
 
     if (filters.height_max !== undefined && filters.height_max !== null) {
-      conditions.push(`height <= $${paramIndex++}`);
+      conditions.push(`mf.height <= $${paramIndex++}`);
       params.push(filters.height_max);
     }
 
@@ -359,7 +359,10 @@ class MediaFile extends BaseModel {
 
     const sql = `
       SELECT COUNT(*)::int as count
-      FROM ${this.tableName}
+      FROM ${this.tableName} mf
+      LEFT JOIN users u ON u.id = mf.uploaded_by
+      LEFT JOIN editors e ON e.id = mf.editor_id
+      LEFT JOIN folders f ON f.id = mf.folder_id
       ${whereClause}
     `;
 
