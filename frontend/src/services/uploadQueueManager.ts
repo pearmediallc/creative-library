@@ -113,39 +113,57 @@ class UploadQueueManager {
           if (e.lengthComputable) {
             task.uploadedBytes = e.loaded;
             task.progress = Math.round((e.loaded / e.total) * 100);
+            console.log(`Upload progress for ${task.file.name}: ${task.progress}% (${e.loaded}/${e.total})`);
             this.notifyListeners();
           }
         });
 
         xhr.addEventListener('load', () => {
+          console.log(`Upload load event for ${task.file.name} - Status: ${xhr.status}`);
           if (xhr.status >= 200 && xhr.status < 300) {
             task.uploadedBytes = task.totalBytes;
             task.progress = 100;
+            console.log(`✅ Upload SUCCESS for ${task.file.name}`);
             resolve(xhr.response);
           } else {
             const errorMsg = `Upload failed with status ${xhr.status}`;
-            console.error('Upload error:', errorMsg, xhr.responseText);
+            console.error('❌ Upload error:', errorMsg, xhr.responseText);
             reject(new Error(errorMsg));
           }
         });
 
-        xhr.addEventListener('error', () => {
-          console.error('Network error during upload');
+        xhr.addEventListener('error', (e) => {
+          console.error('❌ Network error during upload for', task.file.name, e);
           reject(new Error('Network error'));
         });
 
         xhr.addEventListener('abort', () => {
-          console.log('Upload cancelled');
+          console.log('⚠️ Upload cancelled for', task.file.name);
           reject(new Error('Upload cancelled'));
+        });
+
+        xhr.addEventListener('loadstart', () => {
+          console.log(`🚀 XHR loadstart for ${task.file.name}`);
+        });
+
+        xhr.addEventListener('loadend', () => {
+          console.log(`🏁 XHR loadend for ${task.file.name} - Status: ${xhr.status}`);
         });
 
         abortController.signal.addEventListener('abort', () => xhr.abort());
 
-        xhr.open('POST', `/api/file-requests/${task.requestId}/upload`);
-        xhr.setRequestHeader('Authorization', `Bearer ${localStorage.getItem('token')}`);
+        const uploadUrl = `/api/file-requests/${task.requestId}/upload`;
+        console.log(`📤 Opening XHR POST to: ${uploadUrl}`);
+        xhr.open('POST', uploadUrl);
 
-        console.log(`Starting upload for file: ${task.file.name} to request: ${task.requestId}`);
+        const token = localStorage.getItem('token');
+        console.log(`🔑 Authorization token ${token ? 'present' : 'MISSING'} (length: ${token?.length || 0})`);
+        xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+
+        console.log(`📦 FormData contents: file=${task.file.name} (${task.file.size} bytes), comments=${task.comments || 'none'}`);
+        console.log(`🚀 Sending XHR request for file: ${task.file.name} to request: ${task.requestId}`);
         xhr.send(formData);
+        console.log(`✉️ XHR.send() called for ${task.file.name}`);
       });
 
       // Only save/notify after successful upload (inside the load handler above)
