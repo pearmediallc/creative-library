@@ -389,16 +389,18 @@ class FileRequestController {
             fre.created_at as assigned_at,
             buyer.name as buyer_name,
             buyer.email as buyer_email,
-            STRING_AGG(DISTINCT editors.name, ', ' ORDER BY editors.name) as assigned_editor_names
+            creator.name as created_by_name,
+            STRING_AGG(DISTINCT e.display_name, ', ' ORDER BY e.display_name) as assigned_editors
           FROM file_request_editors fre
           JOIN file_requests fr ON fre.request_id = fr.id
           LEFT JOIN folders f ON fr.folder_id = f.id
           LEFT JOIN file_request_uploads fru ON fr.id = fru.file_request_id
           LEFT JOIN users buyer ON fr.assigned_buyer_id = buyer.id
+          LEFT JOIN users creator ON fr.created_by = creator.id
           LEFT JOIN file_request_editors fre_all ON fr.id = fre_all.request_id
-          LEFT JOIN users editors ON fre_all.editor_id = editors.id
+          LEFT JOIN editors e ON fre_all.editor_id = e.id
           ${whereClause}
-          GROUP BY fr.id, f.name, fre.status, fre.created_at, buyer.name, buyer.email
+          GROUP BY fr.id, f.name, fre.status, fre.created_at, buyer.name, buyer.email, creator.name
           ORDER BY fre.created_at DESC`,
           params
         );

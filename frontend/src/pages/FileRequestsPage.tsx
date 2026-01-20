@@ -223,10 +223,13 @@ export function FileRequestsPage() {
                 <List className="w-4 h-4" />
               </Button>
             </div>
-            <Button onClick={() => setShowCreateModal(true)}>
-              <Plus className="w-4 h-4 mr-2" />
-              Create Request
-            </Button>
+            {/* Only show Create Request button for non-creative users */}
+            {user?.role !== 'creative' && (
+              <Button onClick={() => setShowCreateModal(true)}>
+                <Plus className="w-4 h-4 mr-2" />
+                Create Request
+              </Button>
+            )}
           </div>
         </div>
 
@@ -369,22 +372,32 @@ export function FileRequestsPage() {
                 {/* Editor Filter */}
                 <div>
                   <label className="block text-sm font-medium mb-2">Editors</label>
-                  <select
-                    multiple
-                    value={selectedEditorIds}
-                    onChange={(e) => {
-                      const selected = Array.from(e.target.selectedOptions, option => option.value);
-                      setSelectedEditorIds(selected);
-                    }}
-                    className="w-full px-3 py-2 border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary min-h-[100px]"
-                  >
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      variant={selectedEditorIds.length === 0 ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setSelectedEditorIds([])}
+                    >
+                      All Editors
+                    </Button>
                     {editors.map((editor) => (
-                      <option key={editor.id} value={editor.id}>
+                      <Button
+                        key={editor.id}
+                        variant={selectedEditorIds.includes(editor.id) ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => {
+                          if (selectedEditorIds.includes(editor.id)) {
+                            setSelectedEditorIds(selectedEditorIds.filter(id => id !== editor.id));
+                          } else {
+                            setSelectedEditorIds([...selectedEditorIds, editor.id]);
+                          }
+                        }}
+                      >
                         {editor.display_name || editor.name}
-                      </option>
+                      </Button>
                     ))}
-                  </select>
-                  <p className="text-xs text-muted-foreground mt-1">Hold Ctrl/Cmd to select multiple</p>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">Click to toggle editor selection</p>
                 </div>
 
                 {/* Media Type Filter */}
