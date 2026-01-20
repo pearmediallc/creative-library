@@ -41,6 +41,7 @@ export const authApi = {
   login: (data: { email: string; password: string }) =>
     api.post('/auth/login', data),
   me: () => api.get('/auth/me'),
+  getBuyers: () => api.get('/auth/buyers'),
 };
 
 // Editor endpoints

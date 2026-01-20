@@ -317,7 +317,7 @@ class FileRequestController {
     try {
       const userId = req.user.id;
       const userRole = req.user.role;
-      const { status } = req.query; // active, closed, all
+      const { status, date_from, date_to, editor_ids, media_type } = req.query;
 
       // Check if user is an editor (creative role)
       const isEditor = userRole === 'creative';
@@ -352,6 +352,33 @@ class FileRequestController {
           whereClause += ' AND fr.is_active = FALSE';
         }
 
+        // Apply additional filters
+        if (date_from) {
+          whereClause += ` AND fr.created_at >= $${params.length + 1}`;
+          params.push(date_from);
+        }
+        if (date_to) {
+          whereClause += ` AND fr.created_at <= $${params.length + 1}`;
+          params.push(date_to + ' 23:59:59');
+        }
+        if (editor_ids) {
+          const editorIdsArray = editor_ids.split(',').map(id => id.trim());
+          whereClause += ` AND EXISTS (
+            SELECT 1 FROM file_request_editors fre_filter
+            WHERE fre_filter.request_id = fr.id
+            AND fre_filter.editor_id = ANY($${params.length + 1}::uuid[])
+          )`;
+          params.push(editorIdsArray);
+        }
+        if (media_type && media_type !== 'all') {
+          whereClause += ` AND EXISTS (
+            SELECT 1 FROM file_request_uploads fru_filter
+            WHERE fru_filter.file_request_id = fr.id
+            AND fru_filter.file_type LIKE $${params.length + 1}
+          )`;
+          params.push(`${media_type}/%`);
+        }
+
         // Query for editor: show requests assigned to them via file_request_editors
         const result = await query(
           `SELECT
@@ -359,13 +386,19 @@ class FileRequestController {
             f.name as folder_name,
             COUNT(DISTINCT fru.id) as upload_count,
             fre.status as my_assignment_status,
-            fre.created_at as assigned_at
+            fre.created_at as assigned_at,
+            buyer.name as buyer_name,
+            buyer.email as buyer_email,
+            STRING_AGG(DISTINCT editors.name, ', ' ORDER BY editors.name) as assigned_editor_names
           FROM file_request_editors fre
           JOIN file_requests fr ON fre.request_id = fr.id
           LEFT JOIN folders f ON fr.folder_id = f.id
           LEFT JOIN file_request_uploads fru ON fr.id = fru.file_request_id
+          LEFT JOIN users buyer ON fr.assigned_buyer_id = buyer.id
+          LEFT JOIN file_request_editors fre_all ON fr.id = fre_all.request_id
+          LEFT JOIN users editors ON fre_all.editor_id = editors.id
           ${whereClause}
-          GROUP BY fr.id, f.name, fre.status, fre.created_at
+          GROUP BY fr.id, f.name, fre.status, fre.created_at, buyer.name, buyer.email
           ORDER BY fre.created_at DESC`,
           params
         );
@@ -387,17 +420,49 @@ class FileRequestController {
           whereClause = 'WHERE 1=1';
           params = [];
           logger.info('Admin viewing all file requests', { userId, userRole });
+        } else if (userRole === 'buyer') {
+          // Buyers see requests they created OR requests assigned to them
+          whereClause = 'WHERE (fr.created_by = $1 OR fr.assigned_buyer_id = $1)';
+          params = [userId];
+          logger.info('Buyer viewing own and assigned file requests', { userId, userRole });
         } else {
-          // Buyers and regular users see only requests they created
+          // Regular users see only requests they created
           whereClause = 'WHERE fr.created_by = $1';
           params = [userId];
-          logger.info('Buyer/User viewing own file requests', { userId, userRole });
+          logger.info('User viewing own file requests', { userId, userRole });
         }
 
         if (status === 'active') {
           whereClause += ' AND fr.is_active = TRUE';
         } else if (status === 'closed') {
           whereClause += ' AND fr.is_active = FALSE';
+        }
+
+        // Apply additional filters
+        if (date_from) {
+          whereClause += ` AND fr.created_at >= $${params.length + 1}`;
+          params.push(date_from);
+        }
+        if (date_to) {
+          whereClause += ` AND fr.created_at <= $${params.length + 1}`;
+          params.push(date_to + ' 23:59:59');
+        }
+        if (editor_ids) {
+          const editorIdsArray = editor_ids.split(',').map(id => id.trim());
+          whereClause += ` AND EXISTS (
+            SELECT 1 FROM file_request_editors fre_filter
+            WHERE fre_filter.request_id = fr.id
+            AND fre_filter.editor_id = ANY($${params.length + 1}::uuid[])
+          )`;
+          params.push(editorIdsArray);
+        }
+        if (media_type && media_type !== 'all') {
+          whereClause += ` AND EXISTS (
+            SELECT 1 FROM file_request_uploads fru_filter
+            WHERE fru_filter.file_request_id = fr.id
+            AND fru_filter.file_type LIKE $${params.length + 1}
+          )`;
+          params.push(`${media_type}/%`);
         }
 
         const result = await query(
@@ -499,8 +564,25 @@ class FileRequestController {
             GROUP BY fr.id, f.name, u.name, u.email`,
             [id]
           );
+        } else if (userRole === 'buyer') {
+          // Buyers can view requests they created OR requests assigned to them
+          result = await query(
+            `SELECT
+              fr.*,
+              f.name as folder_name,
+              COUNT(DISTINCT fru.id) as upload_count,
+              u.name as creator_name,
+              u.email as creator_email
+            FROM file_requests fr
+            LEFT JOIN folders f ON fr.folder_id = f.id
+            LEFT JOIN file_request_uploads fru ON fr.id = fru.file_request_id
+            LEFT JOIN users u ON fr.created_by = u.id
+            WHERE fr.id = $1 AND (fr.created_by = $2 OR fr.assigned_buyer_id = $2)
+            GROUP BY fr.id, f.name, u.name, u.email`,
+            [id, userId]
+          );
         } else {
-          // Buyers and regular users can only view requests they created
+          // Regular users can only view requests they created
           result = await query(
             `SELECT
               fr.*,

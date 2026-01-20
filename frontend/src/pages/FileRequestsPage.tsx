@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { DashboardLayout } from '../components/layout/DashboardLayout';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
-import { fileRequestApi } from '../lib/api';
+import { fileRequestApi, editorApi } from '../lib/api';
 import { formatDate, formatDateTime } from '../lib/utils';
 import { Inbox, Plus, Link as LinkIcon, Copy, XCircle, Trash2, CheckCircle, UserPlus, Search, Filter, List, Grid } from 'lucide-react';
 import { CreateFileRequestModal } from '../components/CreateFileRequestModal';
@@ -49,15 +49,49 @@ export function FileRequestsPage() {
   const [selectedVertical, setSelectedVertical] = useState<string>('All');
   const [selectedPlatform, setSelectedPlatform] = useState<string>('All');
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [selectedEditorIds, setSelectedEditorIds] = useState<string[]>([]);
+  const [selectedMediaType, setSelectedMediaType] = useState<'all' | 'image' | 'video'>('all');
+  const [editors, setEditors] = useState<any[]>([]);
+
+  useEffect(() => {
+    fetchEditors();
+  }, []);
 
   useEffect(() => {
     fetchRequests();
-  }, [filter]);
+  }, [filter, dateFrom, dateTo, selectedEditorIds, selectedMediaType]);
+
+  const fetchEditors = async () => {
+    try {
+      const response = await editorApi.getAll();
+      setEditors(response.data.data || []);
+    } catch (error: any) {
+      console.error('Failed to fetch editors:', error);
+    }
+  };
 
   const fetchRequests = async () => {
     try {
       setLoading(true);
-      const response = await fileRequestApi.getAll({ status: filter });
+      const params: any = { status: filter };
+
+      // Add date filters
+      if (dateFrom) params.date_from = dateFrom;
+      if (dateTo) params.date_to = dateTo;
+
+      // Add editor filter (comma-separated IDs)
+      if (selectedEditorIds.length > 0) {
+        params.editor_ids = selectedEditorIds.join(',');
+      }
+
+      // Add media type filter
+      if (selectedMediaType !== 'all') {
+        params.media_type = selectedMediaType;
+      }
+
+      const response = await fileRequestApi.getAll(params);
       setRequests(response.data.data || []);
     } catch (error: any) {
       console.error('Failed to fetch file requests:', error);
@@ -308,6 +342,77 @@ export function FileRequestsPage() {
                       </option>
                     ))}
                   </select>
+                </div>
+
+                {/* Date From */}
+                <div>
+                  <label className="block text-sm font-medium mb-2">Date From</label>
+                  <input
+                    type="date"
+                    value={dateFrom}
+                    onChange={(e) => setDateFrom(e.target.value)}
+                    className="w-full px-3 py-2 border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                </div>
+
+                {/* Date To */}
+                <div>
+                  <label className="block text-sm font-medium mb-2">Date To</label>
+                  <input
+                    type="date"
+                    value={dateTo}
+                    onChange={(e) => setDateTo(e.target.value)}
+                    className="w-full px-3 py-2 border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                </div>
+
+                {/* Editor Filter */}
+                <div>
+                  <label className="block text-sm font-medium mb-2">Editors</label>
+                  <select
+                    multiple
+                    value={selectedEditorIds}
+                    onChange={(e) => {
+                      const selected = Array.from(e.target.selectedOptions, option => option.value);
+                      setSelectedEditorIds(selected);
+                    }}
+                    className="w-full px-3 py-2 border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary min-h-[100px]"
+                  >
+                    {editors.map((editor) => (
+                      <option key={editor.id} value={editor.id}>
+                        {editor.display_name || editor.name}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-muted-foreground mt-1">Hold Ctrl/Cmd to select multiple</p>
+                </div>
+
+                {/* Media Type Filter */}
+                <div>
+                  <label className="block text-sm font-medium mb-2">Media Type</label>
+                  <div className="flex gap-2">
+                    <Button
+                      variant={selectedMediaType === 'all' ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setSelectedMediaType('all')}
+                    >
+                      All
+                    </Button>
+                    <Button
+                      variant={selectedMediaType === 'image' ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setSelectedMediaType('image')}
+                    >
+                      Images
+                    </Button>
+                    <Button
+                      variant={selectedMediaType === 'video' ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setSelectedMediaType('video')}
+                    >
+                      Videos
+                    </Button>
+                  </div>
                 </div>
               </div>
             )}

@@ -36,4 +36,10 @@ router.get('/users',
   authController.getAllUsers.bind(authController)
 );
 
+// Get all buyers (for file request assignment dropdown) - authenticated users only
+router.get('/buyers',
+  authenticateToken,
+  authController.getBuyers.bind(authController)
+);
+
 module.exports = router;

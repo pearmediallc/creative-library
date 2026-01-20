@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Inbox, FolderPlus, FileText } from 'lucide-react';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
-import { fileRequestApi, folderApi, editorApi, adminApi, teamApi } from '../lib/api';
+import { fileRequestApi, folderApi, editorApi, authApi, teamApi } from '../lib/api';
 import { FILE_REQUEST_TYPES } from '../constants/fileRequestTypes';
 import { PLATFORMS } from '../constants/platforms';
 import { VERTICALS } from '../constants/verticals';
@@ -113,10 +113,9 @@ export function CreateFileRequestModal({ onClose, onSuccess, teamId }: CreateFil
 
   const fetchBuyers = async () => {
     try {
-      const response = await adminApi.getUsers();
-      const usersData = response.data.data || [];
-      const buyerUsers = usersData.filter((u: any) => u.role === 'buyer');
-      setBuyers(buyerUsers.map((b: any) => ({
+      const response = await authApi.getBuyers();
+      const buyersData = response.data.data || [];
+      setBuyers(buyersData.map((b: any) => ({
         id: b.id,
         name: b.name,
         email: b.email

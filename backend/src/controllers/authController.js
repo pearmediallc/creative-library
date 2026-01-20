@@ -129,6 +129,23 @@ class AuthController {
       next(error);
     }
   }
+
+  /**
+   * GET /api/auth/buyers
+   * Get all active buyers (for file request assignment dropdown)
+   */
+  async getBuyers(req, res, next) {
+    try {
+      const result = await authService.getBuyers();
+      res.json({
+        success: true,
+        data: result
+      });
+    } catch (error) {
+      logger.error('Get buyers error', { error: error.message });
+      next(error);
+    }
+  }
 }
 
 module.exports = new AuthController();

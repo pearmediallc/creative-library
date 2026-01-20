@@ -165,6 +165,20 @@ class AuthService {
     );
     return result.rows || result;
   }
+
+  /**
+   * Get all active buyers (for file request assignment dropdown)
+   */
+  async getBuyers() {
+    const { query } = require('../config/database');
+    const result = await query(
+      `SELECT id, name, email
+       FROM users
+       WHERE is_active = TRUE AND role = 'buyer'
+       ORDER BY name ASC`
+    );
+    return result.rows || result;
+  }
 }
 
 module.exports = new AuthService();
