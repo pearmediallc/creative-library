@@ -1077,9 +1077,14 @@ class FileRequestController {
         success: true,
         message: 'File uploaded successfully',
         data: {
+          id: mediaFile.id,
           filename: mediaFile.original_filename,
+          original_filename: mediaFile.original_filename,
           file_type: mediaFile.file_type,
-          file_size: mediaFile.file_size
+          file_size: mediaFile.file_size,
+          thumbnail_url: mediaFile.thumbnail_url || null,
+          s3_url: mediaFile.s3_url,
+          cloudfront_url: mediaFile.s3_url
         }
       });
     } catch (error) {
@@ -1241,16 +1246,26 @@ class FileRequestController {
         fileSize: mediaFile.file_size,
         userId,
         editorId,
-        notificationSent: userId !== fileRequest.creator_id
+        notificationSent: userId !== fileRequest.creator_id,
+        hasThumbnail: !!mediaFile.thumbnail_url
       });
 
       res.status(201).json({
         success: true,
         message: 'File uploaded successfully',
         data: {
+          id: mediaFile.id,
           filename: mediaFile.original_filename,
+          original_filename: mediaFile.original_filename,
           file_type: mediaFile.file_type,
-          file_size: mediaFile.file_size
+          file_size: mediaFile.file_size,
+          thumbnail_url: mediaFile.thumbnail_url || null,
+          s3_url: mediaFile.s3_url,
+          cloudfront_url: mediaFile.s3_url, // s3_url is already CloudFront URL
+          uploaded_by_email: req.user.email,
+          uploaded_by_name: req.user.name,
+          editor_id: editorId,
+          created_at: new Date().toISOString()
         }
       });
     } catch (error) {

@@ -157,10 +157,11 @@ class CanvasController {
     try {
       const requestId = req.params.id; // Route uses /:id
       const userId = req.user.id;
+      const userRole = req.user.role;
 
       // Verify request exists and user has access
       const fileRequestResult = await query(
-        'SELECT id, created_by AS creator_id, editor_id, folder_id FROM file_requests WHERE id = $1',
+        'SELECT id, created_by AS creator_id, editor_id, folder_id, assigned_buyer_id FROM file_requests WHERE id = $1',
         [requestId]
       );
 
@@ -173,14 +174,43 @@ class CanvasController {
 
       const fileRequest = fileRequestResult.rows[0];
 
-      // Check if user is creator or assigned editor (check both legacy editor_id and new file_request_editors table)
-      const editorCheckResult = await query(
-        'SELECT 1 FROM file_request_editors WHERE request_id = $1 AND editor_id = $2',
-        [requestId, userId]
-      );
+      // Check access for different user types
+      let hasAccess = false;
 
-      const isAssignedEditor = editorCheckResult.rows.length > 0 || fileRequest.editor_id === userId;
-      const hasAccess = fileRequest.creator_id === userId || isAssignedEditor;
+      // 1. Creator always has access
+      if (fileRequest.creator_id === userId) {
+        hasAccess = true;
+      }
+      // 2. Admin always has access
+      else if (userRole === 'admin') {
+        hasAccess = true;
+      }
+      // 3. Assigned buyer has access
+      else if (fileRequest.assigned_buyer_id === userId) {
+        hasAccess = true;
+      }
+      // 4. Assigned editor has access (need to check via editor_id lookup)
+      else if (userRole === 'creative') {
+        // Get editor_id from user_id
+        const editorResult = await query(
+          'SELECT id FROM editors WHERE user_id = $1 AND is_active = TRUE',
+          [userId]
+        );
+
+        if (editorResult.rows.length > 0) {
+          const editorId = editorResult.rows[0].id;
+
+          // Check if this editor is assigned to the request
+          const editorCheckResult = await query(
+            'SELECT 1 FROM file_request_editors WHERE request_id = $1 AND editor_id = $2',
+            [requestId, editorId]
+          );
+
+          if (editorCheckResult.rows.length > 0 || fileRequest.editor_id === editorId) {
+            hasAccess = true;
+          }
+        }
+      }
 
       if (!hasAccess) {
         return res.status(403).json({
