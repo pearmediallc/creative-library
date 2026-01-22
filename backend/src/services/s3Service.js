@@ -109,7 +109,7 @@ class S3Service {
         'thumbnails',
         editorName,      // Pass editor name for hybrid structure
         'image',         // Thumbnails are always images
-        folderPath       // Pass folder path for organized storage
+        { folderPath }   // Pass folder path as options object
       );
 
       console.log(`✅ Thumbnail uploaded successfully`);
@@ -193,7 +193,7 @@ class S3Service {
         'thumbnails',
         editorName,      // Pass editor name for hybrid structure
         'video',         // Mark as video thumbnail
-        folderPath       // Pass folder path for organized storage
+        { folderPath }   // Pass folder path as options object
       );
 
       console.log(`✅ Video thumbnail uploaded successfully`);

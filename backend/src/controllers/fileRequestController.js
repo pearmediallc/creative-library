@@ -1012,7 +1012,8 @@ class FileRequestController {
           tags: ['file-request-upload'],
           description: comments || `Uploaded via file request: ${fileRequest.title}`,
           folder_id: fileRequest.folder_id,
-          assigned_buyer_id: fileRequest.assigned_buyer_id || null // Assign to buyer if specified
+          assigned_buyer_id: fileRequest.assigned_buyer_id || null, // Assign to buyer if specified
+          is_file_request_upload: true // Hide from media library by default
         }
       );
 
@@ -1179,7 +1180,8 @@ class FileRequestController {
           description: comments || `Uploaded via file request: ${fileRequest.title}`,
           folder_id: fileRequest.folder_id,
           assigned_buyer_id: fileRequest.assigned_buyer_id || null,
-          request_id: fileRequest.id  // ✨ Pass request ID for proper S3 structure
+          request_id: fileRequest.id,  // ✨ Pass request ID for proper S3 structure
+          is_file_request_upload: true // Hide from media library by default
         }
       );
 

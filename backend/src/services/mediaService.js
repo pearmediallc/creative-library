@@ -211,6 +211,8 @@ class MediaService {
         // ✨ NEW: Folder and buyer assignment
         folder_id: targetFolderId || null,
         assigned_buyer_id: metadata.assigned_buyer_id || null,
+        // ✨ NEW: File request uploads - hide from media library by default
+        is_deleted: metadata.is_file_request_upload === true,
         // ✨ NEW: Metadata tracking fields
         metadata_stripped: metadataOps.removed || false,
         metadata_embedded: metadataOps.added ? {
