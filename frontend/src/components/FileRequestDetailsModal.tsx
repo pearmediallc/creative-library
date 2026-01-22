@@ -206,10 +206,12 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
   };
 
   const handleDownload = (file: FileUpload) => {
+    // Use backend download endpoint which sets proper Content-Disposition headers
+    const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
+    const downloadUrl = `${API_BASE}/media/${file.file_id}/download`;
     const link = document.createElement('a');
-    link.href = file.cloudfront_url;
+    link.href = downloadUrl;
     link.download = file.original_filename;
-    link.target = '_blank';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -252,12 +254,13 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
     try {
       const uploadsToDownload = request.uploads.filter(u => selectedUploads.has(u.id));
 
-      // Download each file
+      // Download each file using backend download endpoint
+      const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
       for (const upload of uploadsToDownload) {
+        const downloadUrl = `${API_BASE}/media/${upload.file_id}/download`;
         const link = document.createElement('a');
-        link.href = upload.cloudfront_url;
+        link.href = downloadUrl;
         link.download = upload.original_filename;
-        link.target = '_blank';
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
