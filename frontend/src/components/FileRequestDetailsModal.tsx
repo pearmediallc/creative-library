@@ -206,15 +206,20 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
   };
 
   const handleDownload = (file: FileUpload) => {
-    // Use backend download endpoint which sets proper Content-Disposition headers
-    const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
-    const downloadUrl = `${API_BASE}/media/${file.file_id}/download`;
-    const link = document.createElement('a');
-    link.href = downloadUrl;
-    link.download = file.original_filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    try {
+      // Use backend download endpoint which sets proper Content-Disposition headers
+      const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
+      const downloadUrl = `${API_BASE}/media/${file.file_id}/download`;
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = file.original_filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (error) {
+      console.error('Download error:', error);
+      alert('Failed to download file. Please try again.');
+    }
   };
 
   const handleAddToLibrary = async (upload: FileUpload) => {
