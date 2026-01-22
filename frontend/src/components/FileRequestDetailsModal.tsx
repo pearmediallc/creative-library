@@ -80,6 +80,10 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
   const [uploadError, setUploadError] = useState('');
   const [isDragging, setIsDragging] = useState(false);
 
+  // Bulk actions state
+  const [selectedUploads, setSelectedUploads] = useState<Set<string>>(new Set());
+  const [bulkActionInProgress, setBulkActionInProgress] = useState(false);
+
   useEffect(() => {
     fetchRequestDetails();
   }, [requestId]);
@@ -219,6 +223,88 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
     } catch (error: any) {
       console.error('Failed to add to library:', error);
       alert(error.response?.data?.error || 'Failed to add file to Media Library');
+    }
+  };
+
+  // Bulk selection handlers
+  const toggleSelectUpload = (uploadId: string) => {
+    const newSelected = new Set(selectedUploads);
+    if (newSelected.has(uploadId)) {
+      newSelected.delete(uploadId);
+    } else {
+      newSelected.add(uploadId);
+    }
+    setSelectedUploads(newSelected);
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedUploads.size === request?.uploads.length) {
+      setSelectedUploads(new Set());
+    } else {
+      setSelectedUploads(new Set(request?.uploads.map(u => u.id) || []));
+    }
+  };
+
+  const handleBulkDownload = async () => {
+    if (!request || selectedUploads.size === 0) return;
+
+    setBulkActionInProgress(true);
+    try {
+      const uploadsToDownload = request.uploads.filter(u => selectedUploads.has(u.id));
+
+      // Download each file
+      for (const upload of uploadsToDownload) {
+        const link = document.createElement('a');
+        link.href = upload.cloudfront_url;
+        link.download = upload.original_filename;
+        link.target = '_blank';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        // Small delay between downloads to avoid browser blocking
+        await new Promise(resolve => setTimeout(resolve, 300));
+      }
+
+      alert(`Successfully initiated download for ${uploadsToDownload.length} file(s)!`);
+    } catch (error) {
+      console.error('Bulk download error:', error);
+      alert('Failed to download files. Please try again.');
+    } finally {
+      setBulkActionInProgress(false);
+    }
+  };
+
+  const handleBulkAddToLibrary = async () => {
+    if (!request || selectedUploads.size === 0) return;
+
+    setBulkActionInProgress(true);
+    try {
+      const uploadsToAdd = request.uploads.filter(u => selectedUploads.has(u.id));
+
+      // Add each file to library
+      const results = await Promise.allSettled(
+        uploadsToAdd.map(upload =>
+          mediaApi.addFileRequestUploadToLibrary(upload.file_id)
+        )
+      );
+
+      const successful = results.filter(r => r.status === 'fulfilled').length;
+      const failed = results.filter(r => r.status === 'rejected').length;
+
+      if (failed > 0) {
+        alert(`Added ${successful} file(s) to Media Library. ${failed} file(s) failed.`);
+      } else {
+        alert(`Successfully added ${successful} file(s) to your Media Library!`);
+      }
+
+      // Clear selection after bulk action
+      setSelectedUploads(new Set());
+    } catch (error: any) {
+      console.error('Bulk add to library error:', error);
+      alert('Failed to add files to Media Library. Please try again.');
+    } finally {
+      setBulkActionInProgress(false);
     }
   };
 
@@ -752,19 +838,70 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
 
           {/* Uploaded Files */}
           <div>
-            <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-              Uploaded Files ({request.uploads.length})
-            </h3>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                Uploaded Files ({request.uploads.length})
+              </h3>
+
+              {request.uploads.length > 0 && (
+                <div className="flex items-center gap-2">
+                  <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={selectedUploads.size === request.uploads.length}
+                      onChange={toggleSelectAll}
+                      className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary"
+                    />
+                    Select All
+                  </label>
+
+                  {selectedUploads.size > 0 && (
+                    <>
+                      <span className="text-sm text-gray-500 dark:text-gray-400">
+                        ({selectedUploads.size} selected)
+                      </span>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={handleBulkDownload}
+                        disabled={bulkActionInProgress}
+                      >
+                        Download Selected
+                      </Button>
+                      {user?.role !== 'creative' && (
+                        <Button
+                          size="sm"
+                          variant="default"
+                          onClick={handleBulkAddToLibrary}
+                          disabled={bulkActionInProgress}
+                        >
+                          Add Selected to Library
+                        </Button>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
 
             {request.uploads.length > 0 ? (
               <div className="space-y-2">
                 {request.uploads.map((upload) => (
-                  <UploadedFileCard
-                    key={upload.id}
-                    upload={upload}
-                    onDownload={handleDownload}
-                    onAddToLibrary={user?.role !== 'creative' ? handleAddToLibrary : undefined}
-                  />
+                  <div key={upload.id} className="flex items-start gap-2">
+                    <input
+                      type="checkbox"
+                      checked={selectedUploads.has(upload.id)}
+                      onChange={() => toggleSelectUpload(upload.id)}
+                      className="mt-3 w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
+                    />
+                    <div className="flex-1">
+                      <UploadedFileCard
+                        upload={upload}
+                        onDownload={handleDownload}
+                        onAddToLibrary={user?.role !== 'creative' ? handleAddToLibrary : undefined}
+                      />
+                    </div>
+                  </div>
                 ))}
               </div>
             ) : (

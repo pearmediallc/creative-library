@@ -1806,10 +1806,16 @@ class MediaController {
         });
       }
 
-      // File is already in media_files table, just confirm it's accessible
+      // Update file to make it visible in media library (set is_deleted = FALSE)
+      await query(
+        `UPDATE media_files SET is_deleted = FALSE, updated_at = NOW() WHERE id = $1`,
+        [fileId]
+      );
+
       logger.info('File added to media library successfully', {
         fileId,
-        filename: fileData.original_filename
+        filename: fileData.original_filename,
+        userId
       });
 
       res.json({
