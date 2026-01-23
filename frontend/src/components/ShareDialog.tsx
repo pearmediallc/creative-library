@@ -437,13 +437,10 @@ export function ShareDialog({
     }
   };
 
-  const availableUsers = allUsers.filter(
-    u => !permissions.some(p => p.grantee_type === 'user' && p.grantee_id === u.id)
-  );
-
-  const availableTeams = allTeams.filter(
-    t => !permissions.some(p => p.grantee_type === 'team' && p.grantee_id === t.id)
-  );
+  // Show ALL users and teams in dropdown, not just those without permissions
+  // Users can share with the same person multiple times with different permission types
+  const availableUsers = allUsers;
+  const availableTeams = allTeams;
 
   if (!isOpen) return null;
 
