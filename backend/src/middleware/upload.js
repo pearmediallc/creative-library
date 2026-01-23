@@ -20,6 +20,7 @@ const upload = multer({
       'image/png',
       'image/gif',
       'image/webp',
+      'image/avif', // ✨ ADDED: Support for AVIF format
       'video/mp4',
       'video/quicktime',
       'video/x-msvideo',
@@ -32,7 +33,7 @@ const upload = multer({
       cb(null, true);
     } else {
       // Check file extension as fallback for octet-stream files
-      const ext = file.originalname.toLowerCase().match(/\.(jpg|jpeg|png|gif|webp|mp4|mov|avi|webm)$/);
+      const ext = file.originalname.toLowerCase().match(/\.(jpg|jpeg|png|gif|webp|avif|mp4|mov|avi|webm)$/);
       if (ext) {
         cb(null, true);
       } else {

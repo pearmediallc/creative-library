@@ -232,7 +232,7 @@ class MediaService {
       console.log(`  └─ Folder ID: ${targetFolderId || 'NULL (root)'}`);
       console.log(`  └─ S3 Folder Path: ${folderPath || 'NULL (root)'}`);
       console.log(`  └─ Is File Request Upload: ${metadata.is_file_request_upload === true}`);
-      console.log(`  └─ Is Deleted (hidden from library): ${metadata.is_file_request_upload === true}`);
+      console.log(`  └─ Is Deleted (visible in library): FALSE`);
       console.log(`  └─ Structure Type: ${(editor?.name && mediaType) ? 'NEW HYBRID' : 'OLD FALLBACK'}`);
 
       logger.info('Media file uploaded successfully', {
@@ -241,7 +241,8 @@ class MediaService {
         editorId,
         editorName: editor?.name || 'public-upload',
         s3Key: uploadResult.s3Key,
-        structureType: 'NEW_HYBRID'
+        structureType: 'NEW_HYBRID',
+        isDeleted: false
       });
 
       console.log('🎉 ========== MEDIA UPLOAD COMPLETE ==========\n');

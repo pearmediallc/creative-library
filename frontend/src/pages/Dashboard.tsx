@@ -4,22 +4,29 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { mediaApi, analyticsApi, editorApi } from '../lib/api';
 import { formatBytes, formatNumber } from '../lib/utils';
 import { StorageStats, EditorPerformance } from '../types';
+import { useAuth } from '../contexts/AuthContext';
 
 export function DashboardPage() {
+  const { user } = useAuth();
   const [stats, setStats] = useState<StorageStats | null>(null);
   const [editorPerformance, setEditorPerformance] = useState<EditorPerformance[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Only admins can see analytics data (ads, spend, editor performance)
+  const canViewAnalytics = user?.role === 'admin';
+
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [statsRes, performanceRes] = await Promise.all([
-          mediaApi.getStats(),
-          analyticsApi.getEditorPerformance(),
-        ]);
-
+        // Always fetch stats
+        const statsRes = await mediaApi.getStats();
         setStats(statsRes.data.data);
-        setEditorPerformance(performanceRes.data.data);
+
+        // Only fetch analytics if user is admin
+        if (canViewAnalytics) {
+          const performanceRes = await analyticsApi.getEditorPerformance();
+          setEditorPerformance(performanceRes.data.data);
+        }
       } catch (error) {
         console.error('Failed to fetch dashboard data:', error);
       } finally {
@@ -28,7 +35,7 @@ export function DashboardPage() {
     };
 
     fetchData();
-  }, []);
+  }, [canViewAnalytics]);
 
   if (loading) {
     return (
@@ -48,7 +55,7 @@ export function DashboardPage() {
           <p className="text-muted-foreground">Overview of your creative assets</p>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <div className={`grid gap-4 ${canViewAnalytics ? 'md:grid-cols-2 lg:grid-cols-4' : 'md:grid-cols-2'}`}>
           <Card>
             <CardHeader className="pb-2">
               <CardDescription>Total Files</CardDescription>
@@ -71,61 +78,69 @@ export function DashboardPage() {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader className="pb-2">
-              <CardDescription>Total Ads</CardDescription>
-              <CardTitle className="text-3xl">
-                {formatNumber(editorPerformance.reduce((sum, e) => sum + e.ad_count, 0))}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-xs text-muted-foreground">Tracked in analytics</p>
-            </CardContent>
-          </Card>
+          {/* Only show analytics data to admins */}
+          {canViewAnalytics && (
+            <>
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardDescription>Total Ads</CardDescription>
+                  <CardTitle className="text-3xl">
+                    {formatNumber(editorPerformance.reduce((sum, e) => sum + e.ad_count, 0))}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-xs text-muted-foreground">Tracked in analytics</p>
+                </CardContent>
+              </Card>
 
-          <Card>
-            <CardHeader className="pb-2">
-              <CardDescription>Total Spend</CardDescription>
-              <CardTitle className="text-3xl">
-                ${formatNumber(editorPerformance.reduce((sum, e) => sum + (e.total_spend || 0), 0))}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-xs text-muted-foreground">Across all campaigns</p>
-            </CardContent>
-          </Card>
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardDescription>Total Spend</CardDescription>
+                  <CardTitle className="text-3xl">
+                    ${formatNumber(editorPerformance.reduce((sum, e) => sum + (e.total_spend || 0), 0))}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-xs text-muted-foreground">Across all campaigns</p>
+                </CardContent>
+              </Card>
+            </>
+          )}
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Editor Performance</CardTitle>
-            <CardDescription>Overview of creative team performance</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {editorPerformance.length > 0 ? (
-              <div className="space-y-3">
-                {editorPerformance.slice(0, 5).map((editor) => (
-                  <div key={editor.editor_id} className="flex items-center justify-between py-2">
-                    <div className="flex-1">
-                      <p className="font-medium">{editor.editor_name}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {formatNumber(editor.ad_count)} ads • {formatNumber(editor.total_impressions)} impressions
-                      </p>
+        {/* Only show editor performance to admins */}
+        {canViewAnalytics && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Editor Performance</CardTitle>
+              <CardDescription>Overview of creative team performance</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {editorPerformance.length > 0 ? (
+                <div className="space-y-3">
+                  {editorPerformance.slice(0, 5).map((editor) => (
+                    <div key={editor.editor_id} className="flex items-center justify-between py-2">
+                      <div className="flex-1">
+                        <p className="font-medium">{editor.editor_name}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {formatNumber(editor.ad_count)} ads • {formatNumber(editor.total_impressions)} impressions
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-medium">${formatNumber(editor.total_spend || 0)}</p>
+                        <p className="text-sm text-muted-foreground">
+                          CPM: ${editor.avg_cpm ? Number(editor.avg_cpm).toFixed(2) : '0.00'}
+                        </p>
+                      </div>
                     </div>
-                    <div className="text-right">
-                      <p className="font-medium">${formatNumber(editor.total_spend || 0)}</p>
-                      <p className="text-sm text-muted-foreground">
-                        CPM: ${editor.avg_cpm ? Number(editor.avg_cpm).toFixed(2) : '0.00'}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">No analytics data available</p>
-            )}
-          </CardContent>
-        </Card>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">No analytics data available</p>
+              )}
+            </CardContent>
+          </Card>
+        )}
       </div>
     </DashboardLayout>
   );
