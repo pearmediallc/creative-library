@@ -1809,13 +1809,18 @@ class MediaController {
     try {
       const { fileId } = req.params;
       const userId = req.user.id;
+      const userRole = req.user.role;
 
-      logger.info('Adding file request upload to media library', { fileId, userId });
+      logger.info('🔵 ========== ADD TO LIBRARY - START ==========', {
+        fileId,
+        userId,
+        userRole
+      });
 
       // File should already exist in media_files table
       // We just need to verify it exists and belongs to a file request
       const file = await query(
-        `SELECT mf.*, fr.created_by as request_creator
+        `SELECT mf.*, fr.created_by as request_creator, fr.folder_id as request_folder_id
          FROM media_files mf
          LEFT JOIN file_request_uploads fru ON fru.file_id = mf.id
          LEFT JOIN file_requests fr ON fr.id = fru.file_request_id
@@ -1824,6 +1829,7 @@ class MediaController {
       );
 
       if (file.rows.length === 0) {
+        logger.error('❌ File not found', { fileId });
         return res.status(404).json({
           success: false,
           error: 'File not found'
@@ -1832,8 +1838,24 @@ class MediaController {
 
       const fileData = file.rows[0];
 
+      logger.info('📄 File details BEFORE update', {
+        fileId: fileData.id,
+        filename: fileData.original_filename,
+        folder_id: fileData.folder_id,
+        request_folder_id: fileData.request_folder_id,
+        uploaded_by: fileData.uploaded_by,
+        assigned_buyer_id: fileData.assigned_buyer_id,
+        is_deleted: fileData.is_deleted,
+        request_creator: fileData.request_creator
+      });
+
       // Verify user has permission (request creator or admin/buyer)
-      if (fileData.request_creator !== userId && req.user.role !== 'admin' && req.user.role !== 'buyer') {
+      if (fileData.request_creator !== userId && userRole !== 'admin' && userRole !== 'buyer') {
+        logger.error('❌ Permission denied', {
+          userId,
+          userRole,
+          request_creator: fileData.request_creator
+        });
         return res.status(403).json({
           success: false,
           error: 'You do not have permission to add this file to your library'
@@ -1846,11 +1868,36 @@ class MediaController {
         [fileId]
       );
 
-      logger.info('File added to media library successfully', {
+      logger.info('✅ File updated - is_deleted set to FALSE');
+
+      // Query the file again to verify the update
+      const updatedFile = await query(
+        `SELECT id, original_filename, folder_id, assigned_buyer_id, uploaded_by, is_deleted
+         FROM media_files WHERE id = $1`,
+        [fileId]
+      );
+
+      const updatedFileData = updatedFile.rows[0];
+
+      logger.info('📄 File details AFTER update', {
+        fileId: updatedFileData.id,
+        filename: updatedFileData.original_filename,
+        folder_id: updatedFileData.folder_id,
+        assigned_buyer_id: updatedFileData.assigned_buyer_id,
+        uploaded_by: updatedFileData.uploaded_by,
+        is_deleted: updatedFileData.is_deleted
+      });
+
+      logger.info('✅ ADD TO LIBRARY - SUCCESS', {
         fileId,
         filename: fileData.original_filename,
-        userId
+        userId,
+        userRole,
+        folder_id: updatedFileData.folder_id,
+        assigned_buyer_id: updatedFileData.assigned_buyer_id
       });
+
+      logger.info('🔵 ========== ADD TO LIBRARY - END ==========\n');
 
       res.json({
         success: true,
@@ -1858,7 +1905,7 @@ class MediaController {
         data: fileData
       });
     } catch (error) {
-      logger.error('Add file request upload to library error', { error: error.message, stack: error.stack });
+      logger.error('❌ Add file request upload to library error', { error: error.message, stack: error.stack });
       next(error);
     }
   }

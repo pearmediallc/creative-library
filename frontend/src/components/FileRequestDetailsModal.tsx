@@ -777,8 +777,8 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
             </div>
           </div>
 
-          {/* Direct Upload for Editors */}
-          {request.is_active && (
+          {/* Direct Upload for Editors - Only editors/creatives can upload, not buyers */}
+          {request.is_active && user?.role !== 'buyer' && (
             <div>
               <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Upload Files {request.allow_multiple_uploads && '(Multiple files/folders allowed)'}

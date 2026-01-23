@@ -100,7 +100,7 @@ class MediaFile extends BaseModel {
         // 2. Files assigned to them (via file requests)
         // 3. Files shared with them via file_permissions
         // 4. Files in folders that belong to their file requests
-        conditions.push(`(
+        const rbacCondition = `(
           mf.uploaded_by = $${paramIndex}
           OR mf.assigned_buyer_id = $${paramIndex}
           OR mf.id IN (
@@ -114,8 +114,19 @@ class MediaFile extends BaseModel {
             WHERE created_by = $${paramIndex}
             AND folder_id IS NOT NULL
           )
-        )`);
+        )`;
+        conditions.push(rbacCondition);
         params.push(filters.user_id);
+
+        const { query } = require('../config/database');
+        const logger = require('../utils/logger');
+        logger.info('🔒 RBAC Query for Buyer', {
+          userId: filters.user_id,
+          userRole: filters.user_role,
+          rbacCondition,
+          paramIndex
+        });
+
         paramIndex++;
       } else if (filters.user_role !== 'admin') {
         // Non-admin, non-buyer users (creatives, editors) can only see their own uploads
