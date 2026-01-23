@@ -468,25 +468,47 @@ class PermissionController {
 
       if (resourceType === 'file') {
         const file = await MediaFile.findById(resourceId);
-        return file && file.uploaded_by === userId;
+
+        // User can share if they uploaded it
+        if (file && file.uploaded_by === userId) {
+          return true;
+        }
+
+        // User can share if file is assigned to them
+        if (file && file.assigned_buyer_id === userId) {
+          return true;
+        }
+
+        // User can share if they created the file request that this file belongs to
+        if (file && file.metadata?.request_id) {
+          const fileRequest = await query(
+            `SELECT created_by FROM file_requests WHERE id = $1`,
+            [file.metadata.request_id]
+          );
+          if (fileRequest.rows.length > 0 && fileRequest.rows[0].created_by === userId) {
+            return true;
+          }
+        }
+
+        return false;
       } else if (resourceType === 'folder') {
         const folder = await Folder.findById(resourceId);
         if (folder && folder.created_by === userId) {
           return true; // User created the folder
         }
 
-        // Check if user has access via file request
-        // Users who created file requests targeting this folder can share it
-        const fileRequestAccess = await query(
+        // Check if user is the CREATOR of a file request targeting this folder
+        // Only request creators can share folders, not assigned buyers
+        const fileRequestCreator = await query(
           `SELECT 1 FROM file_requests
            WHERE folder_id = $1
-             AND (created_by = $2 OR assigned_buyer_id = $2)
+             AND created_by = $2
            LIMIT 1`,
           [resourceId, userId]
         );
 
-        if (fileRequestAccess.rows.length > 0) {
-          return true; // User has access via file request
+        if (fileRequestCreator.rows.length > 0) {
+          return true; // User created the file request for this folder
         }
 
         return false;
