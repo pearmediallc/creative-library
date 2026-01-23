@@ -308,13 +308,16 @@ class MediaService {
     try {
       // IMPORTANT: Role-based access control for media files
       // - Admins can see all content (for system management)
-      // - Buyers can see all content (they need to review all submissions)
+      // - Buyers can see: files uploaded by them, assigned to them, or shared with them
       // - All other users (editors, creatives, etc.) can only see their own uploads
-      if (userRole !== 'admin' && userRole !== 'buyer') {
-        filters.uploaded_by = userId;
-        logger.info('Non-admin/buyer user - restricting to own uploads', { userId, userRole });
+
+      // For non-admins, apply RBAC filtering
+      if (userRole !== 'admin') {
+        filters.user_id = userId;
+        filters.user_role = userRole;
+        logger.info('Non-admin user - applying RBAC filters', { userId, userRole });
       } else {
-        logger.info('Admin/Buyer user - showing all files', { userId, userRole });
+        logger.info('Admin user - showing all files', { userId, userRole });
       }
 
       // Get media files

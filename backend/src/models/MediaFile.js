@@ -91,7 +91,43 @@ class MediaFile extends BaseModel {
     // Only active files (use is_deleted column with table prefix to avoid ambiguity)
     conditions.push(`mf.is_deleted = FALSE`);
 
-    if (filters.uploaded_by) {
+    // ✨ RBAC: Role-based access control filtering
+    // Apply before other filters to ensure security
+    if (filters.user_id && filters.user_role) {
+      if (filters.user_role === 'buyer') {
+        // Buyers can see:
+        // 1. Files uploaded by them
+        // 2. Files assigned to them (via file requests)
+        // 3. Files shared with them via file_permissions
+        // 4. Files in folders that belong to their file requests
+        conditions.push(`(
+          mf.uploaded_by = $${paramIndex}
+          OR mf.assigned_buyer_id = $${paramIndex}
+          OR mf.id IN (
+            SELECT resource_id FROM file_permissions
+            WHERE grantee_type = 'user'
+            AND grantee_id = $${paramIndex}
+            AND resource_type = 'file'
+          )
+          OR mf.folder_id IN (
+            SELECT folder_id FROM file_requests
+            WHERE created_by = $${paramIndex}
+            AND folder_id IS NOT NULL
+          )
+        )`);
+        params.push(filters.user_id);
+        paramIndex++;
+      } else if (filters.user_role !== 'admin') {
+        // Non-admin, non-buyer users (creatives, editors) can only see their own uploads
+        conditions.push(`mf.uploaded_by = $${paramIndex++}`);
+        params.push(filters.user_id);
+      }
+      // Admin users have no restrictions (no additional conditions)
+    }
+
+    // ✨ Deprecated: Old uploaded_by filter (replaced by RBAC above)
+    // Keeping for backwards compatibility but RBAC takes precedence
+    if (filters.uploaded_by && !filters.user_id) {
       conditions.push(`mf.uploaded_by = $${paramIndex++}`);
       params.push(filters.uploaded_by);
     }
@@ -249,7 +285,34 @@ class MediaFile extends BaseModel {
     // Only active files (use is_deleted column with table prefix to avoid ambiguity)
     conditions.push(`mf.is_deleted = FALSE`);
 
-    if (filters.uploaded_by) {
+    // ✨ RBAC: Role-based access control filtering (mirrors findWithFilters)
+    if (filters.user_id && filters.user_role) {
+      if (filters.user_role === 'buyer') {
+        conditions.push(`(
+          mf.uploaded_by = $${paramIndex}
+          OR mf.assigned_buyer_id = $${paramIndex}
+          OR mf.id IN (
+            SELECT resource_id FROM file_permissions
+            WHERE grantee_type = 'user'
+            AND grantee_id = $${paramIndex}
+            AND resource_type = 'file'
+          )
+          OR mf.folder_id IN (
+            SELECT folder_id FROM file_requests
+            WHERE created_by = $${paramIndex}
+            AND folder_id IS NOT NULL
+          )
+        )`);
+        params.push(filters.user_id);
+        paramIndex++;
+      } else if (filters.user_role !== 'admin') {
+        conditions.push(`mf.uploaded_by = $${paramIndex++}`);
+        params.push(filters.user_id);
+      }
+    }
+
+    // ✨ Deprecated: Old uploaded_by filter (backwards compatibility)
+    if (filters.uploaded_by && !filters.user_id) {
       conditions.push(`mf.uploaded_by = $${paramIndex++}`);
       params.push(filters.uploaded_by);
     }
