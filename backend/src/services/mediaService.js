@@ -245,6 +245,44 @@ class MediaService {
 
       console.log('🎉 ========== MEDIA UPLOAD COMPLETE ==========\n');
 
+      // ✨ NEW: Auto-grant permissions for file request assigned buyer
+      if (metadata.assigned_buyer_id && mediaFile.id) {
+        try {
+          const FilePermission = require('../models/FilePermission');
+          await FilePermission.grantPermission({
+            resource_type: 'file',
+            resource_id: mediaFile.id,
+            grantee_type: 'user',
+            grantee_id: metadata.assigned_buyer_id,
+            permission_type: 'view',
+            granted_by: userId,
+            expires_at: null
+          });
+          await FilePermission.grantPermission({
+            resource_type: 'file',
+            resource_id: mediaFile.id,
+            grantee_type: 'user',
+            grantee_id: metadata.assigned_buyer_id,
+            permission_type: 'download',
+            granted_by: userId,
+            expires_at: null
+          });
+          console.log(`✅ Auto-granted view+download permissions to buyer ${metadata.assigned_buyer_id}`);
+          logger.info('Auto-granted permissions for file request', {
+            mediaFileId: mediaFile.id,
+            buyerId: metadata.assigned_buyer_id,
+            creatorId: userId
+          });
+        } catch (permError) {
+          logger.error('Failed to auto-grant permissions', {
+            error: permError.message,
+            mediaFileId: mediaFile.id,
+            buyerId: metadata.assigned_buyer_id
+          });
+          // Don't fail the upload if permission creation fails
+        }
+      }
+
       return mediaFile;
     } catch (error) {
       console.error('\n❌ ========== MEDIA UPLOAD FAILED ==========');
