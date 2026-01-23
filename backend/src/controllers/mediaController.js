@@ -445,7 +445,8 @@ class MediaController {
         if (proxyRes.headers['content-length']) {
           res.setHeader('Content-Length', proxyRes.headers['content-length']);
         }
-        res.setHeader('Content-Disposition', `inline; filename="${file.original_filename}"`);
+        // FIXED: Use 'attachment' instead of 'inline' to force download
+        res.setHeader('Content-Disposition', `attachment; filename="${file.original_filename}"`);
 
         // Pipe S3 response to client
         proxyRes.pipe(res);
