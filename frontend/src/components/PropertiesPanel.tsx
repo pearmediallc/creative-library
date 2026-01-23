@@ -301,18 +301,36 @@ export function PropertiesPanel({
     }
   };
 
-  const handleVersionDownload = (version: VersionEntry) => {
-    // Use backend download endpoint which sets proper Content-Disposition: attachment headers
-    const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
-    const downloadUrl = `${API_BASE}/media/${file.id}/download`;
+  const handleVersionDownload = async (version: VersionEntry) => {
+    try {
+      // Use authenticated fetch with Bearer token to download file
+      const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
+      const downloadUrl = `${API_BASE}/media/${file.id}/download`;
+      const token = localStorage.getItem('token');
 
-    const link = document.createElement('a');
-    link.href = downloadUrl;
-    link.download = `version-${version.version_number}`;
-    // DO NOT set target='_blank' as it opens in new tab instead of downloading
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+      const response = await fetch(downloadUrl, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Download failed');
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `version-${version.version_number}`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Download failed:', error);
+      alert('Failed to download file. Please try again.');
+    }
   };
 
   const getFileIcon = (fileType?: string) => {

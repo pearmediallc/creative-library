@@ -64,14 +64,15 @@ export function useNotifications(options: UseNotificationsOptions = {}) {
 
       // If there are new unread notifications
       if (newUnreadCount > previousUnreadCount && previousUnreadCount > 0) {
-        // Play sound
-        if (enableSound) {
-          const latestNotification = (data.notifications || [])[0];
-          const soundType = latestNotification?.type === 'mention' ? 'mention' :
-                           latestNotification?.type === 'file_request_assigned' ? 'request' :
-                           'default';
-          notificationSound.playNotificationSound(soundType);
-        }
+        // REMOVED: Notification sounds disabled per user request
+        // Sounds were interrupting workflow and not desired
+        // if (enableSound) {
+        //   const latestNotification = (data.notifications || [])[0];
+        //   const soundType = latestNotification?.type === 'mention' ? 'mention' :
+        //                    latestNotification?.type === 'file_request_assigned' ? 'request' :
+        //                    'default';
+        //   notificationSound.playNotificationSound(soundType);
+        // }
 
         // Show browser notification
         if (enableBrowserNotifications && 'Notification' in window && Notification.permission === 'granted') {

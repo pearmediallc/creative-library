@@ -210,17 +210,32 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
     alert('Link copied to clipboard!');
   };
 
-  const handleDownload = (file: FileUpload) => {
+  const handleDownload = async (file: FileUpload) => {
     try {
-      // Use backend download endpoint which sets proper Content-Disposition headers
+      // Use authenticated fetch with Bearer token to download file
       const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
       const downloadUrl = `${API_BASE}/media/${file.file_id}/download`;
+      const token = localStorage.getItem('token');
+
+      const response = await fetch(downloadUrl, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Download failed');
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
-      link.href = downloadUrl;
+      link.href = url;
       link.download = file.original_filename;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Download error:', error);
       alert('Failed to download file. Please try again.');
