@@ -1673,13 +1673,13 @@ class MediaController {
           mt.name,
           mt.category,
           mt.description,
-          mft.created_at as added_at,
+          mft.added_at,
           u.name as added_by_name
         FROM media_file_tags mft
         JOIN metadata_tags mt ON mft.tag_id = mt.id
         LEFT JOIN users u ON mft.added_by = u.id
         WHERE mft.media_file_id = $1 AND mt.is_active = TRUE
-        ORDER BY mft.created_at DESC
+        ORDER BY mft.added_at DESC
       `, [id]);
 
       res.json({
