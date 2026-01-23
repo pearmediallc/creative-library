@@ -84,6 +84,11 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
   const [selectedUploads, setSelectedUploads] = useState<Set<string>>(new Set());
   const [bulkActionInProgress, setBulkActionInProgress] = useState(false);
 
+  // Deadline editing state
+  const [isEditingDeadline, setIsEditingDeadline] = useState(false);
+  const [newDeadline, setNewDeadline] = useState('');
+  const [savingDeadline, setSavingDeadline] = useState(false);
+
   useEffect(() => {
     fetchRequestDetails();
   }, [requestId]);
@@ -314,6 +319,28 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
     } finally {
       setBulkActionInProgress(false);
     }
+  };
+
+  const handleSaveDeadline = async () => {
+    if (!request || !newDeadline) return;
+
+    setSavingDeadline(true);
+    try {
+      await fileRequestApi.update(request.id, { deadline: newDeadline });
+      alert('Deadline updated successfully!');
+      setIsEditingDeadline(false);
+      fetchRequestDetails(); // Refresh to show new deadline
+    } catch (error: any) {
+      console.error('Failed to update deadline:', error);
+      alert(error.response?.data?.error || 'Failed to update deadline');
+    } finally {
+      setSavingDeadline(false);
+    }
+  };
+
+  const handleCancelDeadlineEdit = () => {
+    setIsEditingDeadline(false);
+    setNewDeadline('');
   };
 
   const formatDuration = (startDate: string, endDate: string) => {
@@ -621,14 +648,53 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
                 </div>
               )}
 
-              {request.deadline && (
-                <div className="flex items-center gap-2 text-sm">
-                  <Calendar className="w-4 h-4 text-muted-foreground" />
-                  <span className="text-gray-700 dark:text-gray-300">
-                    Deadline: {formatDate(request.deadline)}
-                  </span>
-                </div>
-              )}
+              {/* Deadline Section with Edit Capability */}
+              <div className="flex items-center gap-2 text-sm">
+                <Calendar className="w-4 h-4 text-muted-foreground" />
+                {isEditingDeadline ? (
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="date"
+                      value={newDeadline}
+                      onChange={(e) => setNewDeadline(e.target.value)}
+                      className="px-2 py-1 border border-gray-300 rounded text-sm"
+                      min={new Date().toISOString().split('T')[0]}
+                    />
+                    <Button
+                      size="sm"
+                      onClick={handleSaveDeadline}
+                      disabled={savingDeadline || !newDeadline}
+                    >
+                      {savingDeadline ? 'Saving...' : 'Save'}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleCancelDeadlineEdit}
+                      disabled={savingDeadline}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <span className="text-gray-700 dark:text-gray-300">
+                      Deadline: {request.deadline ? formatDate(request.deadline) : 'Not set'}
+                    </span>
+                    {user?.role !== 'creative' && (
+                      <button
+                        onClick={() => {
+                          setIsEditingDeadline(true);
+                          setNewDeadline(request.deadline || '');
+                        }}
+                        className="text-blue-600 hover:text-blue-800 text-xs underline"
+                      >
+                        Edit
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
 
               {request.require_email && (
                 <div className="flex items-center gap-2 text-sm">

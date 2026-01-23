@@ -227,6 +227,10 @@ class MediaService {
       console.log('✅ Database record created successfully');
       console.log(`  └─ Media File ID: ${mediaFile.id}`);
       console.log(`  └─ S3 Key: ${uploadResult.s3Key}`);
+      console.log(`  └─ Folder ID: ${targetFolderId || 'NULL (root)'}`);
+      console.log(`  └─ S3 Folder Path: ${folderPath || 'NULL (root)'}`);
+      console.log(`  └─ Is File Request Upload: ${metadata.is_file_request_upload === true}`);
+      console.log(`  └─ Is Deleted (hidden from library): ${metadata.is_file_request_upload === true}`);
       console.log(`  └─ Structure Type: ${(editor?.name && mediaType) ? 'NEW HYBRID' : 'OLD FALLBACK'}`);
 
       logger.info('Media file uploaded successfully', {

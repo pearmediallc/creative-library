@@ -6,6 +6,7 @@ import { LoginPage } from './pages/Login';
 import { RegisterPage } from './pages/Register';
 import { DashboardPage } from './pages/Dashboard';
 import { MediaLibraryPage } from './pages/MediaLibrary';
+import { FileDetailRedirectPage } from './pages/FileDetailRedirectPage';
 import { AnalyticsPage } from './pages/Analytics';
 import { EditorsPage } from './pages/Editors';
 import { AdminPage } from './pages/Admin';
@@ -107,6 +108,15 @@ function AppRoutes() {
         element={
           <PrivateRoute>
             <DashboardPage />
+          </PrivateRoute>
+        }
+      />
+      {/* Deep link route for Slack file sharing - must come before /media */}
+      <Route
+        path="/media/:fileId"
+        element={
+          <PrivateRoute>
+            <FileDetailRedirectPage />
           </PrivateRoute>
         }
       />

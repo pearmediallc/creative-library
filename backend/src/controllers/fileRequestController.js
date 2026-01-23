@@ -1017,6 +1017,11 @@ class FileRequestController {
       // Use editor_id from form submission or fall back to request's editor_id
       const uploadEditorId = editor_id || fileRequest.editor_id || null;
 
+      console.log('📂 FILE REQUEST UPLOAD - Folder Targeting:');
+      console.log('  └─ File Request ID:', fileRequest.id);
+      console.log('  └─ Target folder_id from request:', fileRequest.folder_id);
+      console.log('  └─ Assigned buyer:', fileRequest.assigned_buyer_id);
+
       const mediaFile = await mediaService.uploadMedia(
         req.file,
         fileRequest.creator_id,
@@ -1029,6 +1034,9 @@ class FileRequestController {
           is_file_request_upload: true // Hide from media library by default
         }
       );
+
+      console.log('✅ Upload complete - File ID:', mediaFile.id);
+      console.log('  └─ Folder ID in database:', mediaFile.folder_id);
 
       // Track the upload with comments and editor
       await query(
