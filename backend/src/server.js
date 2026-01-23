@@ -60,8 +60,9 @@ logger.info(`Allowed CORS origins: ${allowedOrigins.join(', ')}`);
 
 app.use(cors({
   origin: (origin, callback) => {
-    // Log the incoming origin for debugging
-    logger.info(`CORS request from origin: ${origin || 'undefined'}`);
+    // REMOVED: Excessive debug logging that clutters output
+    // Only log blocked origins for security monitoring
+    // This was logging every single request causing noise in logs
 
     // Allow requests with no origin (like mobile apps, Postman, or same-origin)
     if (!origin) {
@@ -94,14 +95,10 @@ app.use('/api/', limiter);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Request logging
-app.use((req, res, next) => {
-  logger.info(`${req.method} ${req.path}`, {
-    ip: req.ip,
-    userAgent: req.get('user-agent')
-  });
-  next();
-});
+// REMOVED: Request logging middleware
+// This was logging every single request (GET, POST, etc.) causing excessive log clutter
+// Only important events (errors, security warnings, critical operations) are now logged
+// For detailed debugging, enable via environment variable if needed
 
 // ============================================
 // ROUTES
