@@ -24,6 +24,18 @@ class FileRequestController {
       console.log('User:', req.user);
 
       const userId = req.user.id;
+      const userRole = req.user.role;
+
+      // 🔒 SECURITY: Only admins and buyers can create file requests
+      // Creatives/Editors should NOT be able to create requests
+      if (userRole === 'creative' || userRole === 'editor') {
+        console.log('ERROR: Creative/Editor attempted to create file request');
+        return res.status(403).json({
+          success: false,
+          error: 'Only admins and buyers can create file requests'
+        });
+      }
+
       const {
         title,
         description,
@@ -44,6 +56,7 @@ class FileRequestController {
 
       console.log('Parsed values:', {
         userId,
+        userRole,
         title,
         request_type,
         folder_id,

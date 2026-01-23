@@ -32,6 +32,8 @@ class TeamMessagesController {
       }
 
       // Get messages
+      // FIXED: Return all messages (both parents and replies) by default
+      // If parent_id is specified, only return replies to that specific message
       const sql = `
         SELECT
           tm.*,
@@ -56,7 +58,7 @@ class TeamMessagesController {
         LEFT JOIN users u ON u.id = tm.user_id
         WHERE tm.team_id = $1
           AND tm.is_deleted = FALSE
-          ${parent_id ? 'AND tm.parent_message_id = $4' : 'AND tm.parent_message_id IS NULL'}
+          ${parent_id ? 'AND tm.parent_message_id = $4' : ''}
         ORDER BY tm.created_at ASC
         LIMIT $2 OFFSET $3
       `;

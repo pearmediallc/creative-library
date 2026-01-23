@@ -3,9 +3,15 @@ const logger = require('../utils/logger');
 const { logActivity } = require('../middleware/activityLogger');
 const { v4: uuidv4 } = require('uuid');
 const bulkMetadataService = require('../services/bulkMetadataService');
-const { query } = require('../config/database');
+const { query, pool } = require('../config/database');
 
 class MediaController {
+  constructor() {
+    // Initialize dependencies for tag management methods
+    this.mediaFileModel = require('../models/MediaFile');
+    this.pool = pool;
+  }
+
   /**
    * Upload media file
    * POST /api/media/upload
@@ -370,9 +376,11 @@ class MediaController {
   async downloadFile(req, res, next) {
     try {
       const { id } = req.params;
+      const userId = req.user.id;
+      const userRole = req.user.role;
 
       console.log('📥 Download request for file:', id);
-      console.log('👤 Requested by user:', req.user.id, req.user.email);
+      console.log('👤 Requested by user:', userId, req.user.email);
 
       // Get file metadata
       const file = await mediaService.getMediaFile(id);
@@ -385,7 +393,29 @@ class MediaController {
         });
       }
 
-      console.log('📂 File belongs to user:', file.user_id);
+      console.log('📂 File belongs to user:', file.uploaded_by);
+
+      // 🔒 SECURITY CHECK: Verify user has permission to download
+      const isOwner = file.uploaded_by === userId;
+      const isAdmin = userRole === 'admin' || userRole === 'super_admin';
+      const isBuyer = userRole === 'buyer' || file.assigned_buyer_id === userId;
+
+      // Check if user has explicit download permission
+      const FilePermission = require('../models/FilePermission');
+      const hasDownloadPermission = await FilePermission.checkPermission(
+        'media_file',
+        id,
+        userId,
+        'download'
+      );
+
+      if (!isOwner && !isAdmin && !isBuyer && !hasDownloadPermission) {
+        console.log('🚫 Permission denied for user:', userId);
+        return res.status(403).json({
+          success: false,
+          error: 'You do not have permission to download this file'
+        });
+      }
 
       console.log('✅ File found:', file.original_filename);
       console.log('📍 S3 URL:', file.s3_url);

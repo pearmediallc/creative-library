@@ -458,6 +458,14 @@ class PermissionController {
    */
   async verifyUserOwnership(resourceType, resourceId, userId) {
     try {
+      // Check if user is admin - admins have access to everything
+      const userResult = await query('SELECT role FROM users WHERE id = $1', [userId]);
+      const userRole = userResult.rows[0]?.role;
+
+      if (userRole === 'admin' || userRole === 'super_admin') {
+        return true; // Admins bypass ownership checks
+      }
+
       if (resourceType === 'file') {
         const file = await MediaFile.findById(resourceId);
         return file && file.uploaded_by === userId;

@@ -579,7 +579,8 @@ class MediaFile extends BaseModel {
     const params = [];
 
     if (userId) {
-      query += ` AND mf.uploaded_by = $1`;
+      // FIXED: Media buyers should see files they uploaded OR files assigned to them
+      query += ` AND (mf.uploaded_by = $1 OR mf.assigned_buyer_id = $1)`;
       params.push(userId);
     }
 

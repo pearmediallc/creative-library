@@ -10,7 +10,6 @@ const baseNavigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
   { name: 'Media Library', href: '/media', icon: Image },
   { name: 'File Requests', href: '/file-requests', icon: Inbox },
-  { name: 'Access Requests', href: '/access-requests', icon: Key },
   { name: 'Starred', href: '/starred', icon: Star },
   { name: 'Recents', href: '/recents', icon: Clock },
   { name: 'Shared with me', href: '/shared-with-me', icon: UserCheck },
@@ -18,6 +17,11 @@ const baseNavigation = [
   { name: 'Shared by You', href: '/shared-by-me', icon: Share2 },
   { name: 'Teams', href: '/teams', icon: Users },
   { name: 'Settings', href: '/settings', icon: User },
+];
+
+// Navigation items for admin and buyers only (not for creatives/editors)
+const adminBuyerNavigation = [
+  { name: 'Access Requests', href: '/access-requests', icon: Key },
 ];
 
 // Admin-only navigation items
@@ -49,12 +53,15 @@ export function Sidebar() {
   // Build navigation based on user role
   const navigation = (() => {
     if (user?.role === 'admin') {
-      return [...baseNavigation, ...adminOnlyNavigation];
+      return [...baseNavigation, ...adminBuyerNavigation, ...adminOnlyNavigation];
     } else if (user?.role === 'creative') {
-      // Editors get base navigation + their specific items (Analytics)
+      // Editors get base navigation + their specific items (Analytics) but NOT Access Requests
       return [...baseNavigation, ...editorNavigation];
+    } else if (user?.role === 'buyer') {
+      // Buyers get base navigation + Access Requests
+      return [...baseNavigation, ...adminBuyerNavigation];
     }
-    // Other roles (buyer) get base navigation only
+    // Default: base navigation only
     return baseNavigation;
   })();
 
