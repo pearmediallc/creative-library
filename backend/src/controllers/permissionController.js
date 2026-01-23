@@ -471,7 +471,25 @@ class PermissionController {
         return file && file.uploaded_by === userId;
       } else if (resourceType === 'folder') {
         const folder = await Folder.findById(resourceId);
-        return folder && folder.created_by === userId;
+        if (folder && folder.created_by === userId) {
+          return true; // User created the folder
+        }
+
+        // Check if user has access via file request
+        // Users who created file requests targeting this folder can share it
+        const fileRequestAccess = await query(
+          `SELECT 1 FROM file_requests
+           WHERE folder_id = $1
+             AND (created_by = $2 OR assigned_buyer_id = $2)
+           LIMIT 1`,
+          [resourceId, userId]
+        );
+
+        if (fileRequestAccess.rows.length > 0) {
+          return true; // User has access via file request
+        }
+
+        return false;
       }
       return false;
     } catch (error) {
