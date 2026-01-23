@@ -212,9 +212,9 @@ class MediaService {
         // ✨ NEW: Folder and buyer assignment
         folder_id: targetFolderId || null,
         assigned_buyer_id: metadata.assigned_buyer_id || null,
-        // ✨ CHANGED: File request uploads should be visible in media library
-        // They are already in the correct folder, no need to hide them
-        is_deleted: false,
+        // ✨ File request uploads are hidden from media library by default
+        // Users can click "Add to Library" to make them visible in their target folder
+        is_deleted: metadata.is_file_request_upload === true,
         // ✨ NEW: Metadata tracking fields
         metadata_stripped: metadataOps.removed || false,
         metadata_embedded: metadataOps.added ? {
@@ -226,13 +226,15 @@ class MediaService {
         metadata_operations: metadataOps.operations || []
       });
 
+      const isHidden = metadata.is_file_request_upload === true;
+
       console.log('✅ Database record created successfully');
       console.log(`  └─ Media File ID: ${mediaFile.id}`);
       console.log(`  └─ S3 Key: ${uploadResult.s3Key}`);
       console.log(`  └─ Folder ID: ${targetFolderId || 'NULL (root)'}`);
       console.log(`  └─ S3 Folder Path: ${folderPath || 'NULL (root)'}`);
-      console.log(`  └─ Is File Request Upload: ${metadata.is_file_request_upload === true}`);
-      console.log(`  └─ Is Deleted (visible in library): FALSE`);
+      console.log(`  └─ Is File Request Upload: ${isHidden}`);
+      console.log(`  └─ Hidden from library (is_deleted): ${isHidden}`);
       console.log(`  └─ Structure Type: ${(editor?.name && mediaType) ? 'NEW HYBRID' : 'OLD FALLBACK'}`);
 
       logger.info('Media file uploaded successfully', {
@@ -242,7 +244,7 @@ class MediaService {
         editorName: editor?.name || 'public-upload',
         s3Key: uploadResult.s3Key,
         structureType: 'NEW_HYBRID',
-        isDeleted: false
+        isDeleted: isHidden
       });
 
       console.log('🎉 ========== MEDIA UPLOAD COMPLETE ==========\n');

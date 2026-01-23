@@ -244,9 +244,12 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
 
   const handleAddToLibrary = async (upload: FileUpload) => {
     try {
-      // Add file to media library
+      // Add file to media library (makes it visible in the target folder)
       await mediaApi.addFileRequestUploadToLibrary(upload.file_id);
-      alert(`"${upload.original_filename}" has been added to your Media Library!`);
+      alert(`"${upload.original_filename}" has been added to your Media Library in the target folder!`);
+
+      // Refresh the request details to update the upload list
+      await fetchRequestDetails();
     } catch (error: any) {
       console.error('Failed to add to library:', error);
       alert(error.response?.data?.error || 'Failed to add file to Media Library');
@@ -310,7 +313,7 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
     try {
       const uploadsToAdd = request.uploads.filter(u => selectedUploads.has(u.id));
 
-      // Add each file to library
+      // Add each file to library (makes them visible in their target folders)
       const results = await Promise.allSettled(
         uploadsToAdd.map(upload =>
           mediaApi.addFileRequestUploadToLibrary(upload.file_id)
@@ -321,13 +324,14 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
       const failed = results.filter(r => r.status === 'rejected').length;
 
       if (failed > 0) {
-        alert(`Added ${successful} file(s) to Media Library. ${failed} file(s) failed.`);
+        alert(`Added ${successful} file(s) to Media Library in their target folders. ${failed} file(s) failed.`);
       } else {
-        alert(`Successfully added ${successful} file(s) to your Media Library!`);
+        alert(`Successfully added ${successful} file(s) to your Media Library in their target folders!`);
       }
 
-      // Clear selection after bulk action
+      // Clear selection and refresh to show updated status
       setSelectedUploads(new Set());
+      await fetchRequestDetails();
     } catch (error: any) {
       console.error('Bulk add to library error:', error);
       alert('Failed to add files to Media Library. Please try again.');
