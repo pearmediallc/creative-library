@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { X, Share2, Users, Link as LinkIcon, Copy, Check, Mail, Calendar, Eye, Download, Edit, Trash2, User as UserIcon, Lock, Clock, BarChart, MessageSquare } from 'lucide-react';
 import { Button } from './ui/Button';
-import { permissionApi, teamApi, adminApi, publicLinkApi, slackApi } from '../lib/api';
+import { permissionApi, teamApi, authApi, publicLinkApi, slackApi } from '../lib/api';
 
 interface ShareDialogProps {
   isOpen: boolean;
@@ -108,7 +108,7 @@ export function ShareDialog({
   const fetchUsersAndTeams = useCallback(async () => {
     try {
       const [usersRes, teamsRes] = await Promise.all([
-        adminApi.getUsers(),
+        authApi.getUsers(), // Use authApi instead of adminApi - accessible by all authenticated users
         teamApi.getAll()
       ]);
       setAllUsers((usersRes.data.data || []).map((u: any) => ({

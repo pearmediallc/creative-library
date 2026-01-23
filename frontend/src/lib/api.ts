@@ -42,6 +42,7 @@ export const authApi = {
     api.post('/auth/login', data),
   me: () => api.get('/auth/me'),
   getBuyers: () => api.get('/auth/buyers'),
+  getUsers: () => api.get('/auth/users'), // For sharing - accessible by all authenticated users
 };
 
 // Editor endpoints
