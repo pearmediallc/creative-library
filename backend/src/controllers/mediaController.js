@@ -300,7 +300,10 @@ class MediaController {
    */
   async getStats(req, res, next) {
     try {
-      const stats = await mediaService.getStorageStats();
+      const userId = req.user.id;
+      const userRole = req.user.role;
+
+      const stats = await mediaService.getStorageStats(userId, userRole);
 
       res.json({
         success: true,

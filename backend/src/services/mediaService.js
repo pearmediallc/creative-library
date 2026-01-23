@@ -212,8 +212,9 @@ class MediaService {
         // ✨ NEW: Folder and buyer assignment
         folder_id: targetFolderId || null,
         assigned_buyer_id: metadata.assigned_buyer_id || null,
-        // ✨ NEW: File request uploads - hide from media library by default
-        is_deleted: metadata.is_file_request_upload === true,
+        // ✨ CHANGED: File request uploads should be visible in media library
+        // They are already in the correct folder, no need to hide them
+        is_deleted: false,
         // ✨ NEW: Metadata tracking fields
         metadata_stripped: metadataOps.removed || false,
         metadata_embedded: metadataOps.added ? {
@@ -466,11 +467,13 @@ class MediaService {
 
   /**
    * Get storage statistics
+   * @param {string} userId - User ID
+   * @param {string} userRole - User role (admin, buyer, creative, etc.)
    * @returns {Promise<Object>} Storage stats
    */
-  async getStorageStats() {
+  async getStorageStats(userId, userRole) {
     try {
-      return await MediaFile.getStorageStats();
+      return await MediaFile.getStorageStats(userId, userRole);
     } catch (error) {
       logger.error('Get storage stats failed', { error: error.message });
       throw new Error('Failed to retrieve storage statistics');

@@ -441,10 +441,32 @@ class MediaFile extends BaseModel {
 
   /**
    * Get storage statistics
+   * @param {string} userId - User ID
+   * @param {string} userRole - User role (admin, buyer, creative, etc.)
    * @returns {Promise<Object>} Storage stats
    */
-  async getStorageStats() {
+  async getStorageStats(userId, userRole) {
     console.log('\n📊 ========== DASHBOARD STORAGE STATS SYNC ==========');
+    console.log(`   User ID: ${userId}`);
+    console.log(`   User Role: ${userRole}`);
+
+    // Build WHERE clause based on role
+    let whereClause = 'WHERE is_deleted = FALSE';
+    const params = [];
+
+    if (userRole !== 'admin') {
+      // Non-admin users only see:
+      // 1. Files they uploaded
+      // 2. Files assigned to them (if buyer)
+      // 3. Files shared with them (via file_permissions)
+      whereClause += ` AND (uploaded_by = $1 OR assigned_buyer_id = $1 OR id IN (
+        SELECT resource_id FROM file_permissions
+        WHERE grantee_type = 'user'
+        AND grantee_id = $1
+        AND resource_type = 'file'
+      ))`;
+      params.push(userId);
+    }
 
     const sql = `
       SELECT
@@ -454,15 +476,15 @@ class MediaFile extends BaseModel {
         SUM(CASE WHEN file_type = 'video' THEN 1 ELSE 0 END) as video_count,
         SUM(CASE WHEN file_type NOT IN ('image', 'video') THEN 1 ELSE 0 END) as other_count
       FROM ${this.tableName}
-      WHERE is_deleted = FALSE
+      ${whereClause}
     `;
 
     console.log('📋 Executing query to get storage stats from database...');
     console.log(`   Table: ${this.tableName}`);
-    console.log(`   Filter: is_deleted = FALSE`);
+    console.log(`   Filter: ${whereClause}`);
     console.log(`   Full SQL: ${sql}`);
 
-    const result = await this.raw(sql);
+    const result = await this.raw(sql, params);
 
     console.log('📦 Raw database result:', JSON.stringify(result, null, 2));
     console.log('📦 Result type:', typeof result);
