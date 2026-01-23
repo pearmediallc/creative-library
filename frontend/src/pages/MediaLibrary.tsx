@@ -196,14 +196,26 @@ export function MediaLibraryPage() {
   const canUpload = user?.role === 'admin' || user?.role === 'creative';
   const canDelete = user?.role === 'admin';
 
-  // Handle URL parameters on mount (for direct folder links from Slack, etc.)
+  // Handle URL parameters on mount (for direct folder/file links from Slack, etc.)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const folderIdFromUrl = params.get('folderId');
+    const fileIdFromUrl = params.get('fileId');
 
     if (folderIdFromUrl) {
       setCurrentFolderId(folderIdFromUrl);
-      // Clean up URL after processing
+    }
+
+    // If fileId is provided, we'll open it after files load
+    // Store it in a variable to be checked in the files effect
+    if (fileIdFromUrl) {
+      console.log('File ID from URL parameter:', fileIdFromUrl);
+      // Will be handled after files are loaded
+      (window as any).__pendingFileId = fileIdFromUrl;
+    }
+
+    // Clean up URL after processing
+    if (folderIdFromUrl || fileIdFromUrl) {
       window.history.replaceState({}, '', window.location.pathname);
     }
   }, []);
@@ -242,6 +254,23 @@ export function MediaLibraryPage() {
     fetchData();
     setCurrentPage(1);
   }, [filters.filters, currentFolderId]);
+
+  // Handle opening file from URL parameter after files are loaded
+  useEffect(() => {
+    const pendingFileId = (window as any).__pendingFileId;
+    if (pendingFileId && files.length > 0 && !lightbox.isOpen) {
+      const fileIndex = files.findIndex((f: MediaFile) => f.id === pendingFileId);
+      if (fileIndex !== -1) {
+        console.log('Opening file from URL:', pendingFileId, 'at index:', fileIndex);
+        setLightbox({
+          isOpen: true,
+          initialIndex: fileIndex
+        });
+        // Clear the pending file ID
+        delete (window as any).__pendingFileId;
+      }
+    }
+  }, [files, lightbox.isOpen]);
 
   const fetchData = async () => {
     try {
