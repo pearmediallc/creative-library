@@ -675,7 +675,7 @@ export function FileRequestsPage() {
                   ? 'Create a file request to start collecting files from external parties'
                   : 'Try adjusting your filters to see more results'}
               </p>
-              {requests.length === 0 && (
+              {requests.length === 0 && (user?.role === 'buyer' || user?.role === 'admin') && (
                 <Button onClick={() => setShowCreateModal(true)}>
                   <Plus className="w-4 h-4 mr-2" />
                   Create Your First Request

@@ -55,6 +55,7 @@ class MediaFile extends BaseModel {
       assigned_buyer_id: data.assigned_buyer_id || null,
       parent_file_id: data.parent_file_id || null,
       version_number: data.version_number || 1,
+      is_deleted: data.is_deleted !== undefined ? data.is_deleted : false,
       metadata_stripped: data.metadata_stripped || false,
       metadata_embedded: data.metadata_embedded || null,
       metadata_operations: data.metadata_operations || []

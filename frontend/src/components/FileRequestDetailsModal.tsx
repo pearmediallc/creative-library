@@ -519,17 +519,11 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
                 <div className="col-span-2">
                   <span className="text-blue-700 dark:text-blue-300 font-medium">Assigned To:</span>
                   <div className="flex flex-wrap gap-2 mt-1">
-                    {request.assigned_editors.map((editor, index) => (
+                    {request.assigned_editors.map((editor) => (
                       <div key={editor.id} className="inline-flex items-center gap-1 bg-blue-100 dark:bg-blue-800 px-2 py-1 rounded">
                         <span className="text-sm text-blue-900 dark:text-blue-100">
                           {editor.display_name || editor.name}
                         </span>
-                        {index === 0 && request.assigned_editors && request.assigned_editors.length > 1 && (
-                          <span className="text-xs text-blue-600 dark:text-blue-400">(Initial)</span>
-                        )}
-                        {index > 0 && (
-                          <span className="text-xs text-orange-600 dark:text-orange-400">(Reassigned)</span>
-                        )}
                       </div>
                     ))}
                   </div>
@@ -612,18 +606,12 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
                   Assigned Creatives ({request.num_creatives_requested || request.assigned_editors.length})
                 </h3>
                 <div className="space-y-2">
-                  {request.assigned_editors.map((editor, index) => (
+                  {request.assigned_editors.map((editor) => (
                     <div key={editor.id} className="flex items-center justify-between text-sm bg-white dark:bg-gray-800 rounded p-2 border border-gray-200 dark:border-gray-700">
                       <div>
                         <span className="font-medium text-gray-900 dark:text-white">
                           {editor.display_name || editor.name}
                         </span>
-                        {index === 0 && request.assigned_editors && request.assigned_editors.length > 1 && (
-                          <span className="ml-2 text-xs text-blue-600 dark:text-blue-400">(Initial)</span>
-                        )}
-                        {index > 0 && (
-                          <span className="ml-2 text-xs text-orange-600 dark:text-orange-400">(Reassigned)</span>
-                        )}
                       </div>
                       <div className="text-xs text-gray-500 dark:text-gray-400">
                         {formatDate(editor.assigned_at)}
