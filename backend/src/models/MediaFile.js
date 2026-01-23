@@ -160,9 +160,14 @@ class MediaFile extends BaseModel {
     }
 
     // ✨ FIXED: Support multiple folder IDs (comma-separated from frontend)
+    // Special handling for 'null' value to query root-level files
     if (filters.folder_id) {
       const folderIds = filters.folder_id.split(',').filter(id => id.trim());
-      if (folderIds.length === 1) {
+
+      // Special case: 'null' means only show files at root level (folder_id IS NULL)
+      if (folderIds.length === 1 && folderIds[0] === 'null') {
+        conditions.push(`mf.folder_id IS NULL`);
+      } else if (folderIds.length === 1) {
         conditions.push(`mf.folder_id = $${paramIndex++}`);
         params.push(folderIds[0]);
       } else if (folderIds.length > 1) {
@@ -311,9 +316,14 @@ class MediaFile extends BaseModel {
     }
 
     // Support multiple folder IDs (comma-separated from frontend)
+    // Special handling for 'null' value to query root-level files
     if (filters.folder_id) {
       const folderIds = filters.folder_id.split(',').filter(id => id.trim());
-      if (folderIds.length === 1) {
+
+      // Special case: 'null' means only show files at root level (folder_id IS NULL)
+      if (folderIds.length === 1 && folderIds[0] === 'null') {
+        conditions.push(`mf.folder_id IS NULL`);
+      } else if (folderIds.length === 1) {
         conditions.push(`mf.folder_id = $${paramIndex++}`);
         params.push(folderIds[0]);
       } else if (folderIds.length > 1) {

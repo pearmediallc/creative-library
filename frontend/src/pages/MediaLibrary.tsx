@@ -293,6 +293,12 @@ export function MediaLibraryPage() {
         // Fetch root level with advanced filters
         const queryParams = filters.toQueryParams();
 
+        // FIXED: When viewing root without folder filters, explicitly request root-level files only
+        // This prevents files in subfolders from appearing at root level
+        if (!queryParams.folder_id) {
+          queryParams.folder_id = 'null';  // Special value to indicate "only root files"
+        }
+
         const [filesRes, editorsRes] = await Promise.all([
           mediaApi.getAll(queryParams),
           editorApi.getAll(),
