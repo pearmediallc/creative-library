@@ -1201,6 +1201,7 @@ class FileRequestController {
           description: comments || `Uploaded via file request: ${fileRequest.title}`,
           folder_id: fileRequest.folder_id,
           assigned_buyer_id: fileRequest.assigned_buyer_id || null,
+          request_creator_id: fileRequest.creator_id, // ✨ Pass request creator for permissions
           request_id: fileRequest.id,  // ✨ Pass request ID for proper S3 structure
           is_file_request_upload: true // Hide from media library by default
         }
