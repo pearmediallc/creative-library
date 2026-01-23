@@ -309,6 +309,13 @@ class Folder extends BaseModel {
                 AND tm.user_id = $2
                 AND (fp.expires_at IS NULL OR fp.expires_at > NOW())
             )
+            -- Buyer has access via file request folder
+            OR EXISTS (
+              SELECT 1 FROM file_requests fr
+              WHERE fr.folder_id = mf.folder_id
+                AND fr.created_by = $2
+                AND mf.folder_id IS NOT NULL
+            )
           )
       `;
 
