@@ -232,26 +232,36 @@ async function getConnectedUsers(req, res) {
   try {
     console.log('📋 Fetching all Slack-connected users...');
 
+    // Get ALL users who have Slack connections (active or not)
+    // This ensures we show everyone who has connected their Slack account
     const result = await pool.query(
-      `SELECT
+      `SELECT DISTINCT ON (u.id)
         u.id,
         u.name,
         u.email,
         u.role,
         usc.slack_username,
         usc.slack_email,
+        usc.slack_user_id,
+        usc.is_active,
         usc.created_at as connected_at
-       FROM user_slack_connections usc
-       JOIN users u ON usc.user_id = u.id
-       WHERE usc.is_active = TRUE
-       ORDER BY u.name ASC`
+       FROM users u
+       JOIN user_slack_connections usc ON usc.user_id = u.id
+       WHERE usc.slack_user_id IS NOT NULL
+       ORDER BY u.id, usc.is_active DESC, usc.created_at DESC`
     );
 
     console.log(`📋 Found ${result.rows.length} Slack-connected users`);
+    console.log(`📋 Users:`, result.rows.map(r => ({ name: r.name, slackUsername: r.slack_username, isActive: r.is_active })));
+
+    // Filter to only return active connections for actual notifications
+    const activeUsers = result.rows.filter(row => row.is_active !== false);
+
+    console.log(`📋 ${activeUsers.length} users have active Slack connections`);
 
     res.json({
       success: true,
-      data: result.rows.map(row => ({
+      data: activeUsers.map(row => ({
         id: row.id,
         name: row.name,
         email: row.email,

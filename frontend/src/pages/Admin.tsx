@@ -10,6 +10,7 @@ import { SlackSettingsPanel } from '../components/SlackSettingsPanel';
 
 export function AdminPage() {
   const [users, setUsers] = useState<User[]>([]);
+  const [pendingUsers, setPendingUsers] = useState<User[]>([]);
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -29,17 +30,23 @@ export function AdminPage() {
   const [newPassword, setNewPassword] = useState('');
   const [generatedPassword, setGeneratedPassword] = useState<string | null>(null);
 
+  // Rejection reason state
+  const [rejectingUserId, setRejectingUserId] = useState<string | null>(null);
+  const [rejectionReason, setRejectionReason] = useState('');
+
   useEffect(() => {
     fetchData();
   }, []);
 
   const fetchData = async () => {
     try {
-      const [usersRes, statsRes] = await Promise.all([
+      const [usersRes, pendingRes, statsRes] = await Promise.all([
         adminApi.getUsers(),
+        adminApi.getPendingUsers(),
         adminApi.getStats(),
       ]);
       setUsers(usersRes.data.data || []);
+      setPendingUsers(pendingRes.data.data || []);
       setStats(statsRes.data.data || null);
     } catch (err) {
       console.error('Failed to fetch admin data:', err);
@@ -131,6 +138,32 @@ export function AdminPage() {
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
     alert('Password copied to clipboard!');
+  };
+
+  const handleApproveUser = async (userId: string) => {
+    if (!window.confirm('Approve this user registration?')) return;
+
+    try {
+      await adminApi.approveUser(userId);
+      alert('User approved successfully!');
+      fetchData();
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to approve user');
+      alert(err.response?.data?.error || 'Failed to approve user');
+    }
+  };
+
+  const handleRejectUser = async (userId: string) => {
+    try {
+      await adminApi.rejectUser(userId, { reason: rejectionReason });
+      alert('User registration rejected');
+      setRejectingUserId(null);
+      setRejectionReason('');
+      fetchData();
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to reject user');
+      alert(err.response?.data?.error || 'Failed to reject user');
+    }
   };
 
   if (loading) {
@@ -252,6 +285,67 @@ export function AdminPage() {
                     Cancel
                   </Button>
                 </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Pending Signups */}
+        {pendingUsers.length > 0 && (
+          <Card className="border-orange-200 bg-orange-50 dark:bg-orange-950 dark:border-orange-800">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <span className="flex items-center justify-center w-6 h-6 rounded-full bg-orange-500 text-white text-sm font-bold">
+                  {pendingUsers.length}
+                </span>
+                Pending Signups
+              </CardTitle>
+              <CardDescription>Review and approve new user registrations</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {pendingUsers.map((user) => (
+                  <div key={user.id} className="flex items-center justify-between p-4 bg-white dark:bg-gray-900 border border-orange-200 dark:border-orange-800 rounded-lg">
+                    <div className="flex items-center gap-4 flex-1">
+                      <div className="h-10 w-10 rounded-full bg-orange-100 dark:bg-orange-900 flex items-center justify-center">
+                        <Shield size={20} className="text-orange-600" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-medium">{user.name}</p>
+                        <p className="text-sm text-muted-foreground">{user.email}</p>
+                      </div>
+                      <div className="flex gap-4 text-sm">
+                        <div>
+                          <span className="text-muted-foreground">Role:</span>{' '}
+                          <span className="font-medium capitalize">{user.role}</span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Status:</span>{' '}
+                          <span className="text-orange-600 font-medium">Pending Approval</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        onClick={() => handleApproveUser(user.id)}
+                        className="bg-green-600 hover:bg-green-700"
+                      >
+                        <Check size={16} className="mr-1" />
+                        Approve
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setRejectingUserId(user.id)}
+                        className="text-red-600 border-red-300 hover:bg-red-50"
+                      >
+                        <X size={16} className="mr-1" />
+                        Reject
+                      </Button>
+                    </div>
+                  </div>
+                ))}
               </div>
             </CardContent>
           </Card>
@@ -450,6 +544,59 @@ export function AdminPage() {
                     </Button>
                   </div>
                 )}
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* Rejection Reason Modal */}
+        {rejectingUserId && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+            <Card className="w-full max-w-md bg-white dark:bg-gray-900">
+              <CardHeader>
+                <CardTitle>Reject User Registration</CardTitle>
+                <CardDescription>
+                  Provide a reason for rejection (optional)
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Reason for rejection</label>
+                    <textarea
+                      value={rejectionReason}
+                      onChange={(e) => setRejectionReason(e.target.value)}
+                      placeholder="e.g., Email domain not approved, Invalid role selection, etc."
+                      className="w-full h-24 px-3 py-2 rounded-md border border-input bg-background text-sm resize-none"
+                    />
+                  </div>
+
+                  {error && (
+                    <div className="p-3 rounded-md bg-destructive/10 text-destructive text-sm">
+                      {error}
+                    </div>
+                  )}
+
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={() => handleRejectUser(rejectingUserId)}
+                      className="flex-1 bg-red-600 hover:bg-red-700"
+                    >
+                      Confirm Rejection
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setRejectingUserId(null);
+                        setRejectionReason('');
+                        setError('');
+                      }}
+                      className="flex-1"
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
               </CardContent>
             </Card>
           </div>

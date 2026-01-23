@@ -41,9 +41,10 @@ class SavedSearchController {
       try {
         savedSearch.filters = JSON.parse(savedSearch.filters);
       } catch (parseError) {
-        logger.error('Invalid JSON in saved search filters', {
-          searchId: savedSearch.id,
-          error: parseError.message
+        // CHANGED: Downgraded from error to debug to reduce log noise
+        // This handles legacy corrupted data gracefully without flooding logs
+        logger.debug('Invalid JSON in saved search filters (using empty object)', {
+          searchId: savedSearch.id
         });
         savedSearch.filters = {}; // Default to empty filters if JSON is invalid
       }
@@ -100,9 +101,8 @@ class SavedSearchController {
         try {
           filters = JSON.parse(row.filters);
         } catch (parseError) {
-          logger.error('Invalid JSON in saved search filters', {
-            searchId: row.id,
-            error: parseError.message
+          logger.debug('Invalid JSON in saved search filters (using empty object)', {
+            searchId: row.id
           });
         }
         return {
@@ -148,9 +148,8 @@ class SavedSearchController {
       try {
         savedSearch.filters = JSON.parse(savedSearch.filters);
       } catch (parseError) {
-        logger.error('Invalid JSON in saved search filters', {
-          searchId: savedSearch.id,
-          error: parseError.message
+        logger.debug('Invalid JSON in saved search filters (using empty object)', {
+          searchId: savedSearch.id
         });
         savedSearch.filters = {};
       }
@@ -197,9 +196,8 @@ class SavedSearchController {
       try {
         filters = JSON.parse(savedSearch.filters);
       } catch (parseError) {
-        logger.error('Invalid JSON in saved search filters', {
-          searchId: savedSearch.id,
-          error: parseError.message
+        logger.debug('Invalid JSON in saved search filters (using empty object)', {
+          searchId: savedSearch.id
         });
         return res.status(400).json({
           success: false,
@@ -307,9 +305,8 @@ class SavedSearchController {
       try {
         savedSearch.filters = JSON.parse(savedSearch.filters);
       } catch (parseError) {
-        logger.error('Invalid JSON in saved search filters', {
-          searchId: savedSearch.id,
-          error: parseError.message
+        logger.debug('Invalid JSON in saved search filters (using empty object)', {
+          searchId: savedSearch.id
         });
         savedSearch.filters = {};
       }
@@ -416,9 +413,8 @@ class SavedSearchController {
       try {
         savedSearch.filters = JSON.parse(savedSearch.filters);
       } catch (parseError) {
-        logger.error('Invalid JSON in saved search filters', {
-          searchId: savedSearch.id,
-          error: parseError.message
+        logger.debug('Invalid JSON in saved search filters (using empty object)', {
+          searchId: savedSearch.id
         });
         savedSearch.filters = {};
       }

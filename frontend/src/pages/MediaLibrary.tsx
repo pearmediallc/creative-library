@@ -526,13 +526,15 @@ export function MediaLibraryPage() {
 
   const handleDownload = async (file: MediaFile) => {
     try {
-      const url = file.s3_url || file.download_url;
-      if (!url) return;
+      // Use backend download endpoint which sets proper Content-Disposition: attachment headers
+      // This ensures files are downloaded instead of opening in browser
+      const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
+      const downloadUrl = `${API_BASE}/media/${file.id}/download`;
 
       const link = document.createElement('a');
-      link.href = url;
+      link.href = downloadUrl;
       link.download = file.original_filename;
-      link.target = '_blank';
+      // DO NOT set target='_blank' as it opens in new tab instead of downloading
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);

@@ -66,18 +66,19 @@ export function MediaLightbox({
     }
   }, [canGoNext]);
 
-  const handleDownload = async () => {
+  const handleDownload = () => {
     try {
-      const response = await fetch(currentFile.s3_url);
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = currentFile.original_filename;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
+      // Use backend download endpoint which sets proper Content-Disposition: attachment headers
+      // This ensures files are downloaded instead of opening in browser
+      const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
+      const downloadUrl = `${API_BASE}/media/${currentFile.id}/download`;
+
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = currentFile.original_filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
     } catch (error) {
       console.error('Failed to download file:', error);
     }

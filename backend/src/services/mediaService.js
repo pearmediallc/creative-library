@@ -30,11 +30,12 @@ class MediaService {
       console.log(`  └─ Organize by Date: ${metadata.organize_by_date ? 'Yes' : 'No'}`);
       console.log(`  └─ Assigned Buyer: ${metadata.assigned_buyer_id || 'None'}`);
 
-      // Check user upload limit
-      const hasReachedLimit = await User.hasReachedUploadLimit(userId);
-      if (hasReachedLimit) {
-        throw new Error('Monthly upload limit reached');
-      }
+      // REMOVED: Upload limit check disabled per user request
+      // Users should have unlimited uploads for their workflow
+      // const hasReachedLimit = await User.hasReachedUploadLimit(userId);
+      // if (hasReachedLimit) {
+      //   throw new Error('Monthly upload limit reached');
+      // }
 
       // Validate file type
       if (!s3Service.isValidFileType(file.mimetype)) {

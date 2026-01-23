@@ -72,17 +72,18 @@ async function validateEmailWhitelist(req, res, next) {
     const whitelisted = await checkEmailWhitelist(email);
 
     if (!whitelisted) {
-      logger.warn('Registration blocked - email not in whitelist', {
+      logger.warn('Registration proceeding without whitelist match - will require admin approval', {
         email: email.split('@')[0] + '@***',  // Partial email for privacy
         domain: email.split('@')[1],
         ip: req.ip,
         userAgent: req.headers['user-agent']
       });
 
-      return res.status(403).json({
-        success: false,
-        error: 'Please use your official email address to register'
-      });
+      // CHANGED: Instead of blocking, allow registration to proceed
+      // The approval workflow will handle verification
+      // This ensures users can sign up and wait for admin approval
+      req.emailWhitelist = null;
+      return next();
     }
 
     // Attach whitelist info to request for later use
@@ -95,11 +96,15 @@ async function validateEmailWhitelist(req, res, next) {
 
     next();
   } catch (error) {
-    logger.error('Email validation error', { error: error.message });
-    return res.status(500).json({
-      success: false,
-      error: 'Failed to validate email'
+    logger.error('Email validation error - allowing registration to proceed', {
+      error: error.message,
+      email: email.split('@')[0] + '@***'
     });
+
+    // CHANGED: On error, allow registration to proceed with approval workflow
+    // instead of blocking with "Failed to validate email"
+    req.emailWhitelist = null;
+    next();
   }
 }
 
