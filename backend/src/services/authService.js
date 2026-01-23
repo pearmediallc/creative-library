@@ -52,7 +52,13 @@ class AuthService {
 
     return {
       message: 'Registration submitted successfully. Your account is pending admin approval.',
-      requiresApproval: true
+      requiresApproval: true,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role
+      }
     };
   }
 

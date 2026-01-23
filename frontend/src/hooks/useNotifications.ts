@@ -74,17 +74,19 @@ export function useNotifications(options: UseNotificationsOptions = {}) {
         //   notificationSound.playNotificationSound(soundType);
         // }
 
-        // Show browser notification
-        if (enableBrowserNotifications && 'Notification' in window && Notification.permission === 'granted') {
-          const latestNotification = (data.notifications || [])[0];
-          if (latestNotification && !latestNotification.is_read) {
-            new Notification(latestNotification.title, {
-              body: latestNotification.message,
-              icon: '/logo192.png',
-              tag: latestNotification.id
-            });
-          }
-        }
+        // REMOVED: Browser notifications disabled per user request
+        // Notifications were popping up and interrupting workflow
+        // Users can still see notifications in the notification bell/panel
+        // if (enableBrowserNotifications && 'Notification' in window && Notification.permission === 'granted') {
+        //   const latestNotification = (data.notifications || [])[0];
+        //   if (latestNotification && !latestNotification.is_read) {
+        //     new Notification(latestNotification.title, {
+        //       body: latestNotification.message,
+        //       icon: '/logo192.png',
+        //       tag: latestNotification.id
+        //     });
+        //   }
+        // }
       }
 
       setUnreadCount(newUnreadCount);
