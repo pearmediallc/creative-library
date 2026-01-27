@@ -73,10 +73,24 @@ function splitSQLStatements(sql) {
 
 async function runMigration(migrationNumber) {
   try {
-    const migrationFile = path.join(__dirname, 'migrations', `${migrationNumber}_file_request_enhancements.sql`);
+    // Try different file name patterns
+    let migrationFile = path.join(__dirname, 'migrations', `${migrationNumber}_file_request_enhancements.sql`);
 
     if (!fs.existsSync(migrationFile)) {
-      console.error(`❌ Migration file not found: ${migrationFile}`);
+      migrationFile = path.join(__dirname, 'migrations', `${migrationNumber}_vertical_based_assignment.sql`);
+    }
+
+    if (!fs.existsSync(migrationFile)) {
+      // Try just the number pattern
+      const migrationFiles = fs.readdirSync(path.join(__dirname, 'migrations'));
+      const matchingFile = migrationFiles.find(file => file.startsWith(migrationNumber + '_'));
+      if (matchingFile) {
+        migrationFile = path.join(__dirname, 'migrations', matchingFile);
+      }
+    }
+
+    if (!fs.existsSync(migrationFile)) {
+      console.error(`❌ Migration file not found for migration number: ${migrationNumber}`);
       process.exit(1);
     }
 

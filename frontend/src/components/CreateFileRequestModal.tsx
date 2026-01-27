@@ -42,9 +42,19 @@ interface Template {
   name: string;
   description: string | null;
   default_title: string | null;
+  default_request_type: string | null;
   default_instructions: string | null;
   default_priority: 'low' | 'normal' | 'high' | 'urgent' | null;
   default_due_days: number | null;
+  default_platform: string | null;
+  default_vertical: string | null;
+  default_num_creatives: number | null;
+  default_folder_id: string | null;
+  default_allow_multiple_uploads: boolean | null;
+  default_require_email: boolean | null;
+  default_custom_message: string | null;
+  default_assigned_editor_ids: string[] | null;
+  default_assigned_buyer_id: string | null;
   is_active?: boolean;
 }
 
@@ -53,7 +63,7 @@ export function CreateFileRequestModal({ onClose, onSuccess, teamId }: CreateFil
   const [platform, setPlatform] = useState('');
   const [vertical, setVertical] = useState('');
   const [conceptNotes, setConceptNotes] = useState('');
-  const [numCreatives, setNumCreatives] = useState<number>(1);
+  const [numCreatives, setNumCreatives] = useState<string>(''); // Changed to string for empty placeholder
   const [folderId, setFolderId] = useState<string>('');
   const [deadline, setDeadline] = useState('');
   const [allowMultipleUploads, setAllowMultipleUploads] = useState(true);
@@ -149,17 +159,53 @@ export function CreateFileRequestModal({ onClose, onSuccess, teamId }: CreateFil
   const handleTemplateSelect = async (templateId: string) => {
     setSelectedTemplateId(templateId);
 
-    if (!templateId) return;
+    if (!templateId) {
+      // Clear form when "No team template" is selected
+      setRequestType('');
+      setConceptNotes('');
+      setPlatform('');
+      setVertical('');
+      setNumCreatives('');
+      setDeadline('');
+      return;
+    }
 
     const template = templates.find(t => t.id === templateId);
     if (!template) return;
 
-    // Auto-fill form fields from template
-    if (template.default_title) {
-      setRequestType(template.default_title);
+    // Auto-fill ALL form fields from template
+    if (template.default_title || template.default_request_type) {
+      setRequestType(template.default_title || template.default_request_type || '');
     }
     if (template.default_instructions) {
       setConceptNotes(template.default_instructions);
+    }
+    if (template.default_platform) {
+      setPlatform(template.default_platform);
+    }
+    if (template.default_vertical) {
+      setVertical(template.default_vertical);
+    }
+    if (template.default_num_creatives) {
+      setNumCreatives(template.default_num_creatives.toString());
+    }
+    if (template.default_folder_id) {
+      setFolderId(template.default_folder_id);
+    }
+    if (template.default_allow_multiple_uploads !== undefined) {
+      setAllowMultipleUploads(template.default_allow_multiple_uploads);
+    }
+    if (template.default_require_email !== undefined) {
+      setRequireEmail(template.default_require_email);
+    }
+    if (template.default_custom_message) {
+      setCustomMessage(template.default_custom_message);
+    }
+    if (template.default_assigned_editor_ids && template.default_assigned_editor_ids.length > 0) {
+      setSelectedEditorIds(template.default_assigned_editor_ids);
+    }
+    if (template.default_assigned_buyer_id) {
+      setAssignedBuyerId(template.default_assigned_buyer_id);
     }
     if (template.default_due_days) {
       // Calculate deadline from default_due_days
@@ -234,8 +280,8 @@ export function CreateFileRequestModal({ onClose, onSuccess, teamId }: CreateFil
       return;
     }
 
-    if (numCreatives < 1) {
-      setError('Number of Creatives must be at least 1');
+    if (!numCreatives || parseInt(numCreatives) < 1) {
+      setError('Number of Creatives is required and must be at least 1');
       return;
     }
 
@@ -265,7 +311,7 @@ export function CreateFileRequestModal({ onClose, onSuccess, teamId }: CreateFil
         platform: platform,
         vertical: vertical,
         concept_notes: conceptNotes.trim() || undefined,
-        num_creatives: numCreatives,
+        num_creatives: parseInt(numCreatives) || 1,
       });
 
       // Store request ID for canvas
@@ -484,7 +530,8 @@ export function CreateFileRequestModal({ onClose, onSuccess, teamId }: CreateFil
             <Input
               type="number"
               value={numCreatives}
-              onChange={(e) => setNumCreatives(parseInt(e.target.value) || 1)}
+              onChange={(e) => setNumCreatives(e.target.value)}
+              placeholder="Enter number (e.g., 5)"
               min={1}
               disabled={creating}
             />
@@ -580,32 +627,46 @@ export function CreateFileRequestModal({ onClose, onSuccess, teamId }: CreateFil
               disabled={creating}
             />
             <p className="text-xs text-muted-foreground mt-1">
-              Search and select multiple editors easily
+              {vertical ? 'Auto-assigned to vertical head. You can select additional editors here.' : 'Search and select multiple editors easily'}
             </p>
           </div>
 
-          {/* Buyer Assignment */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Assign to Buyer (optional)
-            </label>
-            <select
-              value={assignedBuyerId}
-              onChange={(e) => setAssignedBuyerId(e.target.value)}
-              disabled={creating}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-            >
-              <option value="">No buyer assignment</option>
-              {buyers.map((buyer) => (
-                <option key={buyer.id} value={buyer.id}>
-                  {buyer.name} ({buyer.email})
-                </option>
-              ))}
-            </select>
-            <p className="text-xs text-muted-foreground mt-1">
-              Uploaded files will be automatically assigned to this buyer
-            </p>
-          </div>
+          {/* Vertical Auto-Assignment Notice */}
+          {vertical && (
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+              <p className="text-sm text-blue-900 dark:text-blue-200 font-medium">
+                📌 Vertical-Based Assignment Active
+              </p>
+              <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
+                This request will be automatically assigned to the {vertical} vertical head. Buyer assignment is hidden when vertical is selected.
+              </p>
+            </div>
+          )}
+
+          {/* Buyer Assignment - Hidden when vertical is selected */}
+          {!vertical && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Assign to Buyer (optional)
+              </label>
+              <select
+                value={assignedBuyerId}
+                onChange={(e) => setAssignedBuyerId(e.target.value)}
+                disabled={creating}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+              >
+                <option value="">No buyer assignment</option>
+                {buyers.map((buyer) => (
+                  <option key={buyer.id} value={buyer.id}>
+                    {buyer.name} ({buyer.email})
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-muted-foreground mt-1">
+                Uploaded files will be automatically assigned to this buyer
+              </p>
+            </div>
+          )}
 
           {/* Deadline */}
           <div>

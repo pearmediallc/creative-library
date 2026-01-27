@@ -135,6 +135,18 @@ router.get('/:id/upload-history',
   fileRequestController.getUploadHistory.bind(fileRequestController)
 );
 
+// Reassign request to another editor
+router.post('/:id/reassign',
+  authenticateToken,
+  fileRequestController.reassignRequest.bind(fileRequestController)
+);
+
+// Get reassignment history
+router.get('/:id/reassignments',
+  authenticateToken,
+  fileRequestController.getReassignments.bind(fileRequestController)
+);
+
 // ============================================
 // CANVAS ROUTES (Product Brief Feature)
 // ============================================

@@ -613,9 +613,12 @@ export const fileRequestApi = {
   complete: (id: string, data?: { delivery_note?: string }) =>
     api.post(`/file-requests/${id}/complete`, data),
 
-  // Reassign file request (admin only)
-  reassign: (id: string, data: { new_editor_ids: string[]; reason?: string }) =>
+  // Reassign file request to another editor
+  reassign: (id: string, data: { reassign_to: string; note?: string }) =>
     api.post(`/file-requests/${id}/reassign`, data),
+
+  // Get reassignment history
+  getReassignments: (id: string) => api.get(`/file-requests/${id}/reassignments`),
 
   // Get upload history for file request
   getUploadHistory: (id: string) => api.get(`/file-requests/${id}/upload-history`),

@@ -201,6 +201,60 @@ class FileRequestController {
         }
       }
 
+      // 🆕 AUTO-ASSIGNMENT LOGIC: If vertical is provided, auto-assign to vertical head
+      let autoAssignedHead = null;
+      let autoAssignedEditors = [];
+
+      if (vertical && (!editor_ids || editor_ids.length === 0)) {
+        console.log('🔍 Vertical provided, checking for vertical head:', vertical);
+        try {
+          const verticalHeadResult = await query(
+            `SELECT
+              vh.*,
+              u.id as editor_user_id,
+              e.id as editor_id
+             FROM vertical_heads vh
+             LEFT JOIN users u ON vh.head_editor_id = u.id
+             LEFT JOIN editors e ON e.user_id = u.id
+             WHERE vh.vertical = $1`,
+            [vertical]
+          );
+
+          if (verticalHeadResult.rows.length > 0 && verticalHeadResult.rows[0].editor_id) {
+            // Vertical head found - auto-assign
+            autoAssignedHead = verticalHeadResult.rows[0].head_editor_id;
+            autoAssignedEditors = [verticalHeadResult.rows[0].editor_id];
+            console.log('✅ Auto-assigned to vertical head:', {
+              head_user_id: autoAssignedHead,
+              editor_id: autoAssignedEditors[0]
+            });
+          } else {
+            // No vertical head - use fallback editors (Parmeet and Ritu)
+            console.log('⚠️ No vertical head found, using fallback editors');
+            const fallbackResult = await query(
+              `SELECT fallback_editor_ids FROM vertical_heads LIMIT 1`
+            );
+
+            if (fallbackResult.rows.length > 0 && fallbackResult.rows[0].fallback_editor_ids) {
+              const fallbackUserIds = fallbackResult.rows[0].fallback_editor_ids;
+              const fallbackEditorsResult = await query(
+                `SELECT id FROM editors WHERE user_id = ANY($1::uuid[]) AND is_active = TRUE`,
+                [fallbackUserIds]
+              );
+
+              autoAssignedEditors = fallbackEditorsResult.rows.map(r => r.id);
+              console.log('✅ Auto-assigned to fallback editors:', autoAssignedEditors);
+            }
+          }
+        } catch (autoAssignError) {
+          console.error('Auto-assignment error (non-fatal):', autoAssignError);
+          // Continue without auto-assignment if error occurs
+        }
+      }
+
+      // Merge auto-assigned editors with manually selected editors
+      const finalEditorIds = [...autoAssignedEditors, ...(editor_ids || [])];
+
       // Generate unique token
       const requestToken = this.generateToken();
       console.log('Generated request token:', requestToken);
@@ -222,7 +276,8 @@ class FileRequestController {
         require_email,
         custom_message: custom_message || null,
         assigned_buyer_id: assigned_buyer_id || null,
-        assigned_at: (editor_id || (editor_ids && editor_ids.length > 0)) ? new Date() : null
+        auto_assigned_head: autoAssignedHead || null,
+        assigned_at: (editor_id || finalEditorIds.length > 0) ? new Date() : null
       });
 
       let result;
@@ -230,8 +285,8 @@ class FileRequestController {
         result = await query(
           `INSERT INTO file_requests
           (title, description, request_type, concept_notes, num_creatives, platform, vertical, created_by, folder_id, request_token, deadline,
-           allow_multiple_uploads, require_email, custom_message, assigned_buyer_id, assigned_at)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+           allow_multiple_uploads, require_email, custom_message, assigned_buyer_id, auto_assigned_head, assigned_at)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
           RETURNING *`,
           [
             requestTitle.trim(),
@@ -249,7 +304,8 @@ class FileRequestController {
             require_email,
             custom_message || null,
             assigned_buyer_id || null,
-            (editor_id || (editor_ids && editor_ids.length > 0)) ? new Date() : null
+            autoAssignedHead || null,
+            (editor_id || finalEditorIds.length > 0) ? new Date() : null
           ]
         );
         console.log('Insert successful, returned:', result.rows[0]);
@@ -268,9 +324,10 @@ class FileRequestController {
 
       const fileRequest = result.rows[0];
 
-      // Handle multi-editor assignment
-      const editorsToAssign = editor_ids || (editor_id ? [editor_id] : []);
+      // Handle multi-editor assignment (includes auto-assigned + manually selected)
+      const editorsToAssign = finalEditorIds.length > 0 ? finalEditorIds : (editor_id ? [editor_id] : []);
       if (editorsToAssign.length > 0) {
+        console.log('📝 Assigning editors:', editorsToAssign);
         for (const edId of editorsToAssign) {
           await query(
             `INSERT INTO file_request_editors (request_id, editor_id, status)
@@ -2355,6 +2412,199 @@ class FileRequestController {
       });
     } catch (error) {
       logger.error('Get upload history failed', { error: error.message });
+      next(error);
+    }
+  }
+
+  /**
+   * Reassign file request to another editor
+   * POST /api/file-requests/:id/reassign
+   */
+  async reassignRequest(req, res, next) {
+    try {
+      const { id } = req.params;
+      const { reassign_to, note } = req.body;
+      const userId = req.user.id;
+
+      if (!reassign_to) {
+        return res.status(400).json({
+          success: false,
+          error: 'reassign_to is required'
+        });
+      }
+
+      // Get request details
+      const requestResult = await query(
+        'SELECT * FROM file_requests WHERE id = $1',
+        [id]
+      );
+
+      if (requestResult.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          error: 'File request not found'
+        });
+      }
+
+      const fileRequest = requestResult.rows[0];
+
+      // RBAC: Only auto-assigned head, current assignees, or admin can reassign
+      const canReassign = fileRequest.auto_assigned_head === userId ||
+                         (fileRequest.assigned_editors && fileRequest.assigned_editors.includes(userId)) ||
+                         req.user.role === 'admin';
+
+      if (!canReassign) {
+        return res.status(403).json({
+          success: false,
+          error: 'Only assigned editors or vertical heads can reassign requests'
+        });
+      }
+
+      // Verify reassign_to editor exists
+      const editorCheck = await query(
+        'SELECT e.id, e.user_id FROM editors e WHERE e.user_id = $1 AND e.is_active = TRUE',
+        [reassign_to]
+      );
+
+      if (editorCheck.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          error: 'Target editor not found'
+        });
+      }
+
+      const targetEditorId = editorCheck.rows[0].id;
+
+      // Create reassignment record
+      await query(
+        `INSERT INTO request_reassignments
+         (file_request_id, reassigned_from, reassigned_to, reassignment_note)
+         VALUES ($1, $2, $3, $4)`,
+        [id, userId, reassign_to, note || null]
+      );
+
+      // Add new editor to file_request_editors
+      await query(
+        `INSERT INTO file_request_editors (request_id, editor_id, status)
+         VALUES ($1, $2, 'pending')
+         ON CONFLICT (request_id, editor_id) DO NOTHING`,
+        [id, targetEditorId]
+      );
+
+      // Update reassignment count
+      await query(
+        `UPDATE file_requests
+         SET reassignment_count = reassignment_count + 1
+         WHERE id = $1`,
+        [id]
+      );
+
+      // Send notification to reassigned editor with note
+      await Notification.create({
+        userId: reassign_to,
+        type: 'file_request_reassigned',
+        title: 'File Request Reassigned to You',
+        message: `"${fileRequest.title}" has been reassigned to you by ${req.user.name || req.user.email}${note ? ': ' + note : ''}`,
+        referenceType: 'file_request',
+        referenceId: id,
+        metadata: {
+          request_title: fileRequest.title,
+          reassigned_from: req.user.name || req.user.email,
+          reassignment_note: note,
+          deadline: fileRequest.deadline
+        }
+      });
+
+      // Log activity
+      await logActivity({
+        req,
+        actionType: 'file_request_reassigned',
+        resourceType: 'file_request',
+        resourceId: id,
+        resourceName: fileRequest.title,
+        details: {
+          reassigned_to,
+          note
+        },
+        status: 'success'
+      });
+
+      logger.info('File request reassigned', {
+        requestId: id,
+        reassigned_from: userId,
+        reassigned_to,
+        note
+      });
+
+      res.json({
+        success: true,
+        message: 'Request reassigned successfully'
+      });
+    } catch (error) {
+      logger.error('Reassign request failed', { error: error.message });
+      next(error);
+    }
+  }
+
+  /**
+   * Get reassignment history for a request
+   * GET /api/file-requests/:id/reassignments
+   */
+  async getReassignments(req, res, next) {
+    try {
+      const { id } = req.params;
+      const userId = req.user.id;
+
+      // Verify user has access to this request
+      const requestResult = await query(
+        'SELECT * FROM file_requests WHERE id = $1',
+        [id]
+      );
+
+      if (requestResult.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          error: 'File request not found'
+        });
+      }
+
+      const fileRequest = requestResult.rows[0];
+
+      // Check access
+      const hasAccess = fileRequest.created_by === userId ||
+                       fileRequest.assigned_buyer_id === userId ||
+                       (fileRequest.assigned_editors && fileRequest.assigned_editors.includes(userId)) ||
+                       req.user.role === 'admin';
+
+      if (!hasAccess) {
+        return res.status(403).json({
+          success: false,
+          error: 'Access denied'
+        });
+      }
+
+      // Get reassignment history
+      const reassignments = await query(
+        `SELECT
+          rr.*,
+          uf.name as from_name,
+          uf.email as from_email,
+          ut.name as to_name,
+          ut.email as to_email
+         FROM request_reassignments rr
+         JOIN users uf ON rr.reassigned_from = uf.id
+         JOIN users ut ON rr.reassigned_to = ut.id
+         WHERE rr.file_request_id = $1
+         ORDER BY rr.created_at DESC`,
+        [id]
+      );
+
+      res.json({
+        success: true,
+        data: reassignments.rows
+      });
+    } catch (error) {
+      logger.error('Get reassignments failed', { error: error.message });
       next(error);
     }
   }

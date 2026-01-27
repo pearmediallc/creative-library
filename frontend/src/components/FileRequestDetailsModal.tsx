@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { X, Copy, Calendar, Folder, Mail, CheckCircle, Clock, FileText, Upload as UploadIcon, Rocket, XCircle, RotateCcw } from 'lucide-react';
+import { X, Copy, Calendar, Folder, Mail, CheckCircle, Clock, FileText, Upload as UploadIcon, Rocket, XCircle, RotateCcw, UserPlus } from 'lucide-react';
 import { Button } from './ui/Button';
 import { fileRequestApi, mediaApi } from '../lib/api';
 import { formatDate } from '../lib/utils';
@@ -7,6 +7,7 @@ import { CanvasEditor } from './CanvasEditor';
 import { CanvasRenderer } from './CanvasRenderer';
 import { UploadedFileCard } from './UploadedFileCard';
 import { UploadHistoryTimeline } from './UploadHistoryTimeline';
+import { ReassignmentModal } from './ReassignmentModal';
 import type { Canvas } from '../lib/canvasTemplates';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -124,8 +125,13 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
   const [newDeadline, setNewDeadline] = useState('');
   const [savingDeadline, setSavingDeadline] = useState(false);
 
+  // Reassignment state
+  const [showReassignModal, setShowReassignModal] = useState(false);
+  const [reassignments, setReassignments] = useState<any[]>([]);
+
   useEffect(() => {
     fetchRequestDetails();
+    fetchReassignments();
   }, [requestId]);
 
   // Subscribe to upload queue to refresh when uploads complete
@@ -510,6 +516,33 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
     }
   };
 
+  const fetchReassignments = async () => {
+    try {
+      const response = await fileRequestApi.getReassignments(requestId);
+      setReassignments(response.data.data || []);
+    } catch (error: any) {
+      console.error('Failed to fetch reassignments:', error);
+    }
+  };
+
+  const handleReassign = async (reassignTo: string, note: string) => {
+    try {
+      await fileRequestApi.reassign(requestId, { reassign_to: reassignTo, note });
+      await fetchRequestDetails();
+      await fetchReassignments();
+      onUpdate();
+    } catch (error: any) {
+      throw error; // Let ReassignmentModal handle the error
+    }
+  };
+
+  // Determine if user can reassign
+  const canReassign = user && request && (
+    request.auto_assigned_head === user.id ||
+    request.assigned_editors?.some((e: any) => e.id === user.id) ||
+    user.role === 'admin'
+  );
+
   if (loading) {
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -676,6 +709,43 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
                     Reopen Request
                   </Button>
                 )}
+
+                {/* Reassign - Only for vertical head or assigned editors */}
+                {canReassign && request.status !== 'closed' && (
+                  <Button
+                    onClick={() => setShowReassignModal(true)}
+                    size="sm"
+                    variant="outline"
+                    className="border-blue-500 text-blue-600 hover:bg-blue-50 dark:border-blue-400 dark:text-blue-400"
+                  >
+                    <UserPlus className="w-4 h-4 mr-2" />
+                    Reassign
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Reassignment History */}
+          {reassignments.length > 0 && (
+            <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+              <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">Reassignment History</h4>
+              <div className="space-y-2">
+                {reassignments.map((r: any) => (
+                  <div key={r.id} className="bg-gray-50 dark:bg-gray-700/50 rounded-md p-3">
+                    <p className="text-sm text-gray-700 dark:text-gray-200">
+                      <strong>{r.from_name}</strong> reassigned to <strong>{r.to_name}</strong>
+                    </p>
+                    {r.reassignment_note && (
+                      <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 italic">
+                        "{r.reassignment_note}"
+                      </p>
+                    )}
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      {formatDate(r.created_at)}
+                    </p>
+                  </div>
+                ))}
               </div>
             </div>
           )}
@@ -1182,6 +1252,16 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
             />
           )
         )
+      )}
+
+      {/* Reassignment Modal */}
+      {showReassignModal && request && (
+        <ReassignmentModal
+          requestId={requestId}
+          requestTitle={request.title}
+          onClose={() => setShowReassignModal(false)}
+          onReassign={handleReassign}
+        />
       )}
     </div>
   );

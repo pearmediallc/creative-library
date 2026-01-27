@@ -34,6 +34,7 @@ const workloadRoutes = require('./routes/workload');
 const notificationRoutes = require('./routes/notifications');
 const rbacRoutes = require('./routes/rbac');
 const accessRequestRoutes = require('./routes/accessRequests');
+const verticalHeadsRoutes = require('./routes/verticalHeads');
 
 // Import error handler
 const errorHandler = require('./middleware/errorHandler');
@@ -143,9 +144,10 @@ app.use('/api/workload', workloadRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/rbac', rbacRoutes);
 app.use('/api/access-requests', accessRequestRoutes);
+app.use('/api/vertical-heads', verticalHeadsRoutes);
 
 // Log registered routes
-logger.info('API routes registered: /api/auth, /api/media, /api/editors, /api/analytics, /api/admin, /api/facebook, /api/activity-logs, /api/folders, /api/teams, /api/permissions, /api/starred, /api/comments, /api/saved-searches, /api/file-requests, /api/metadata-tags, /api/slack, /api/workload, /api/notifications, /api/rbac, /api/access-requests');
+logger.info('API routes registered: /api/auth, /api/media, /api/editors, /api/analytics, /api/admin, /api/facebook, /api/activity-logs, /api/folders, /api/teams, /api/permissions, /api/starred, /api/comments, /api/saved-searches, /api/file-requests, /api/metadata-tags, /api/slack, /api/workload, /api/notifications, /api/rbac, /api/access-requests, /api/vertical-heads');
 
 // 404 handler
 app.use((req, res) => {
