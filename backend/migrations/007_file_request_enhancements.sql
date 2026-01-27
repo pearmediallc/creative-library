@@ -82,11 +82,13 @@ BEGIN
   ELSE
     -- Table exists, add missing columns if needed
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='file_request_uploads' AND column_name='uploaded_by') THEN
-      ALTER TABLE file_request_uploads ADD COLUMN uploaded_by UUID NOT NULL REFERENCES users(id);
+      -- Add as nullable first, then populate with data
+      ALTER TABLE file_request_uploads ADD COLUMN uploaded_by UUID REFERENCES users(id);
     END IF;
 
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='file_request_uploads' AND column_name='upload_type') THEN
-      ALTER TABLE file_request_uploads ADD COLUMN upload_type VARCHAR(20) NOT NULL CHECK (upload_type IN ('file', 'folder'));
+      -- Add as nullable first (can't add NOT NULL to existing table with data)
+      ALTER TABLE file_request_uploads ADD COLUMN upload_type VARCHAR(20) CHECK (upload_type IN ('file', 'folder'));
     END IF;
 
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='file_request_uploads' AND column_name='folder_path') THEN
