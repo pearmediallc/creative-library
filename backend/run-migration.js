@@ -21,6 +21,11 @@ function splitSQLStatements(sql) {
   for (let line of lines) {
     const trimmedLine = line.trim();
 
+    // Skip pure comment lines and blank lines when not in a statement
+    if (!currentStatement && (trimmedLine.startsWith('--') || !trimmedLine)) {
+      continue;
+    }
+
     // Track DO $$ blocks
     if (trimmedLine.startsWith('DO $$') || trimmedLine.startsWith('DO $')) {
       inDoBlock = true;
@@ -57,7 +62,12 @@ function splitSQLStatements(sql) {
 
   return statements.filter(stmt => {
     const cleaned = stmt.trim();
-    return cleaned && !cleaned.startsWith('--') && cleaned !== ';';
+    // Only filter out pure comment blocks or empty statements
+    const hasSQL = cleaned.split('\n').some(line => {
+      const trimmed = line.trim();
+      return trimmed && !trimmed.startsWith('--');
+    });
+    return hasSQL;
   });
 }
 
