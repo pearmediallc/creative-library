@@ -241,7 +241,7 @@ export function TeamDiscussionPanel({ teamId }: TeamDiscussionPanelProps) {
           {!message.parent_message_id && !isEditing && (
             <div className="flex items-center gap-3 mt-2">
               {/* Toggle replies visibility */}
-              {message.reply_count > 0 && (
+              {(message.reply_count ?? 0) > 0 && (
                 <button
                   onClick={() => toggleReplies(message.id)}
                   className="text-xs text-primary hover:underline flex items-center gap-1"

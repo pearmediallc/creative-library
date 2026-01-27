@@ -17,9 +17,16 @@ async function createTemplate(req, res) {
       name,
       description,
       defaultTitle,
+      defaultRequestType,
       defaultInstructions,
       defaultPriority = 'normal',
       defaultDueDays,
+      defaultPlatform,
+      defaultVertical,
+      defaultNumCreatives,
+      defaultAllowMultipleUploads,
+      defaultRequireEmail,
+      defaultCustomMessage,
       requiredFields
     } = req.body;
     const userId = req.user.id;
@@ -45,9 +52,11 @@ async function createTemplate(req, res) {
     const result = await query(
       `INSERT INTO request_templates (
         team_id, created_by, name, description,
-        default_title, default_instructions, default_priority,
-        default_due_days, required_fields
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        default_title, default_request_type, default_instructions, default_priority,
+        default_due_days, default_platform, default_vertical, default_num_creatives,
+        default_allow_multiple_uploads, default_require_email, default_custom_message,
+        required_fields
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
       RETURNING *`,
       [
         teamId,
@@ -55,9 +64,16 @@ async function createTemplate(req, res) {
         name.trim(),
         description || null,
         defaultTitle || null,
+        defaultRequestType || null,
         defaultInstructions || null,
         defaultPriority,
         defaultDueDays || null,
+        defaultPlatform || null,
+        defaultVertical || null,
+        defaultNumCreatives || null,
+        defaultAllowMultipleUploads !== undefined ? defaultAllowMultipleUploads : null,
+        defaultRequireEmail !== undefined ? defaultRequireEmail : null,
+        defaultCustomMessage || null,
         JSON.stringify(requiredFields || [])
       ]
     );
@@ -179,12 +195,19 @@ async function updateTemplate(req, res) {
     const {
       name,
       description,
-      defaultTitle,
-      defaultInstructions,
-      defaultPriority,
-      defaultDueDays,
+      default_title,
+      default_request_type,
+      default_instructions,
+      default_priority,
+      default_due_days,
+      default_platform,
+      default_vertical,
+      default_num_creatives,
+      default_allow_multiple_uploads,
+      default_require_email,
+      default_custom_message,
       requiredFields,
-      isActive
+      is_active
     } = req.body;
     const userId = req.user.id;
 
@@ -219,22 +242,36 @@ async function updateTemplate(req, res) {
        SET name = COALESCE($1, name),
            description = COALESCE($2, description),
            default_title = COALESCE($3, default_title),
-           default_instructions = COALESCE($4, default_instructions),
-           default_priority = COALESCE($5, default_priority),
-           default_due_days = COALESCE($6, default_due_days),
-           required_fields = COALESCE($7, required_fields),
-           is_active = COALESCE($8, is_active)
-       WHERE id = $9
+           default_request_type = COALESCE($4, default_request_type),
+           default_instructions = COALESCE($5, default_instructions),
+           default_priority = COALESCE($6, default_priority),
+           default_due_days = COALESCE($7, default_due_days),
+           default_platform = COALESCE($8, default_platform),
+           default_vertical = COALESCE($9, default_vertical),
+           default_num_creatives = COALESCE($10, default_num_creatives),
+           default_allow_multiple_uploads = COALESCE($11, default_allow_multiple_uploads),
+           default_require_email = COALESCE($12, default_require_email),
+           default_custom_message = COALESCE($13, default_custom_message),
+           required_fields = COALESCE($14, required_fields),
+           is_active = COALESCE($15, is_active)
+       WHERE id = $16
        RETURNING *`,
       [
         name?.trim() || null,
         description !== undefined ? description : null,
-        defaultTitle !== undefined ? defaultTitle : null,
-        defaultInstructions !== undefined ? defaultInstructions : null,
-        defaultPriority || null,
-        defaultDueDays !== undefined ? defaultDueDays : null,
+        default_title !== undefined ? default_title : null,
+        default_request_type !== undefined ? default_request_type : null,
+        default_instructions !== undefined ? default_instructions : null,
+        default_priority || null,
+        default_due_days !== undefined ? default_due_days : null,
+        default_platform !== undefined ? default_platform : null,
+        default_vertical !== undefined ? default_vertical : null,
+        default_num_creatives !== undefined ? default_num_creatives : null,
+        default_allow_multiple_uploads !== undefined ? default_allow_multiple_uploads : null,
+        default_require_email !== undefined ? default_require_email : null,
+        default_custom_message !== undefined ? default_custom_message : null,
         requiredFields ? JSON.stringify(requiredFields) : null,
-        isActive !== undefined ? isActive : null,
+        is_active !== undefined ? is_active : null,
         templateId
       ]
     );

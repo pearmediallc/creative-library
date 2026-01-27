@@ -881,9 +881,16 @@ export const teamApi = {
     name: string;
     description?: string;
     defaultTitle?: string;
+    defaultRequestType?: string;
     defaultInstructions?: string;
     defaultPriority?: 'low' | 'normal' | 'high' | 'urgent';
     defaultDueDays?: number;
+    defaultPlatform?: string;
+    defaultVertical?: string;
+    defaultNumCreatives?: number;
+    defaultAllowMultipleUploads?: boolean;
+    defaultRequireEmail?: boolean;
+    defaultCustomMessage?: string;
     requiredFields?: any[];
   }) =>
     api.post(`/teams/${teamId}/templates`, data),
