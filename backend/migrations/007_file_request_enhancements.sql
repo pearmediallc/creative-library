@@ -3,17 +3,49 @@
 -- Date: 2026-01-24
 
 -- 1. Add status and lifecycle columns to file_requests
-ALTER TABLE file_requests
-ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'open',
-ADD COLUMN IF NOT EXISTS uploaded_at TIMESTAMP,
-ADD COLUMN IF NOT EXISTS uploaded_by UUID REFERENCES users(id),
-ADD COLUMN IF NOT EXISTS launched_at TIMESTAMP,
-ADD COLUMN IF NOT EXISTS launched_by UUID REFERENCES users(id),
-ADD COLUMN IF NOT EXISTS closed_at TIMESTAMP,
-ADD COLUMN IF NOT EXISTS closed_by UUID REFERENCES users(id),
-ADD COLUMN IF NOT EXISTS reopened_at TIMESTAMP,
-ADD COLUMN IF NOT EXISTS reopened_by UUID REFERENCES users(id),
-ADD COLUMN IF NOT EXISTS reopen_count INTEGER DEFAULT 0;
+DO $$
+BEGIN
+  -- Add columns one by one to ensure they exist before constraints
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='file_requests' AND column_name='status') THEN
+    ALTER TABLE file_requests ADD COLUMN status VARCHAR(20) DEFAULT 'open';
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='file_requests' AND column_name='uploaded_at') THEN
+    ALTER TABLE file_requests ADD COLUMN uploaded_at TIMESTAMP;
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='file_requests' AND column_name='uploaded_by') THEN
+    ALTER TABLE file_requests ADD COLUMN uploaded_by UUID REFERENCES users(id);
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='file_requests' AND column_name='launched_at') THEN
+    ALTER TABLE file_requests ADD COLUMN launched_at TIMESTAMP;
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='file_requests' AND column_name='launched_by') THEN
+    ALTER TABLE file_requests ADD COLUMN launched_by UUID REFERENCES users(id);
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='file_requests' AND column_name='closed_at') THEN
+    ALTER TABLE file_requests ADD COLUMN closed_at TIMESTAMP;
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='file_requests' AND column_name='closed_by') THEN
+    ALTER TABLE file_requests ADD COLUMN closed_by UUID REFERENCES users(id);
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='file_requests' AND column_name='reopened_at') THEN
+    ALTER TABLE file_requests ADD COLUMN reopened_at TIMESTAMP;
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='file_requests' AND column_name='reopened_by') THEN
+    ALTER TABLE file_requests ADD COLUMN reopened_by UUID REFERENCES users(id);
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='file_requests' AND column_name='reopen_count') THEN
+    ALTER TABLE file_requests ADD COLUMN reopen_count INTEGER DEFAULT 0;
+  END IF;
+END $$;
 
 -- Add constraint separately (if column already exists, this will be ignored)
 DO $$
@@ -45,12 +77,13 @@ CREATE TABLE IF NOT EXISTS file_request_uploads (
 );
 
 -- 3. Add upload_session_id to media_files
-ALTER TABLE media_files
-ADD COLUMN IF NOT EXISTS upload_session_id UUID;
-
--- Add foreign key separately
 DO $$
 BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='media_files' AND column_name='upload_session_id') THEN
+    ALTER TABLE media_files ADD COLUMN upload_session_id UUID;
+  END IF;
+
+  -- Add foreign key constraint
   IF NOT EXISTS (
     SELECT 1 FROM pg_constraint
     WHERE conname = 'media_files_upload_session_id_fkey'
