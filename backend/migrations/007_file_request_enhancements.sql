@@ -139,7 +139,6 @@ CREATE INDEX IF NOT EXISTS idx_media_files_upload_session ON media_files(upload_
 UPDATE file_requests
 SET status = CASE
   WHEN completed_at IS NOT NULL THEN 'closed'
-  WHEN (SELECT COUNT(*) FROM media_files WHERE metadata->>'request_id' = file_requests.id::text) > 0 THEN 'uploaded'
   WHEN array_length(assigned_editors, 1) > 0 THEN 'in_progress'
   ELSE 'open'
 END
