@@ -43,6 +43,7 @@ export function TeamDiscussionPanel({ teamId }: TeamDiscussionPanelProps) {
   const [editText, setEditText] = useState('');
   const [sending, setSending] = useState(false);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [expandedReplies, setExpandedReplies] = useState<Set<string>>(new Set());
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -129,6 +130,18 @@ export function TeamDiscussionPanel({ teamId }: TeamDiscussionPanelProps) {
   const startReply = (message: Message) => {
     setReplyingTo(message);
     setOpenMenuId(null);
+  };
+
+  const toggleReplies = (messageId: string) => {
+    setExpandedReplies(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(messageId)) {
+        newSet.delete(messageId);
+      } else {
+        newSet.add(messageId);
+      }
+      return newSet;
+    });
   };
 
   const renderMessage = (message: Message) => {
@@ -224,15 +237,28 @@ export function TeamDiscussionPanel({ teamId }: TeamDiscussionPanelProps) {
             <p className="mt-1 text-sm whitespace-pre-wrap break-words">{message.message_text}</p>
           )}
 
-          {/* Reply button */}
+          {/* Reply actions */}
           {!message.parent_message_id && !isEditing && (
-            <button
-              onClick={() => startReply(message)}
-              className="mt-2 text-xs text-primary hover:underline flex items-center gap-1"
-            >
-              <Reply size={12} />
-              Reply {message.reply_count ? `(${message.reply_count})` : ''}
-            </button>
+            <div className="flex items-center gap-3 mt-2">
+              {/* Toggle replies visibility */}
+              {message.reply_count > 0 && (
+                <button
+                  onClick={() => toggleReplies(message.id)}
+                  className="text-xs text-primary hover:underline flex items-center gap-1"
+                >
+                  <Reply size={12} />
+                  {expandedReplies.has(message.id) ? 'Hide' : 'Show'} Replies ({message.reply_count})
+                </button>
+              )}
+              {/* Start writing a reply */}
+              <button
+                onClick={() => startReply(message)}
+                className="text-xs text-primary hover:underline flex items-center gap-1"
+              >
+                <Reply size={12} />
+                Reply
+              </button>
+            </div>
           )}
         </div>
       </div>
@@ -259,8 +285,8 @@ export function TeamDiscussionPanel({ teamId }: TeamDiscussionPanelProps) {
               .map((message) => (
                 <div key={message.id}>
                   {renderMessage(message)}
-                  {/* Render replies */}
-                  {messages
+                  {/* Render replies - only if expanded */}
+                  {expandedReplies.has(message.id) && messages
                     .filter((m) => m.parent_message_id === message.id)
                     .map((reply) => renderMessage(reply))}
                 </div>

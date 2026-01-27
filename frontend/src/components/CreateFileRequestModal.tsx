@@ -192,10 +192,10 @@ export function CreateFileRequestModal({ onClose, onSuccess, teamId }: CreateFil
     if (template.default_folder_id) {
       setFolderId(template.default_folder_id);
     }
-    if (template.default_allow_multiple_uploads !== undefined) {
+    if (template.default_allow_multiple_uploads !== undefined && template.default_allow_multiple_uploads !== null) {
       setAllowMultipleUploads(template.default_allow_multiple_uploads);
     }
-    if (template.default_require_email !== undefined) {
+    if (template.default_require_email !== undefined && template.default_require_email !== null) {
       setRequireEmail(template.default_require_email);
     }
     if (template.default_custom_message) {
@@ -527,13 +527,13 @@ export function CreateFileRequestModal({ onClose, onSuccess, teamId }: CreateFil
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Number of Creatives *
             </label>
-            <Input
+            <input
               type="number"
               value={numCreatives}
               onChange={(e) => setNumCreatives(e.target.value)}
               placeholder="Enter number (e.g., 5)"
-              min={1}
               disabled={creating}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
             />
           </div>
 

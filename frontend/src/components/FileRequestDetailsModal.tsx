@@ -97,6 +97,8 @@ interface FileRequestDetails {
   reopened_by?: string;
   reopen_count?: number;
   assigned_buyer_id?: string;
+  auto_assigned_head?: string;
+  reassignment_count?: number;
 }
 
 export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRequestDetailsModalProps) {

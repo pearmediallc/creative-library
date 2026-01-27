@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { teamApi } from '../lib/api';
 import { FileText, Plus, Edit2, Trash2, Copy, X } from 'lucide-react';
 import { Button } from './ui/Button';
+import { FILE_REQUEST_TYPES } from '../constants/fileRequestTypes';
+import { PLATFORMS } from '../constants/platforms';
+import { VERTICALS } from '../constants/verticals';
 
 interface Template {
   id: string;
@@ -45,6 +48,15 @@ export function RequestTemplateManager({
   const [defaultDueDays, setDefaultDueDays] = useState<number>(7);
   const [isActive, setIsActive] = useState(true);
 
+  // New fields for full file request compatibility
+  const [defaultRequestType, setDefaultRequestType] = useState('');
+  const [defaultPlatform, setDefaultPlatform] = useState('');
+  const [defaultVertical, setDefaultVertical] = useState('');
+  const [defaultNumCreatives, setDefaultNumCreatives] = useState<number>(1);
+  const [defaultAllowMultipleUploads, setDefaultAllowMultipleUploads] = useState(true);
+  const [defaultRequireEmail, setDefaultRequireEmail] = useState(false);
+  const [defaultCustomMessage, setDefaultCustomMessage] = useState('');
+
   useEffect(() => {
     if (teamId) {
       fetchTemplates();
@@ -73,6 +85,13 @@ export function RequestTemplateManager({
     setDefaultPriority('normal');
     setDefaultDueDays(7);
     setIsActive(true);
+    setDefaultRequestType('');
+    setDefaultPlatform('');
+    setDefaultVertical('');
+    setDefaultNumCreatives(1);
+    setDefaultAllowMultipleUploads(true);
+    setDefaultRequireEmail(false);
+    setDefaultCustomMessage('');
     setEditingTemplate(null);
   };
 
@@ -89,9 +108,16 @@ export function RequestTemplateManager({
         name: name.trim(),
         description: description.trim() || undefined,
         defaultTitle: defaultTitle.trim() || undefined,
+        defaultRequestType: defaultRequestType.trim() || undefined,
         defaultInstructions: defaultInstructions.trim() || undefined,
         defaultPriority,
         defaultDueDays,
+        defaultPlatform: defaultPlatform || undefined,
+        defaultVertical: defaultVertical || undefined,
+        defaultNumCreatives: defaultNumCreatives || undefined,
+        defaultAllowMultipleUploads,
+        defaultRequireEmail,
+        defaultCustomMessage: defaultCustomMessage.trim() || undefined,
       });
       const newTemplate = response.data.data;
       setTemplates([newTemplate, ...templates]);
@@ -111,9 +137,16 @@ export function RequestTemplateManager({
     setName(template.name);
     setDescription(template.description || '');
     setDefaultTitle(template.default_title || '');
+    setDefaultRequestType((template as any).default_request_type || '');
     setDefaultInstructions(template.default_instructions || '');
     setDefaultPriority(template.default_priority || 'normal');
     setDefaultDueDays(template.default_due_days || 7);
+    setDefaultPlatform((template as any).default_platform || '');
+    setDefaultVertical((template as any).default_vertical || '');
+    setDefaultNumCreatives((template as any).default_num_creatives || 1);
+    setDefaultAllowMultipleUploads((template as any).default_allow_multiple_uploads !== false);
+    setDefaultRequireEmail((template as any).default_require_email || false);
+    setDefaultCustomMessage((template as any).default_custom_message || '');
     setIsActive(template.is_active);
     setView('edit');
   };
@@ -131,9 +164,16 @@ export function RequestTemplateManager({
         name: name.trim(),
         description: description.trim() || null,
         default_title: defaultTitle.trim() || null,
+        default_request_type: defaultRequestType.trim() || null,
         default_instructions: defaultInstructions.trim() || null,
         default_priority: defaultPriority,
         default_due_days: defaultDueDays,
+        default_platform: defaultPlatform || null,
+        default_vertical: defaultVertical || null,
+        default_num_creatives: defaultNumCreatives || null,
+        default_allow_multiple_uploads: defaultAllowMultipleUploads,
+        default_require_email: defaultRequireEmail,
+        default_custom_message: defaultCustomMessage.trim() || null,
         is_active: isActive,
       });
       const updatedTemplate = response.data.data;
@@ -348,6 +388,87 @@ export function RequestTemplateManager({
               className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary resize-none"
               rows={4}
             />
+          </div>
+
+          {/* New Fields */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium mb-2">Default Platform</label>
+              <select
+                value={defaultPlatform}
+                onChange={(e) => setDefaultPlatform(e.target.value)}
+                className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                <option value="">No default platform</option>
+                {PLATFORMS.map((plat) => (
+                  <option key={plat} value={plat}>{plat}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-2">Default Vertical</label>
+              <select
+                value={defaultVertical}
+                onChange={(e) => setDefaultVertical(e.target.value)}
+                className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                <option value="">No default vertical</option>
+                {VERTICALS.map((vert) => (
+                  <option key={vert} value={vert}>{vert}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-2">Default Number of Creatives</label>
+            <input
+              type="number"
+              value={defaultNumCreatives}
+              onChange={(e) => setDefaultNumCreatives(parseInt(e.target.value) || 1)}
+              min="1"
+              className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-2">Default Custom Message</label>
+            <textarea
+              value={defaultCustomMessage}
+              onChange={(e) => setDefaultCustomMessage(e.target.value)}
+              placeholder="Default custom message for requesters"
+              className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary resize-none"
+              rows={3}
+            />
+          </div>
+
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="allow-multiple"
+                checked={defaultAllowMultipleUploads}
+                onChange={(e) => setDefaultAllowMultipleUploads(e.target.checked)}
+                className="w-4 h-4"
+              />
+              <label htmlFor="allow-multiple" className="text-sm">
+                Allow Multiple Uploads
+              </label>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="require-email"
+                checked={defaultRequireEmail}
+                onChange={(e) => setDefaultRequireEmail(e.target.checked)}
+                className="w-4 h-4"
+              />
+              <label htmlFor="require-email" className="text-sm">
+                Require Email
+              </label>
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
