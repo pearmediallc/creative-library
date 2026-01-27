@@ -52,7 +52,7 @@ export function RequestTemplateManager({
   const [defaultRequestType, setDefaultRequestType] = useState('');
   const [defaultPlatform, setDefaultPlatform] = useState('');
   const [defaultVertical, setDefaultVertical] = useState('');
-  const [defaultNumCreatives, setDefaultNumCreatives] = useState<number>(1);
+  const [defaultNumCreatives, setDefaultNumCreatives] = useState<string>('');
   const [defaultAllowMultipleUploads, setDefaultAllowMultipleUploads] = useState(true);
   const [defaultRequireEmail, setDefaultRequireEmail] = useState(false);
   const [defaultCustomMessage, setDefaultCustomMessage] = useState('');
@@ -88,7 +88,7 @@ export function RequestTemplateManager({
     setDefaultRequestType('');
     setDefaultPlatform('');
     setDefaultVertical('');
-    setDefaultNumCreatives(1);
+    setDefaultNumCreatives('');
     setDefaultAllowMultipleUploads(true);
     setDefaultRequireEmail(false);
     setDefaultCustomMessage('');
@@ -114,7 +114,7 @@ export function RequestTemplateManager({
         defaultDueDays,
         defaultPlatform: defaultPlatform || undefined,
         defaultVertical: defaultVertical || undefined,
-        defaultNumCreatives: defaultNumCreatives || undefined,
+        defaultNumCreatives: defaultNumCreatives ? parseInt(defaultNumCreatives) : undefined,
         defaultAllowMultipleUploads,
         defaultRequireEmail,
         defaultCustomMessage: defaultCustomMessage.trim() || undefined,
@@ -143,7 +143,7 @@ export function RequestTemplateManager({
     setDefaultDueDays(template.default_due_days || 7);
     setDefaultPlatform((template as any).default_platform || '');
     setDefaultVertical((template as any).default_vertical || '');
-    setDefaultNumCreatives((template as any).default_num_creatives || 1);
+    setDefaultNumCreatives((template as any).default_num_creatives ? String((template as any).default_num_creatives) : '');
     setDefaultAllowMultipleUploads((template as any).default_allow_multiple_uploads !== false);
     setDefaultRequireEmail((template as any).default_require_email || false);
     setDefaultCustomMessage((template as any).default_custom_message || '');
@@ -170,7 +170,7 @@ export function RequestTemplateManager({
         default_due_days: defaultDueDays,
         default_platform: defaultPlatform || null,
         default_vertical: defaultVertical || null,
-        default_num_creatives: defaultNumCreatives || null,
+        default_num_creatives: defaultNumCreatives ? parseInt(defaultNumCreatives) : null,
         default_allow_multiple_uploads: defaultAllowMultipleUploads,
         default_require_email: defaultRequireEmail,
         default_custom_message: defaultCustomMessage.trim() || null,
@@ -426,8 +426,8 @@ export function RequestTemplateManager({
             <input
               type="number"
               value={defaultNumCreatives}
-              onChange={(e) => setDefaultNumCreatives(parseInt(e.target.value) || 1)}
-              min="1"
+              onChange={(e) => setDefaultNumCreatives(e.target.value)}
+              placeholder="Enter number (optional)"
               className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
             />
           </div>
