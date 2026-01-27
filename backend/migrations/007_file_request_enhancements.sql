@@ -60,21 +60,52 @@ BEGIN
   END IF;
 END $$;
 
--- 2. Create upload tracking table
-CREATE TABLE IF NOT EXISTS file_request_uploads (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  file_request_id UUID NOT NULL REFERENCES file_requests(id) ON DELETE CASCADE,
-  uploaded_by UUID NOT NULL REFERENCES users(id),
-  upload_type VARCHAR(20) NOT NULL CHECK (upload_type IN ('file', 'folder')),
-  folder_path TEXT,
-  folder_name TEXT,
-  file_count INTEGER DEFAULT 0,
-  total_size_bytes BIGINT DEFAULT 0,
-  created_at TIMESTAMP DEFAULT NOW(),
-  is_deleted BOOLEAN DEFAULT FALSE,
-  deleted_at TIMESTAMP,
-  deleted_by UUID REFERENCES users(id)
-);
+-- 2. Create upload tracking table (or add missing columns if table exists)
+DO $$
+BEGIN
+  -- Create table if it doesn't exist
+  IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'file_request_uploads') THEN
+    CREATE TABLE file_request_uploads (
+      id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+      file_request_id UUID NOT NULL REFERENCES file_requests(id) ON DELETE CASCADE,
+      uploaded_by UUID NOT NULL REFERENCES users(id),
+      upload_type VARCHAR(20) NOT NULL CHECK (upload_type IN ('file', 'folder')),
+      folder_path TEXT,
+      folder_name TEXT,
+      file_count INTEGER DEFAULT 0,
+      total_size_bytes BIGINT DEFAULT 0,
+      created_at TIMESTAMP DEFAULT NOW(),
+      is_deleted BOOLEAN DEFAULT FALSE,
+      deleted_at TIMESTAMP,
+      deleted_by UUID REFERENCES users(id)
+    );
+  ELSE
+    -- Table exists, add missing columns if needed
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='file_request_uploads' AND column_name='uploaded_by') THEN
+      ALTER TABLE file_request_uploads ADD COLUMN uploaded_by UUID NOT NULL REFERENCES users(id);
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='file_request_uploads' AND column_name='upload_type') THEN
+      ALTER TABLE file_request_uploads ADD COLUMN upload_type VARCHAR(20) NOT NULL CHECK (upload_type IN ('file', 'folder'));
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='file_request_uploads' AND column_name='folder_path') THEN
+      ALTER TABLE file_request_uploads ADD COLUMN folder_path TEXT;
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='file_request_uploads' AND column_name='folder_name') THEN
+      ALTER TABLE file_request_uploads ADD COLUMN folder_name TEXT;
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='file_request_uploads' AND column_name='file_count') THEN
+      ALTER TABLE file_request_uploads ADD COLUMN file_count INTEGER DEFAULT 0;
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='file_request_uploads' AND column_name='total_size_bytes') THEN
+      ALTER TABLE file_request_uploads ADD COLUMN total_size_bytes BIGINT DEFAULT 0;
+    END IF;
+  END IF;
+END $$;
 
 -- 3. Add upload_session_id to media_files
 DO $$
