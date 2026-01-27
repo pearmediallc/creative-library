@@ -1,13 +1,35 @@
 import React, { useEffect, useState } from 'react';
-import { X, Copy, Calendar, Folder, Mail, CheckCircle, Clock, FileText, Upload as UploadIcon } from 'lucide-react';
+import { X, Copy, Calendar, Folder, Mail, CheckCircle, Clock, FileText, Upload as UploadIcon, Rocket, XCircle, RotateCcw } from 'lucide-react';
 import { Button } from './ui/Button';
 import { fileRequestApi, mediaApi } from '../lib/api';
 import { formatDate } from '../lib/utils';
 import { CanvasEditor } from './CanvasEditor';
 import { CanvasRenderer } from './CanvasRenderer';
 import { UploadedFileCard } from './UploadedFileCard';
+import { UploadHistoryTimeline } from './UploadHistoryTimeline';
 import type { Canvas } from '../lib/canvasTemplates';
 import { useAuth } from '../contexts/AuthContext';
+
+// Status badge helper
+function getStatusBadge(status: string | undefined) {
+  if (!status) status = 'open';
+
+  const badges = {
+    open: { label: 'Open', color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300' },
+    in_progress: { label: 'In Progress', color: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300' },
+    uploaded: { label: 'Uploaded', color: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300' },
+    launched: { label: 'Launched', color: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' },
+    closed: { label: 'Closed', color: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300' },
+    reopened: { label: 'Reopened', color: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300' }
+  };
+
+  const badge = badges[status as keyof typeof badges] || badges.open;
+  return (
+    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${badge.color}`}>
+      {badge.label}
+    </span>
+  );
+}
 
 interface FileRequestDetailsModalProps {
   requestId: string;
@@ -53,6 +75,7 @@ interface FileRequestDetails {
   num_creatives_requested?: number;
   creator_name?: string;
   creator_email?: string;
+  created_by?: string;
   created_at: string;
   assigned_at?: string;
   picked_up_at?: string;
@@ -61,6 +84,18 @@ interface FileRequestDetails {
   time_to_complete_hours?: string;
   uploads: FileUpload[];
   assigned_editors?: AssignedEditor[];
+  // New status lifecycle fields
+  status?: 'open' | 'in_progress' | 'uploaded' | 'launched' | 'closed' | 'reopened';
+  uploaded_at?: string;
+  uploaded_by?: string;
+  launched_at?: string;
+  launched_by?: string;
+  closed_at?: string;
+  closed_by?: string;
+  reopened_at?: string;
+  reopened_by?: string;
+  reopen_count?: number;
+  assigned_buyer_id?: string;
 }
 
 export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRequestDetailsModalProps) {
@@ -426,6 +461,55 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
     }
   };
 
+  // Status transition handlers
+  const handleMarkAsUploaded = async () => {
+    if (!window.confirm('Mark this request as uploaded? This indicates that all files have been uploaded.')) return;
+
+    try {
+      await fileRequestApi.markAsUploaded(requestId);
+      await fetchRequestDetails();
+      onUpdate();
+    } catch (error: any) {
+      alert(error.response?.data?.error || 'Failed to mark as uploaded');
+    }
+  };
+
+  const handleLaunch = async () => {
+    if (!window.confirm('Launch this request? This indicates acceptance of the uploaded files.')) return;
+
+    try {
+      await fileRequestApi.launch(requestId);
+      await fetchRequestDetails();
+      onUpdate();
+    } catch (error: any) {
+      alert(error.response?.data?.error || 'Failed to launch request');
+    }
+  };
+
+  const handleClose = async () => {
+    if (!window.confirm('Close this request? You can reopen it later if needed.')) return;
+
+    try {
+      await fileRequestApi.closeRequest(requestId);
+      await fetchRequestDetails();
+      onUpdate();
+    } catch (error: any) {
+      alert(error.response?.data?.error || 'Failed to close request');
+    }
+  };
+
+  const handleReopen = async () => {
+    if (!window.confirm('Reopen this closed request?')) return;
+
+    try {
+      await fileRequestApi.reopenRequest(requestId);
+      await fetchRequestDetails();
+      onUpdate();
+    } catch (error: any) {
+      alert(error.response?.data?.error || 'Failed to reopen request');
+    }
+  };
+
   if (loading) {
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -443,10 +527,13 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-              {request.title}
-            </h2>
+          <div className="flex-1">
+            <div className="flex items-center gap-3">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                {request.title}
+              </h2>
+              {getStatusBadge(request.status)}
+            </div>
             <p className="text-sm text-muted-foreground mt-1">
               {request.upload_count} {request.upload_count === 1 ? 'file' : 'files'} uploaded
             </p>
@@ -531,6 +618,67 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
               )}
             </div>
           </div>
+
+          {/* Status Action Buttons */}
+          {user && (
+            <div className="bg-gradient-to-r from-gray-50 to-blue-50 dark:from-gray-800 dark:to-blue-900/20 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">Actions</h3>
+              <div className="flex flex-wrap gap-2">
+                {/* Mark as Uploaded - Only for assigned editors when status is open/in_progress */}
+                {request.assigned_editors?.some(e => e.id === user.id) &&
+                  (request.status === 'open' || request.status === 'in_progress') && (
+                  <Button
+                    onClick={handleMarkAsUploaded}
+                    size="sm"
+                    className="bg-purple-600 hover:bg-purple-700 text-white"
+                  >
+                    <CheckCircle className="w-4 h-4 mr-2" />
+                    Mark as Uploaded
+                  </Button>
+                )}
+
+                {/* Launch - Only for creator/assigned buyer when status is uploaded */}
+                {(request.created_by === user.id || request.assigned_buyer_id === user.id) &&
+                  request.status === 'uploaded' && (
+                  <Button
+                    onClick={handleLaunch}
+                    size="sm"
+                    className="bg-green-600 hover:bg-green-700 text-white"
+                  >
+                    <Rocket className="w-4 h-4 mr-2" />
+                    Launch
+                  </Button>
+                )}
+
+                {/* Close - Only for creator/assigned buyer when status is launched */}
+                {(request.created_by === user.id || request.assigned_buyer_id === user.id) &&
+                  request.status === 'launched' && (
+                  <Button
+                    onClick={handleClose}
+                    size="sm"
+                    variant="outline"
+                    className="border-gray-400 text-gray-700 dark:text-gray-300"
+                  >
+                    <XCircle className="w-4 h-4 mr-2" />
+                    Close Request
+                  </Button>
+                )}
+
+                {/* Reopen - Only for creator/assigned buyer when status is closed */}
+                {(request.created_by === user.id || request.assigned_buyer_id === user.id) &&
+                  request.status === 'closed' && (
+                  <Button
+                    onClick={handleReopen}
+                    size="sm"
+                    className="bg-orange-600 hover:bg-orange-700 text-white"
+                  >
+                    <RotateCcw className="w-4 h-4 mr-2" />
+                    Reopen Request
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Canvas Brief */}
           <div>
@@ -990,6 +1138,16 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
                 <p className="text-sm text-muted-foreground">No files uploaded yet</p>
               </div>
             )}
+          </div>
+
+          {/* Upload History Timeline */}
+          <div>
+            <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+              Upload History
+            </h3>
+            <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4">
+              <UploadHistoryTimeline requestId={requestId} />
+            </div>
           </div>
         </div>
 

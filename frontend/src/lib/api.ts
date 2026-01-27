@@ -567,7 +567,13 @@ export const fileRequestApi = {
     custom_message?: string;
   }) => api.patch(`/file-requests/${id}`, data),
 
-  // Close file request
+  // Status transition methods
+  markAsUploaded: (id: string) => api.post(`/file-requests/${id}/mark-uploaded`),
+  launch: (id: string) => api.post(`/file-requests/${id}/launch`),
+  closeRequest: (id: string) => api.post(`/file-requests/${id}/close`),
+  reopenRequest: (id: string) => api.post(`/file-requests/${id}/reopen`),
+
+  // Backward compatibility (deprecated)
   close: (id: string) => api.post(`/file-requests/${id}/close`),
 
   // Delete file request
@@ -610,6 +616,9 @@ export const fileRequestApi = {
   // Reassign file request (admin only)
   reassign: (id: string, data: { new_editor_ids: string[]; reason?: string }) =>
     api.post(`/file-requests/${id}/reassign`, data),
+
+  // Get upload history for file request
+  getUploadHistory: (id: string) => api.get(`/file-requests/${id}/upload-history`),
 
   // Authenticated upload to file request (for editors)
   uploadToRequestAuth: (id: string, file: File, comments?: string) => {

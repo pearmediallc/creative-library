@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Inbox, FolderPlus, FileText } from 'lucide-react';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
+import { MultiSelect } from './ui/MultiSelect';
 import { fileRequestApi, folderApi, editorApi, authApi, teamApi } from '../lib/api';
 import { FILE_REQUEST_TYPES } from '../constants/fileRequestTypes';
 import { PLATFORMS } from '../constants/platforms';
@@ -568,25 +569,18 @@ export function CreateFileRequestModal({ onClose, onSuccess, teamId }: CreateFil
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Assign to Editors (optional)
             </label>
-            <select
-              multiple
-              value={selectedEditorIds}
-              onChange={(e) => {
-                const selected = Array.from(e.target.selectedOptions, option => option.value);
-                setSelectedEditorIds(selected);
-              }}
+            <MultiSelect
+              options={editors.map(e => ({
+                id: e.id,
+                label: e.display_name || e.name
+              }))}
+              selectedIds={selectedEditorIds}
+              onChange={setSelectedEditorIds}
+              placeholder="Select editors..."
               disabled={creating}
-              size={5}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-            >
-              {editors.map((editor) => (
-                <option key={editor.id} value={editor.id}>
-                  {editor.display_name || editor.name}
-                </option>
-              ))}
-            </select>
+            />
             <p className="text-xs text-muted-foreground mt-1">
-              Hold Ctrl (Windows) or Cmd (Mac) to select multiple editors
+              Search and select multiple editors easily
             </p>
           </div>
 

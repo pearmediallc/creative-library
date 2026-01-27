@@ -1216,6 +1216,16 @@ class FileRequestController {
 
       const editorId = editorResult.rows.length > 0 ? editorResult.rows[0].id : null;
 
+      // 🆕 Create upload session to track this upload
+      const uploadSessionResult = await query(
+        `INSERT INTO file_request_uploads
+        (file_request_id, uploaded_by, upload_type, file_count, total_size_bytes)
+        VALUES ($1, $2, 'file', 1, $3)
+        RETURNING id`,
+        [fileRequest.id, userId, req.file.size]
+      );
+      const uploadSessionId = uploadSessionResult.rows[0].id;
+
       // Upload file to S3 (as the current user)
       const mediaFile = await mediaService.uploadMedia(
         req.file,
@@ -1228,23 +1238,15 @@ class FileRequestController {
           assigned_buyer_id: fileRequest.assigned_buyer_id || null,
           request_creator_id: fileRequest.creator_id, // ✨ Pass request creator for permissions
           request_id: fileRequest.id,  // ✨ Pass request ID for proper S3 structure
-          is_file_request_upload: true // Hide from media library by default
+          is_file_request_upload: true, // Hide from media library by default
+          upload_session_id: uploadSessionId // 🆕 Link to upload session
         }
       );
 
-      // Track the upload with comments and editor
+      // 🆕 Link the uploaded file to the upload session
       await query(
-        `INSERT INTO file_request_uploads
-        (file_request_id, file_id, uploaded_by_email, uploaded_by_name, editor_id, comments)
-        VALUES ($1, $2, $3, $4, $5, $6)`,
-        [
-          fileRequest.id,
-          mediaFile.id,
-          req.user.email,
-          req.user.name,
-          editorId,
-          comments || null
-        ]
+        `UPDATE media_files SET upload_session_id = $1 WHERE id = $2`,
+        [uploadSessionId, mediaFile.id]
       );
 
       logger.info('File uploaded via request (authenticated)', {
@@ -1882,21 +1884,45 @@ class FileRequestController {
       const userResult = await query('SELECT name FROM users WHERE id = $1', [userId]);
       const uploaderName = userResult.rows[0]?.name || 'Unknown';
 
+      // 🆕 Create upload session to track this chunked upload
+      const uploadSessionResult = await query(
+        `INSERT INTO file_request_uploads
+        (file_request_id, uploaded_by, upload_type, file_count, total_size_bytes)
+        VALUES ($1, $2, 'file', 1, $3)
+        RETURNING id`,
+        [id, userId, fileSize]
+      );
+      const uploadSessionId = uploadSessionResult.rows[0].id;
+
+      // Get user's editor ID
+      const editorResult = await query('SELECT id FROM editors WHERE user_id = $1', [userId]);
+      const editorId = editorResult.rows.length > 0 ? editorResult.rows[0].id : null;
+
       // Upload merged file to S3 using mediaService
-      const uploadResult = await mediaService.uploadFile({
-        file: {
+      const uploadResult = await mediaService.uploadMedia(
+        {
           path: mergedFilePath,
           originalname: fileName,
           size: fileSize,
           mimetype: this.getMimeType(fileName)
         },
         userId,
-        uploaderName,
-        folderId: request.folder_id,
-        uploadType: 'file-request',
-        requestId: id,
-        comments
-      });
+        editorId,
+        {
+          tags: ['file-request-upload'],
+          description: comments || `Uploaded via file request (chunked)`,
+          folder_id: request.folder_id,
+          request_id: id,
+          is_file_request_upload: true,
+          upload_session_id: uploadSessionId
+        }
+      );
+
+      // 🆕 Link the uploaded file to the upload session
+      await query(
+        `UPDATE media_files SET upload_session_id = $1 WHERE id = $2`,
+        [uploadSessionId, uploadResult.id]
+      );
 
       // Clean up temp files
       fs.unlinkSync(mergedFilePath);
@@ -2269,6 +2295,66 @@ class FileRequestController {
       });
     } catch (error) {
       logger.error('Reopen request failed', { error: error.message });
+      next(error);
+    }
+  }
+
+  /**
+   * Get upload history for file request
+   * GET /api/file-requests/:id/upload-history
+   */
+  async getUploadHistory(req, res, next) {
+    try {
+      const { id } = req.params;
+      const userId = req.user.id;
+
+      // Verify user has access to this request
+      const requestResult = await query(
+        'SELECT * FROM file_requests WHERE id = $1',
+        [id]
+      );
+
+      if (requestResult.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          error: 'File request not found'
+        });
+      }
+
+      const fileRequest = requestResult.rows[0];
+
+      // Check access
+      const hasAccess = fileRequest.created_by === userId ||
+                       fileRequest.assigned_buyer_id === userId ||
+                       (fileRequest.assigned_editors && fileRequest.assigned_editors.includes(userId)) ||
+                       req.user.role === 'admin';
+
+      if (!hasAccess) {
+        return res.status(403).json({
+          success: false,
+          error: 'Access denied'
+        });
+      }
+
+      // Get upload sessions with uploader details
+      const uploadHistory = await query(
+        `SELECT
+          fru.*,
+          u.name as uploader_name,
+          u.email as uploader_email
+         FROM file_request_uploads fru
+         LEFT JOIN users u ON fru.uploaded_by = u.id
+         WHERE fru.file_request_id = $1
+         ORDER BY fru.created_at DESC`,
+        [id]
+      );
+
+      res.json({
+        success: true,
+        data: uploadHistory.rows
+      });
+    } catch (error) {
+      logger.error('Get upload history failed', { error: error.message });
       next(error);
     }
   }

@@ -129,6 +129,12 @@ router.post('/:id/reopen',
   fileRequestController.reopenRequest.bind(fileRequestController)
 );
 
+// Get upload history for request
+router.get('/:id/upload-history',
+  authenticateToken,
+  fileRequestController.getUploadHistory.bind(fileRequestController)
+);
+
 // ============================================
 // CANVAS ROUTES (Product Brief Feature)
 // ============================================
