@@ -39,12 +39,6 @@ router.patch('/:id',
   fileRequestController.update.bind(fileRequestController)
 );
 
-// Close file request
-router.post('/:id/close',
-  authenticateToken,
-  fileRequestController.close.bind(fileRequestController)
-);
-
 // Delete file request
 router.delete('/:id',
   authenticateToken,
@@ -105,6 +99,34 @@ router.post('/:id/upload-chunk',
 router.post('/:id/finalize-upload',
   authenticateToken,
   fileRequestController.finalizeChunkedUpload.bind(fileRequestController)
+);
+
+// ============================================
+// STATUS TRANSITION ROUTES
+// ============================================
+
+// Mark request as uploaded (editor completes uploads)
+router.post('/:id/mark-uploaded',
+  authenticateToken,
+  fileRequestController.markAsUploaded.bind(fileRequestController)
+);
+
+// Launch request (buyer accepts and launches)
+router.post('/:id/launch',
+  authenticateToken,
+  fileRequestController.launch.bind(fileRequestController)
+);
+
+// Close request (buyer closes after launch) - replaces old close route
+router.post('/:id/close',
+  authenticateToken,
+  fileRequestController.closeRequest.bind(fileRequestController)
+);
+
+// Reopen closed request (buyer reopens)
+router.post('/:id/reopen',
+  authenticateToken,
+  fileRequestController.reopenRequest.bind(fileRequestController)
 );
 
 // ============================================

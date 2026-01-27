@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const mediaService = require('../services/mediaService');
 const { logActivity } = require('../middleware/activityLogger');
 const Notification = require('../models/Notification');
+const Folder = require('../models/Folder');
 
 class FileRequestController {
   /**
@@ -94,13 +95,37 @@ class FileRequestController {
         }
       }
 
-      // Verify folder exists if provided
-      if (folder_id) {
-        console.log('Verifying folder_id:', folder_id);
+      // 🆕 AUTO-CREATE DATE FOLDER if no folder specified
+      // Format: "UserName-YYYY-MM-DD" (reuses same folder for multiple requests on same day)
+      let targetFolderId = folder_id;
+      if (!targetFolderId) {
+        try {
+          const requestFolder = await Folder.getOrCreateRequestFolder(
+            userId,
+            req.user.name,
+            null // Root level
+          );
+          targetFolderId = requestFolder.id;
+          console.log('✅ Auto-created/reused request folder:', {
+            folderId: targetFolderId,
+            folderName: requestFolder.name
+          });
+        } catch (folderCreateError) {
+          console.error('Failed to create request folder:', folderCreateError);
+          return res.status(500).json({
+            success: false,
+            error: 'Failed to create file request folder'
+          });
+        }
+      }
+
+      // Verify folder exists
+      if (targetFolderId) {
+        console.log('Verifying folder_id:', targetFolderId);
         try {
           const folderResult = await query(
             'SELECT id, owner_id, name FROM folders WHERE id = $1 AND is_deleted = FALSE',
-            [folder_id]
+            [targetFolderId]
           );
           console.log('Folder query result:', folderResult.rows);
           if (folderResult.rows.length === 0) {
@@ -190,7 +215,7 @@ class FileRequestController {
         platform: platform || null,
         vertical: vertical || null,
         created_by: userId,
-        folder_id: folder_id || null,
+        folder_id: targetFolderId || null,
         request_token: requestToken,
         deadline: deadline || null,
         allow_multiple_uploads,
@@ -217,7 +242,7 @@ class FileRequestController {
             platform || null,
             vertical || null,
             userId,
-            folder_id || null,
+            targetFolderId || null,
             requestToken,
             deadline || null,
             allow_multiple_uploads,
@@ -1948,6 +1973,304 @@ class FileRequestController {
       '7z': 'application/x-7z-compressed'
     };
     return mimeTypes[ext] || 'application/octet-stream';
+  }
+
+  /**
+   * Mark file request as uploaded (editor completes uploads)
+   * POST /api/file-requests/:id/mark-uploaded
+   */
+  async markAsUploaded(req, res, next) {
+    try {
+      const { id } = req.params;
+      const userId = req.user.id;
+      const userRole = req.user.role;
+
+      // Get file request
+      const requestResult = await query(
+        'SELECT * FROM file_requests WHERE id = $1',
+        [id]
+      );
+
+      if (requestResult.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          error: 'File request not found'
+        });
+      }
+
+      const fileRequest = requestResult.rows[0];
+
+      // Check permission: Only assigned editors can mark as uploaded
+      const isAssignedEditor = fileRequest.assigned_editors && fileRequest.assigned_editors.includes(userId);
+      if (!isAssignedEditor && userRole !== 'admin') {
+        return res.status(403).json({
+          success: false,
+          error: 'Only assigned editors can mark request as uploaded'
+        });
+      }
+
+      // Update status
+      await query(
+        `UPDATE file_requests
+         SET status = 'uploaded',
+             uploaded_at = NOW(),
+             uploaded_by = $1
+         WHERE id = $2`,
+        [userId, id]
+      );
+
+      // Log activity
+      await logActivity({
+        req,
+        actionType: 'file_request_uploaded',
+        resourceType: 'file_request',
+        resourceId: id,
+        resourceName: fileRequest.title,
+        details: { uploaded_by_name: req.user.name },
+        status: 'success'
+      });
+
+      // Notify request creator
+      await Notification.create({
+        user_id: fileRequest.created_by,
+        type: 'file_request_uploaded',
+        title: 'File Request Uploaded',
+        message: `${req.user.name} has uploaded files for "${fileRequest.title}"`,
+        reference_type: 'file_request',
+        reference_id: id
+      });
+
+      res.json({
+        success: true,
+        message: 'File request marked as uploaded'
+      });
+    } catch (error) {
+      logger.error('Mark as uploaded failed', { error: error.message });
+      next(error);
+    }
+  }
+
+  /**
+   * Launch file request (buyer accepts and launches)
+   * POST /api/file-requests/:id/launch
+   */
+  async launch(req, res, next) {
+    try {
+      const { id } = req.params;
+      const userId = req.user.id;
+      const userRole = req.user.role;
+
+      // Get file request
+      const requestResult = await query(
+        'SELECT * FROM file_requests WHERE id = $1',
+        [id]
+      );
+
+      if (requestResult.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          error: 'File request not found'
+        });
+      }
+
+      const fileRequest = requestResult.rows[0];
+
+      // Check permission: Only creator, assigned buyer, or admin
+      const canLaunch = fileRequest.created_by === userId ||
+                        fileRequest.assigned_buyer_id === userId ||
+                        userRole === 'admin';
+
+      if (!canLaunch) {
+        return res.status(403).json({
+          success: false,
+          error: 'Only request creator or assigned buyer can launch'
+        });
+      }
+
+      // Update status
+      await query(
+        `UPDATE file_requests
+         SET status = 'launched',
+             launched_at = NOW(),
+             launched_by = $1
+         WHERE id = $2`,
+        [userId, id]
+      );
+
+      // Log activity
+      await logActivity({
+        req,
+        actionType: 'file_request_launched',
+        resourceType: 'file_request',
+        resourceId: id,
+        resourceName: fileRequest.title,
+        details: { launched_by_name: req.user.name },
+        status: 'success'
+      });
+
+      res.json({
+        success: true,
+        message: 'File request launched successfully'
+      });
+    } catch (error) {
+      logger.error('Launch request failed', { error: error.message });
+      next(error);
+    }
+  }
+
+  /**
+   * Close file request (buyer closes after launch)
+   * POST /api/file-requests/:id/close
+   */
+  async closeRequest(req, res, next) {
+    try {
+      const { id } = req.params;
+      const userId = req.user.id;
+      const userRole = req.user.role;
+
+      // Get file request
+      const requestResult = await query(
+        'SELECT * FROM file_requests WHERE id = $1',
+        [id]
+      );
+
+      if (requestResult.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          error: 'File request not found'
+        });
+      }
+
+      const fileRequest = requestResult.rows[0];
+
+      // Check permission
+      const canClose = fileRequest.created_by === userId ||
+                       fileRequest.assigned_buyer_id === userId ||
+                       userRole === 'admin';
+
+      if (!canClose) {
+        return res.status(403).json({
+          success: false,
+          error: 'Only request creator or assigned buyer can close'
+        });
+      }
+
+      // Update status
+      await query(
+        `UPDATE file_requests
+         SET status = 'closed',
+             closed_at = NOW(),
+             closed_by = $1,
+             completed_at = NOW()
+         WHERE id = $2`,
+        [userId, id]
+      );
+
+      // Log activity
+      await logActivity({
+        req,
+        actionType: 'file_request_closed',
+        resourceType: 'file_request',
+        resourceId: id,
+        resourceName: fileRequest.title,
+        details: { closed_by_name: req.user.name },
+        status: 'success'
+      });
+
+      res.json({
+        success: true,
+        message: 'File request closed successfully'
+      });
+    } catch (error) {
+      logger.error('Close request failed', { error: error.message });
+      next(error);
+    }
+  }
+
+  /**
+   * Reopen file request (buyer reopens closed request)
+   * POST /api/file-requests/:id/reopen
+   */
+  async reopenRequest(req, res, next) {
+    try {
+      const { id } = req.params;
+      const userId = req.user.id;
+      const userRole = req.user.role;
+
+      // Get file request
+      const requestResult = await query(
+        'SELECT * FROM file_requests WHERE id = $1',
+        [id]
+      );
+
+      if (requestResult.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          error: 'File request not found'
+        });
+      }
+
+      const fileRequest = requestResult.rows[0];
+
+      // Check permission
+      const canReopen = fileRequest.created_by === userId ||
+                        fileRequest.assigned_buyer_id === userId ||
+                        userRole === 'admin';
+
+      if (!canReopen) {
+        return res.status(403).json({
+          success: false,
+          error: 'Only request creator or assigned buyer can reopen'
+        });
+      }
+
+      // Update status
+      await query(
+        `UPDATE file_requests
+         SET status = 'reopened',
+             reopened_at = NOW(),
+             reopened_by = $1,
+             reopen_count = reopen_count + 1
+         WHERE id = $2`,
+        [userId, id]
+      );
+
+      // Log activity
+      await logActivity({
+        req,
+        actionType: 'file_request_reopened',
+        resourceType: 'file_request',
+        resourceId: id,
+        resourceName: fileRequest.title,
+        details: {
+          reopened_by_name: req.user.name,
+          reopen_count: (fileRequest.reopen_count || 0) + 1
+        },
+        status: 'success'
+      });
+
+      // Notify assigned editors
+      if (fileRequest.assigned_editors && fileRequest.assigned_editors.length > 0) {
+        for (const editorId of fileRequest.assigned_editors) {
+          await Notification.create({
+            user_id: editorId,
+            type: 'file_request_reopened',
+            title: 'File Request Reopened',
+            message: `${req.user.name} has reopened "${fileRequest.title}"`,
+            reference_type: 'file_request',
+            reference_id: id
+          });
+        }
+      }
+
+      res.json({
+        success: true,
+        message: 'File request reopened successfully'
+      });
+    } catch (error) {
+      logger.error('Reopen request failed', { error: error.message });
+      next(error);
+    }
   }
 }
 

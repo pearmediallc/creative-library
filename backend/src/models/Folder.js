@@ -587,6 +587,71 @@ class Folder extends BaseModel {
       throw error;
     }
   }
+
+  /**
+   * Get or create file request folder with user name + date format
+   * Format: "UserName-YYYY-MM-DD" (e.g., "Jaun-2026-01-24")
+   * Reuses same folder if multiple requests created on same day by same user
+   *
+   * @param {string} userId - User ID creating the request
+   * @param {string} userName - User's display name
+   * @param {string} parentFolderId - Optional parent folder ID (defaults to root)
+   * @returns {Promise<Object>} Folder object
+   */
+  async getOrCreateRequestFolder(userId, userName, parentFolderId = null) {
+    try {
+      // Generate folder name with format: UserName-YYYY-MM-DD
+      const today = new Date();
+      const dateStr = today.toISOString().split('T')[0]; // YYYY-MM-DD
+      const sanitizedName = userName.trim().replace(/\s+/g, '-'); // Replace spaces with hyphens
+      const folderName = `${sanitizedName}-${dateStr}`;
+
+      // Check if folder already exists for this user + date combination
+      const existing = await query(
+        `SELECT * FROM folders
+         WHERE name = $1
+           AND created_by = $2
+           AND parent_folder_id ${parentFolderId ? '= $3' : 'IS NULL'}
+           AND is_deleted = FALSE
+         LIMIT 1`,
+        parentFolderId ? [folderName, userId, parentFolderId] : [folderName, userId]
+      );
+
+      if (existing.rows && existing.rows.length > 0) {
+        logger.info('Reusing existing file request folder', {
+          folderId: existing.rows[0].id,
+          folderName,
+          userId
+        });
+        return existing.rows[0];
+      }
+
+      // Create new folder
+      const newFolder = await this.create({
+        name: folderName,
+        created_by: userId,
+        owner_id: userId,
+        parent_folder_id: parentFolderId,
+        description: `File requests for ${userName} on ${dateStr}`,
+        color: '#3B82F6' // Blue color for file request folders
+      });
+
+      logger.info('Created new file request folder', {
+        folderId: newFolder.id,
+        folderName,
+        userId
+      });
+
+      return newFolder;
+    } catch (error) {
+      logger.error('Get or create request folder failed', {
+        error: error.message,
+        userId,
+        userName
+      });
+      throw error;
+    }
+  }
 }
 
 module.exports = new Folder();
