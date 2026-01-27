@@ -135,15 +135,10 @@ CREATE INDEX IF NOT EXISTS idx_file_request_uploads_user ON file_request_uploads
 CREATE INDEX IF NOT EXISTS idx_file_request_uploads_created ON file_request_uploads(created_at);
 CREATE INDEX IF NOT EXISTS idx_media_files_upload_session ON media_files(upload_session_id);
 
--- 5. Migrate existing data
+-- 5. Migrate existing data - set default status for existing requests
 UPDATE file_requests
 SET status = CASE
   WHEN completed_at IS NOT NULL THEN 'closed'
-  WHEN array_length(assigned_editors, 1) > 0 THEN 'in_progress'
   ELSE 'open'
 END
-WHERE status IS NULL OR status = 'open';
-
-UPDATE file_requests
-SET closed_at = completed_at, closed_by = created_by
-WHERE completed_at IS NOT NULL AND closed_at IS NULL;
+WHERE status IS NULL;
