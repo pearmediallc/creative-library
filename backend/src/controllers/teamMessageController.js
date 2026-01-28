@@ -193,25 +193,25 @@ async function getMessages(req, res) {
     let whereClause = 'tm.team_id = $1 AND tm.is_deleted = false';
     const params = [teamId];
 
-    // Filter by parent message if specified (get replies)
+    // Filter by parent message if specified (get replies only)
     if (parentMessageId) {
       whereClause += ' AND tm.parent_message_id = $2';
       params.push(parentMessageId);
-    } else {
-      // Only get top-level messages if no parent specified
-      whereClause += ' AND tm.parent_message_id IS NULL';
     }
+    // If no parent specified, return ALL messages (both top-level and replies)
+    // Frontend will filter and organize them
 
     const result = await query(
       `SELECT
         tm.*,
         u.name as user_name,
+        u.email as user_email,
         (SELECT COUNT(*) FROM team_messages WHERE parent_message_id = tm.id AND is_deleted = false) as reply_count,
         (SELECT COUNT(*) FROM team_message_reads WHERE message_id = tm.id) as read_count
        FROM team_messages tm
        LEFT JOIN users u ON tm.user_id = u.id
        WHERE ${whereClause}
-       ORDER BY tm.created_at DESC
+       ORDER BY tm.created_at ASC
        LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
       [...params, parseInt(limit), parseInt(offset)]
     );
