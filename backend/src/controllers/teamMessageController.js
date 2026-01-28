@@ -89,12 +89,14 @@ async function sendMessage(req, res) {
       try {
         await query(
           `INSERT INTO notifications (
-            user_id, notification_type, message, team_message_id, is_read
-          ) VALUES ($1, $2, $3, $4, $5)`,
+            user_id, type, title, message, reference_type, reference_id, is_read
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
           [
             member.user_id,
             'team_message',
-            `${senderName} posted in ${teamName}: ${messageText.substring(0, 100)}${messageText.length > 100 ? '...' : ''}`,
+            `New message in ${teamName}`,
+            `${senderName} posted: ${messageText.substring(0, 100)}${messageText.length > 100 ? '...' : ''}`,
+            'team_message',
             message.id,
             false
           ]
@@ -121,12 +123,14 @@ async function sendMessage(req, res) {
           if (mentionMemberCheck.rows.length > 0 && mentionedUserId !== userId) {
             await query(
               `INSERT INTO notifications (
-                user_id, notification_type, message, team_message_id, is_read
-              ) VALUES ($1, $2, $3, $4, $5)`,
+                user_id, type, title, message, reference_type, reference_id, is_read
+              ) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
               [
                 mentionedUserId,
-                'team_mention',
-                `${senderName} mentioned you in ${teamName}: ${messageText.substring(0, 100)}${messageText.length > 100 ? '...' : ''}`,
+                'mention',
+                `${senderName} mentioned you in ${teamName}`,
+                messageText.substring(0, 200) + (messageText.length > 200 ? '...' : ''),
+                'team_message',
                 message.id,
                 false
               ]
