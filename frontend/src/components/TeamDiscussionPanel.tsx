@@ -7,6 +7,8 @@ import { Send, Edit2, Trash2, Reply, MoreVertical } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { TeamMentionInput } from './TeamMentionInput';
 
+// Updated: 2026-01-28 20:00 - Fixed Show/Hide Replies and input height
+
 interface Message {
   id: string;
   team_id: string;
