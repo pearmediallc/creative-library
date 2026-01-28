@@ -144,9 +144,10 @@ export function TeamDiscussionPanel({ teamId }: TeamDiscussionPanelProps) {
     });
   };
 
-  const renderMessage = (message: Message) => {
+  const renderMessage = (message: Message, isReply: boolean = false) => {
     const isOwnMessage = message.user_id === user?.id;
     const isEditing = editingMessage?.id === message.id;
+    const actualReplyCount = messages.filter(m => m.parent_message_id === message.id).length;
 
     return (
       <div
@@ -241,13 +242,13 @@ export function TeamDiscussionPanel({ teamId }: TeamDiscussionPanelProps) {
           {!message.parent_message_id && !isEditing && (
             <div className="flex items-center gap-3 mt-2">
               {/* Toggle replies visibility */}
-              {(message.reply_count ?? 0) > 0 && (
+              {actualReplyCount > 0 && (
                 <button
                   onClick={() => toggleReplies(message.id)}
                   className="text-xs text-primary hover:underline flex items-center gap-1"
                 >
                   <Reply size={12} />
-                  {expandedReplies.has(message.id) ? 'Hide' : 'Show'} Replies ({message.reply_count})
+                  {expandedReplies.has(message.id) ? 'Hide' : 'Show'} Replies ({actualReplyCount})
                 </button>
               )}
               {/* Start writing a reply */}
@@ -320,8 +321,8 @@ export function TeamDiscussionPanel({ teamId }: TeamDiscussionPanelProps) {
             value={messageText}
             onChange={setMessageText}
             placeholder={replyingTo ? 'Write a reply... (use @ to mention team members)' : 'Type your message... (use @ to mention team members)'}
-            className="flex-1 px-3 py-2 border rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-800 dark:border-gray-600 dark:text-white"
-            rows={3}
+            className="flex-1 px-3 py-2 border rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-800 dark:border-gray-600 dark:text-white min-h-[100px]"
+            rows={4}
             disabled={sending}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
