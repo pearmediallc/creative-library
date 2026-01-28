@@ -323,8 +323,8 @@ export function TeamDiscussionPanel({ teamId }: TeamDiscussionPanelProps) {
             value={messageText}
             onChange={setMessageText}
             placeholder={replyingTo ? 'Write a reply... (use @ to mention team members)' : 'Type your message... (use @ to mention team members)'}
-            className="flex-1 px-3 py-2 border rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-800 dark:border-gray-600 dark:text-white min-h-[100px]"
-            rows={4}
+            className="flex-1 px-3 py-2 border rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-primary dark:bg-gray-800 dark:border-gray-600 dark:text-white"
+            rows={5}
             disabled={sending}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
