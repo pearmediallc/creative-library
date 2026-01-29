@@ -600,6 +600,19 @@ class Folder extends BaseModel {
    */
   async getOrCreateRequestFolder(userId, userName, parentFolderId = null) {
     try {
+      // Fetch user name from database if not provided
+      if (!userName) {
+        const userResult = await query(
+          'SELECT name, email FROM users WHERE id = $1',
+          [userId]
+        );
+        if (userResult.rows.length > 0) {
+          userName = userResult.rows[0].name || userResult.rows[0].email.split('@')[0];
+        } else {
+          userName = 'User';
+        }
+      }
+
       // Generate folder name with format: UserName-YYYY-MM-DD
       const today = new Date();
       const dateStr = today.toISOString().split('T')[0]; // YYYY-MM-DD
