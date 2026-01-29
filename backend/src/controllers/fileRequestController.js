@@ -1306,6 +1306,15 @@ class FileRequestController {
         [uploadSessionId, mediaFile.id]
       );
 
+      // ✨ CRITICAL: Also create a file_request_uploads record linking the file
+      // This is what makes the file show up in the upload history!
+      await query(
+        `INSERT INTO file_request_uploads
+        (file_request_id, file_id, uploaded_by, upload_type, editor_id, comments)
+        VALUES ($1, $2, $3, 'file', $4, $5)`,
+        [fileRequest.id, mediaFile.id, userId, editorId, comments || null]
+      );
+
       logger.info('File uploaded via request (authenticated)', {
         fileRequestId: fileRequest.id,
         fileId: mediaFile.id,
@@ -1316,18 +1325,21 @@ class FileRequestController {
 
       // Log activity for the file upload
       await logActivity({
+        req,
         userId,
-        action: 'file_request_upload',
-        details: `Uploaded "${mediaFile.original_filename}" to file request "${fileRequest.title}"`,
-        metadata: {
-          file_request_id: fileRequest.id,
+        actionType: 'file_request_upload',
+        resourceType: 'file_request',
+        resourceId: fileRequest.id,
+        resourceName: fileRequest.title,
+        details: {
           file_id: mediaFile.id,
           file_name: mediaFile.original_filename,
           file_size: mediaFile.file_size,
           file_type: mediaFile.file_type,
           has_comments: !!comments,
           request_creator: fileRequest.creator_id
-        }
+        },
+        status: 'success'
       });
 
       // Create notification for request creator (if uploader is not the creator)

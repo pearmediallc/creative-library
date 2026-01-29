@@ -212,9 +212,9 @@ class MediaService {
         // ✨ NEW: Folder and buyer assignment
         folder_id: targetFolderId || null,
         assigned_buyer_id: metadata.assigned_buyer_id || null,
-        // ✨ File request uploads are hidden from media library by default
-        // Users can click "Add to Library" to make them visible in their target folder
-        is_deleted: metadata.is_file_request_upload === true,
+        // ✨ File request uploads are NOT deleted - they should be visible!
+        // The request creator and assigned buyer should be able to see and download them
+        is_deleted: false,
         // ✨ NEW: Metadata tracking fields
         metadata_stripped: metadataOps.removed || false,
         metadata_embedded: metadataOps.added ? {
