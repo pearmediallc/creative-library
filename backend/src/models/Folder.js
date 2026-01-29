@@ -623,7 +623,7 @@ class Folder extends BaseModel {
       const existing = await query(
         `SELECT * FROM folders
          WHERE name = $1
-           AND created_by = $2
+           AND owner_id = $2
            AND parent_folder_id ${parentFolderId ? '= $3' : 'IS NULL'}
            AND is_deleted = FALSE
          LIMIT 1`,
@@ -642,11 +642,12 @@ class Folder extends BaseModel {
       // Create new folder
       const newFolder = await this.create({
         name: folderName,
-        created_by: userId,
         owner_id: userId,
         parent_folder_id: parentFolderId,
         description: `File requests for ${userName} on ${dateStr}`,
-        color: '#3B82F6' // Blue color for file request folders
+        color: '#3B82F6', // Blue color for file request folders
+        is_auto_created: true,
+        folder_type: 'file_request'
       });
 
       logger.info('Created new file request folder', {
