@@ -768,6 +768,36 @@ class FileRequestController {
       fileRequest.uploads = uploadsResult.rows;
       fileRequest.assigned_editors = editorsResult.rows;
 
+      // ✨ Get reassignment history with notes
+      let reassignmentsResult = { rows: [] };
+      try {
+        reassignmentsResult = await query(
+          `SELECT
+            rr.*,
+            uf.name as from_name,
+            uf.email as from_email,
+            ut.name as to_name,
+            ut.email as to_email
+           FROM request_reassignments rr
+           JOIN users uf ON rr.reassigned_from = uf.id
+           JOIN users ut ON rr.reassigned_to = ut.id
+           WHERE rr.file_request_id = $1
+           ORDER BY rr.created_at DESC`,
+          [id]
+        );
+        logger.info('Reassignment history fetched', {
+          requestId: id,
+          count: reassignmentsResult.rows.length
+        });
+      } catch (reassignError) {
+        logger.error('Failed to fetch reassignment history', {
+          requestId: id,
+          error: reassignError.message
+        });
+        // Continue without reassignment data
+      }
+      fileRequest.reassignments = reassignmentsResult.rows;
+
       // Calculate num_creatives_requested (use from DB if available, fallback to editors count)
       fileRequest.num_creatives_requested = fileRequest.num_creatives || editorsResult.rows.length || 0;
 
