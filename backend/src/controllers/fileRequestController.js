@@ -208,16 +208,32 @@ class FileRequestController {
       if (vertical && (!editor_ids || editor_ids.length === 0)) {
         console.log('🔍 Vertical provided, checking for vertical head:', vertical);
         try {
+          // Normalize vertical for lookup: lowercase, trim
+          const normalizedVertical = vertical.toLowerCase().trim();
+          console.log('🔄 Normalized vertical for lookup:', normalizedVertical);
+
+          // Strategy: Check if the input contains any of the stored vertical keywords
+          // E.g., "Home Insurance" contains "home", "Auto Insurance" contains "auto"
           const verticalHeadResult = await query(
             `SELECT
               vh.*,
               u.id as editor_user_id,
-              e.id as editor_id
+              e.id as editor_id,
+              CASE
+                WHEN LOWER(vh.vertical) = $1 THEN 1                    -- Exact match
+                WHEN $1 LIKE '%' || LOWER(vh.vertical) || '%' THEN 2  -- Input contains vertical keyword
+                WHEN LOWER(vh.vertical) LIKE '%' || $1 || '%' THEN 3  -- Vertical contains input
+                ELSE 4
+              END as match_rank
              FROM vertical_heads vh
              LEFT JOIN users u ON vh.head_editor_id = u.id
              LEFT JOIN editors e ON e.user_id = u.id
-             WHERE vh.vertical = $1`,
-            [vertical]
+             WHERE LOWER(vh.vertical) = $1
+                OR $1 LIKE '%' || LOWER(vh.vertical) || '%'
+                OR LOWER(vh.vertical) LIKE '%' || $1 || '%'
+             ORDER BY match_rank ASC
+             LIMIT 1`,
+            [normalizedVertical]
           );
 
           if (verticalHeadResult.rows.length > 0 && verticalHeadResult.rows[0].editor_id) {
