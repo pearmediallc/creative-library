@@ -2696,7 +2696,8 @@ class FileRequestController {
       logger.info('File request reassigned', {
         requestId: id,
         reassigned_from: userId,
-        reassigned_to,
+        reassigned_to: targetUserId,
+        reassigned_to_editor_id: targetEditorId,
         note
       });
 
