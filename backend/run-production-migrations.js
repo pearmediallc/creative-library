@@ -27,6 +27,10 @@ const migrations = [
   {
     name: '20260129_populate_vertical_heads.sql',
     description: 'Populate vertical heads team mapping'
+  },
+  {
+    name: '20260211_ensure_creative_users_have_editor_records.sql',
+    description: 'Create editor records for creative users'
   }
 ];
 
@@ -135,6 +139,52 @@ async function verifyChanges() {
       missingColumns.forEach(col => console.log(`  • ${col}`));
     } else {
       console.log('\n✅ All required columns present in file_request_uploads');
+    }
+
+    // Check editor records for creative users
+    console.log('\n📋 Checking Editor Records:');
+    const editorStats = await client.query(`
+      SELECT
+        (SELECT COUNT(*) FROM users WHERE role = 'creative') as total_creative_users,
+        (SELECT COUNT(*) FROM editors) as total_editors,
+        (SELECT COUNT(*) FROM users u
+         LEFT JOIN editors e ON e.user_id = u.id
+         WHERE u.role = 'creative' AND e.id IS NULL) as creative_without_editor
+    `);
+
+    const stats = editorStats.rows[0];
+    console.log(`  • Total creative users: ${stats.total_creative_users}`);
+    console.log(`  • Total editor records: ${stats.total_editors}`);
+    console.log(`  • Creative users WITHOUT editor record: ${stats.creative_without_editor}`);
+
+    if (parseInt(stats.creative_without_editor) > 0) {
+      console.log('\n⚠️  WARNING: Some creative users are missing editor records!');
+    } else {
+      console.log('\n✅ All creative users have editor records');
+    }
+
+    // Show all creative users with their editor status
+    const creativeUsers = await client.query(`
+      SELECT
+        u.name,
+        u.email,
+        e.id as editor_id,
+        CASE
+          WHEN e.id IS NULL THEN '❌ NO EDITOR RECORD'
+          WHEN e.is_active THEN '✅ ACTIVE EDITOR'
+          ELSE '⚠️ INACTIVE EDITOR'
+        END as status
+      FROM users u
+      LEFT JOIN editors e ON e.user_id = u.id
+      WHERE u.role = 'creative'
+      ORDER BY u.name
+    `);
+
+    if (creativeUsers.rows.length > 0) {
+      console.log('\n📋 Creative Users & Editor Status:');
+      creativeUsers.rows.forEach(user => {
+        console.log(`  ${user.status} ${user.name} (${user.email})`);
+      });
     }
 
   } catch (error) {

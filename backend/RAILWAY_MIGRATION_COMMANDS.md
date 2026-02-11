@@ -12,10 +12,11 @@ node run-production-migrations.js
 ```
 
 This will:
-- ✅ Run all 3 migrations in sequence
+- ✅ Run all 4 migrations in sequence
 - ✅ Verify changes after completion
 - ✅ Show detailed summary
 - ✅ Stop on first error
+- ✅ Check editor records for creative users
 
 ---
 
@@ -252,6 +253,12 @@ After successful migration:
 - guns → Pankaj
 - refi → Karan
 - medicare → Priya
+
+✅ **editors table** will have records for all creative users:
+- Each creative user will have an editor record
+- `display_name` will match their user name
+- `is_active` will be TRUE
+- This enables vertical assignment to work correctly
 
 ---
 
