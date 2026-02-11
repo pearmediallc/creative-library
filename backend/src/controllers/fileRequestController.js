@@ -2576,9 +2576,14 @@ class FileRequestController {
         });
       }
 
-      // Verify reassign_to editor exists
+      // Resolve reassign_to into (targetEditorId, targetUserId)
+      // Frontend may send either editor_id OR user_id. Support both.
       const editorCheck = await query(
-        'SELECT e.id, e.user_id FROM editors e WHERE e.user_id = $1 AND e.is_active = TRUE',
+        `SELECT e.id as editor_id, e.user_id as user_id
+         FROM editors e
+         WHERE e.is_active = TRUE
+           AND (e.id = $1 OR e.user_id = $1)
+         LIMIT 1`,
         [reassign_to]
       );
 
@@ -2589,14 +2594,15 @@ class FileRequestController {
         });
       }
 
-      const targetEditorId = editorCheck.rows[0].id;
+      const targetEditorId = editorCheck.rows[0].editor_id;
+      const targetUserId = editorCheck.rows[0].user_id;
 
-      // Create reassignment record
+      // Create reassignment record (store reassigned_to as USER id)
       await query(
         `INSERT INTO request_reassignments
          (file_request_id, reassigned_from, reassigned_to, reassignment_note)
          VALUES ($1, $2, $3, $4)`,
-        [id, userId, reassign_to, note || null]
+        [id, userId, targetUserId, note || null]
       );
 
       // Mark existing active/pending assignments as reassigned (keeps history)
@@ -2627,7 +2633,7 @@ class FileRequestController {
 
       // Send notification to reassigned editor with note
       await Notification.create({
-        userId: reassign_to,
+        userId: targetUserId,
         type: 'file_request_reassigned',
         title: 'File Request Reassigned to You',
         message: `"${fileRequest.title}" has been reassigned to you by ${req.user.name || req.user.email}${note ? ': ' + note : ''}`,
@@ -2649,7 +2655,8 @@ class FileRequestController {
         resourceId: id,
         resourceName: fileRequest.title,
         details: {
-          reassigned_to,
+          reassigned_to: targetUserId,
+          reassigned_to_editor_id: targetEditorId,
           note
         },
         status: 'success'
