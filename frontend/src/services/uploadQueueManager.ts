@@ -10,6 +10,8 @@ export interface UploadTask {
   id: string;
   file: File;
   requestId: string;
+  // Relative folder path (from webkitRelativePath) to preserve folder structure on request uploads
+  folderPath?: string;
   status: 'pending' | 'uploading' | 'paused' | 'completed' | 'failed';
   progress: number;
   uploadedBytes: number;
@@ -40,10 +42,18 @@ class UploadQueueManager {
     for (const file of files) {
       const taskId = this.generateTaskId();
 
+      // Preserve folder structure when user selected a directory
+      // @ts-ignore
+      const relativePath: string | undefined = (file as any).webkitRelativePath;
+      const folderPath = relativePath
+        ? relativePath.split('/').slice(0, -1).join('/')
+        : undefined;
+
       const task: UploadTask = {
         id: taskId,
         file,
         requestId,
+        folderPath,
         status: 'pending',
         progress: 0,
         uploadedBytes: 0,
@@ -106,6 +116,10 @@ class UploadQueueManager {
       formData.append('file', task.file);
       if (task.comments) {
         formData.append('comments', task.comments);
+      }
+      // Preserve nested folder uploads inside a request
+      if (task.folderPath) {
+        formData.append('folder_path', task.folderPath);
       }
 
       // Use XMLHttpRequest for progress tracking

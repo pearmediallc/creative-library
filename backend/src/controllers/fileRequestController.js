@@ -1310,7 +1310,7 @@ class FileRequestController {
   async uploadToRequestAuth(req, res, next) {
     try {
       const { id } = req.params;
-      const { comments } = req.body;
+      const { comments, folder_path } = req.body;
       const userId = req.user.id;
 
       logger.info('🚀 ====== UPLOAD TO REQUEST (AUTH) - START ======', {
@@ -1379,13 +1379,43 @@ class FileRequestController {
 
       const editorId = editorResult.rows.length > 0 ? editorResult.rows[0].id : null;
 
+      // Determine target folder for upload. If a folder_path is provided (folder upload),
+      // create/find the hierarchy under the request folder so the structure is preserved.
+      let targetFolderIdForUpload = fileRequest.folder_id;
+      let s3FolderPathForUpload = null;
+
+      if (folder_path && String(folder_path).trim()) {
+        try {
+          const mediaController = require('./mediaController');
+          // Reuse the same hierarchy logic as media uploads (creates folders as needed)
+          targetFolderIdForUpload = await mediaController.createFolderHierarchy(
+            fileRequest.folder_id,
+            String(folder_path).trim(),
+            userId
+          );
+
+          const targetFolder = await Folder.findById(targetFolderIdForUpload);
+          if (targetFolder) {
+            s3FolderPathForUpload = targetFolder.s3_path;
+          }
+        } catch (hierErr) {
+          logger.warn('Folder hierarchy creation failed for request upload (continuing without hierarchy)', {
+            requestId: id,
+            folder_path,
+            error: hierErr.message
+          });
+        }
+      }
+
+      const uploadType = folder_path && String(folder_path).trim() ? 'folder' : 'file';
+
       // 🆕 Create upload session to track this upload
       const uploadSessionResult = await query(
         `INSERT INTO file_request_uploads
-        (file_request_id, uploaded_by, upload_type, file_count, total_size_bytes)
-        VALUES ($1, $2, 'file', 1, $3)
+        (file_request_id, uploaded_by, upload_type, file_count, total_size_bytes, folder_path)
+        VALUES ($1, $2, $3, 1, $4, $5)
         RETURNING id`,
-        [fileRequest.id, userId, req.file.size]
+        [fileRequest.id, userId, uploadType, req.file.size, folder_path || null]
       );
       const uploadSessionId = uploadSessionResult.rows[0].id;
 
@@ -1397,12 +1427,13 @@ class FileRequestController {
         {
           tags: ['file-request-upload'],
           description: comments || `Uploaded via file request: ${fileRequest.title}`,
-          folder_id: fileRequest.folder_id,
+          folder_id: targetFolderIdForUpload,
           assigned_buyer_id: fileRequest.assigned_buyer_id || null,
           request_creator_id: fileRequest.creator_id, // ✨ Pass request creator for permissions
           request_id: fileRequest.id,  // ✨ Pass request ID for proper S3 structure
           is_file_request_upload: true, // Hide from media library by default
-          upload_session_id: uploadSessionId // 🆕 Link to upload session
+          upload_session_id: uploadSessionId, // 🆕 Link to upload session
+          s3_folder_path: s3FolderPathForUpload // preserve folder structure for folder uploads
         }
       );
 
@@ -1416,9 +1447,9 @@ class FileRequestController {
       // This is what makes the file show up in the upload history!
       await query(
         `INSERT INTO file_request_uploads
-        (file_request_id, file_id, uploaded_by, upload_type, editor_id, comments)
-        VALUES ($1, $2, $3, 'file', $4, $5)`,
-        [fileRequest.id, mediaFile.id, userId, editorId, comments || null]
+        (file_request_id, file_id, uploaded_by, upload_type, editor_id, comments, folder_path)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [fileRequest.id, mediaFile.id, userId, uploadType, editorId, comments || null, folder_path || null]
       );
 
       logger.info('File uploaded via request (authenticated)', {
