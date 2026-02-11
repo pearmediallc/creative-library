@@ -51,6 +51,12 @@ router.post('/:id/assign-editors',
   fileRequestController.assignEditors.bind(fileRequestController)
 );
 
+// Admin bulk reassign (replace assigned editors)
+router.post('/:id/admin-reassign',
+  authenticateToken,
+  fileRequestController.adminReassignRequest.bind(fileRequestController)
+);
+
 // Create folder for file request
 router.post('/:id/folders',
   authenticateToken,
@@ -75,7 +81,7 @@ router.post('/:id/complete',
   fileRequestController.completeRequest.bind(fileRequestController)
 );
 
-// Reassign file request (admin only)
+// Reassign request to another editor (vertical head / assigned editors / admin)
 router.post('/:id/reassign',
   authenticateToken,
   fileRequestController.reassignRequest.bind(fileRequestController)
@@ -133,12 +139,6 @@ router.post('/:id/reopen',
 router.get('/:id/upload-history',
   authenticateToken,
   fileRequestController.getUploadHistory.bind(fileRequestController)
-);
-
-// Reassign request to another editor
-router.post('/:id/reassign',
-  authenticateToken,
-  fileRequestController.reassignRequest.bind(fileRequestController)
 );
 
 // Get reassignment history

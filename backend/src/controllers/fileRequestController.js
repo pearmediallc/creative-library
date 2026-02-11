@@ -340,6 +340,66 @@ class FileRequestController {
 
       const fileRequest = result.rows[0];
 
+      // ✨ Ensure each request gets its own sub-folder inside the buyer's dated folder
+      // Desired structure: BuyerName-YYYY-MM-DD/<RequestTitle (or token)>/
+      // We create the subfolder AFTER the request insert so we can include a stable unique suffix.
+      if (targetFolderId) {
+        try {
+          const sanitizedTitle = (requestTitle || 'Request')
+            .trim()
+            .replace(/[\\/:*?"<>|]/g, '-')
+            .replace(/\s+/g, ' ')
+            .slice(0, 60);
+
+          const shortToken = (fileRequest.request_token || '').slice(0, 8) || fileRequest.id.slice(0, 8);
+          const subFolderName = `${sanitizedTitle}-${shortToken}`;
+
+          // Avoid duplicates if request is retried
+          const existingSub = await query(
+            `SELECT id FROM folders
+             WHERE parent_folder_id = $1
+               AND owner_id = $2
+               AND name = $3
+               AND is_deleted = FALSE
+             LIMIT 1`,
+            [targetFolderId, userId, subFolderName]
+          );
+
+          let subFolderId;
+          if (existingSub.rows.length > 0) {
+            subFolderId = existingSub.rows[0].id;
+          } else {
+            const requestSubFolder = await Folder.create({
+              name: subFolderName,
+              owner_id: userId,
+              parent_folder_id: targetFolderId,
+              description: `Assets for request: ${fileRequest.title}`,
+              color: '#10B981',
+              is_auto_created: true,
+              folder_type: 'file_request_item'
+            });
+            subFolderId = requestSubFolder.id;
+          }
+
+          // Point the request to the subfolder (uploads and browsing land here)
+          await query(
+            `UPDATE file_requests
+             SET folder_id = $1, updated_at = NOW()
+             WHERE id = $2`,
+            [subFolderId, fileRequest.id]
+          );
+
+          fileRequest.folder_id = subFolderId;
+        } catch (subFolderErr) {
+          // Non-fatal: request still exists, but folder structure will be flatter
+          logger.warn('Failed to create request subfolder (non-fatal)', {
+            requestId: fileRequest.id,
+            parentFolderId: targetFolderId,
+            error: subFolderErr.message
+          });
+        }
+      }
+
       // Handle multi-editor assignment (includes auto-assigned + manually selected)
       const editorsToAssign = finalEditorIds.length > 0 ? finalEditorIds : (editor_id ? [editor_id] : []);
       if (editorsToAssign.length > 0) {
@@ -1670,14 +1730,19 @@ class FileRequestController {
   }
 
   /**
-   * Reassign file request to different editors (admin only)
-   * POST /api/file-requests/:id/reassign
+   * Admin bulk reassign (replace assigned editors)
+   * POST /api/file-requests/:id/admin-reassign
+   * Body: { new_editor_ids: uuid[] , reason?: string }
    */
-  async reassignRequest(req, res, next) {
+  async adminReassignRequest(req, res, next) {
     try {
       const { id } = req.params;
       const { new_editor_ids, reason } = req.body;
       const userId = req.user.id;
+
+      if (req.user.role !== 'admin') {
+        return res.status(403).json({ success: false, error: 'Admin only' });
+      }
 
       if (!Array.isArray(new_editor_ids) || new_editor_ids.length === 0) {
         return res.status(400).json({
@@ -1687,16 +1752,9 @@ class FileRequestController {
       }
 
       // Verify file request exists
-      const requestResult = await query(
-        'SELECT * FROM file_requests WHERE id = $1',
-        [id]
-      );
-
+      const requestResult = await query('SELECT id, title FROM file_requests WHERE id = $1', [id]);
       if (requestResult.rows.length === 0) {
-        return res.status(404).json({
-          success: false,
-          error: 'File request not found'
-        });
+        return res.status(404).json({ success: false, error: 'File request not found' });
       }
 
       // Get current editor assignments to compare
@@ -1706,18 +1764,10 @@ class FileRequestController {
       );
       const currentEditorIds = currentEditorsResult.rows.map(row => row.editor_id);
 
-      // Find which editors are actually new (not previously assigned)
-      const newlyAssignedEditors = new_editor_ids.filter(
-        editorId => !currentEditorIds.includes(editorId)
-      );
+      const newlyAssignedEditors = new_editor_ids.filter(editorId => !currentEditorIds.includes(editorId));
 
-      // Remove old editor assignments
-      await query(
-        'DELETE FROM file_request_editors WHERE request_id = $1',
-        [id]
-      );
-
-      // Add new editor assignments
+      // Replace assignments
+      await query('DELETE FROM file_request_editors WHERE request_id = $1', [id]);
       for (const editorId of new_editor_ids) {
         await query(
           `INSERT INTO file_request_editors (request_id, editor_id, status)
@@ -1726,13 +1776,14 @@ class FileRequestController {
         );
       }
 
-      // Log activity
       await logActivity({
         req,
         actionType: 'file_request_reassigned',
         resourceType: 'file_request',
         resourceId: id,
+        resourceName: requestResult.rows[0].title,
         details: {
+          mode: 'admin_replace',
           new_editor_ids,
           newly_assigned_editor_ids: newlyAssignedEditors,
           previous_editor_ids: currentEditorIds,
@@ -1741,21 +1792,14 @@ class FileRequestController {
         status: 'success'
       });
 
-      logger.info('File request reassigned', {
-        requestId: id,
-        newEditorIds: new_editor_ids,
-        newlyAssignedEditors: newlyAssignedEditors,
-        userId
-      });
-
       res.json({
         success: true,
-        message: 'File request reassigned successfully',
+        message: 'Request reassigned successfully (admin)',
         assigned_count: new_editor_ids.length,
         newly_assigned_count: newlyAssignedEditors.length
       });
     } catch (error) {
-      logger.error('Reassign request error', { error: error.message });
+      logger.error('Admin reassign request error', { error: error.message });
       next(error);
     }
   }
@@ -2506,15 +2550,29 @@ class FileRequestController {
 
       const fileRequest = requestResult.rows[0];
 
-      // RBAC: Only auto-assigned head, current assignees, or admin can reassign
-      const canReassign = fileRequest.auto_assigned_head === userId ||
-                         (fileRequest.assigned_editors && fileRequest.assigned_editors.includes(userId)) ||
-                         req.user.role === 'admin';
+      // RBAC: Only auto-assigned head, currently assigned editors, or admin can reassign
+      let isAssignedEditor = false;
+      try {
+        const assignedEditorCheck = await query(
+          `SELECT 1
+           FROM file_request_editors fre
+           JOIN editors e ON fre.editor_id = e.id
+           WHERE fre.request_id = $1
+             AND e.user_id = $2
+           LIMIT 1`,
+          [id, userId]
+        );
+        isAssignedEditor = assignedEditorCheck.rows.length > 0;
+      } catch (rbacErr) {
+        logger.warn('Reassign RBAC check failed (default deny)', { requestId: id, userId, error: rbacErr.message });
+      }
+
+      const canReassign = req.user.role === 'admin' || fileRequest.auto_assigned_head === userId || isAssignedEditor;
 
       if (!canReassign) {
         return res.status(403).json({
           success: false,
-          error: 'Only assigned editors or vertical heads can reassign requests'
+          error: 'Only assigned editors, vertical heads, or admin can reassign requests'
         });
       }
 
@@ -2541,11 +2599,21 @@ class FileRequestController {
         [id, userId, reassign_to, note || null]
       );
 
-      // Add new editor to file_request_editors
+      // Mark existing active/pending assignments as reassigned (keeps history)
+      await query(
+        `UPDATE file_request_editors
+         SET status = 'reassigned', updated_at = CURRENT_TIMESTAMP
+         WHERE request_id = $1
+           AND editor_id <> $2
+           AND status IN ('pending', 'accepted', 'in_progress', 'picked_up')`,
+        [id, targetEditorId]
+      );
+
+      // Add/ensure target editor assignment
       await query(
         `INSERT INTO file_request_editors (request_id, editor_id, status)
          VALUES ($1, $2, 'pending')
-         ON CONFLICT (request_id, editor_id) DO NOTHING`,
+         ON CONFLICT (request_id, editor_id) DO UPDATE SET status = 'pending', updated_at = CURRENT_TIMESTAMP`,
         [id, targetEditorId]
       );
 
