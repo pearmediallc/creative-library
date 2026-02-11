@@ -38,8 +38,33 @@ class MediaService {
       // }
 
       // Validate file type
-      if (!s3Service.isValidFileType(file.mimetype)) {
-        throw new Error(`Unsupported file type: ${file.mimetype}`);
+      // Media library is strict (images/videos). File Requests often need docs/zips/scripts.
+      const isFileRequestUpload = metadata.is_file_request_upload === true;
+      const requestAllowedTypes = new Set([
+        // Media
+        'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp',
+        'video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/webm',
+        // Docs / archives
+        'application/pdf',
+        'text/plain',
+        'application/zip',
+        'application/x-zip-compressed',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/vnd.ms-excel',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'application/vnd.ms-powerpoint',
+        'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        // Common fallback
+        'application/octet-stream'
+      ]);
+
+      const mime = (file.mimetype || '').toLowerCase();
+
+      if (!s3Service.isValidFileType(mime)) {
+        if (!isFileRequestUpload || !requestAllowedTypes.has(mime)) {
+          throw new Error(`Unsupported file type: ${file.mimetype}`);
+        }
       }
 
       const mediaType = s3Service.getMediaType(file.mimetype);

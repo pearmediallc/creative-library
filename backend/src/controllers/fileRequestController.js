@@ -2513,11 +2513,25 @@ class FileRequestController {
 
       const fileRequest = requestResult.rows[0];
 
-      // Check access
-      const hasAccess = fileRequest.created_by === userId ||
+      // Check access (creator, assigned buyer, assigned editor, admin)
+      let isAssignedEditor = false;
+      if (req.user.role !== 'admin') {
+        const assignedEditorCheck = await query(
+          `SELECT 1
+           FROM file_request_editors fre
+           JOIN editors e ON fre.editor_id = e.id
+           WHERE fre.request_id = $1
+             AND e.user_id = $2
+           LIMIT 1`,
+          [id, userId]
+        );
+        isAssignedEditor = assignedEditorCheck.rows.length > 0;
+      }
+
+      const hasAccess = req.user.role === 'admin' ||
+                       fileRequest.created_by === userId ||
                        fileRequest.assigned_buyer_id === userId ||
-                       (fileRequest.assigned_editors && fileRequest.assigned_editors.includes(userId)) ||
-                       req.user.role === 'admin';
+                       isAssignedEditor;
 
       if (!hasAccess) {
         return res.status(403).json({
@@ -2735,11 +2749,25 @@ class FileRequestController {
 
       const fileRequest = requestResult.rows[0];
 
-      // Check access
-      const hasAccess = fileRequest.created_by === userId ||
+      // Check access (creator, assigned buyer, assigned editor, admin)
+      let isAssignedEditor = false;
+      if (req.user.role !== 'admin') {
+        const assignedEditorCheck = await query(
+          `SELECT 1
+           FROM file_request_editors fre
+           JOIN editors e ON fre.editor_id = e.id
+           WHERE fre.request_id = $1
+             AND e.user_id = $2
+           LIMIT 1`,
+          [id, userId]
+        );
+        isAssignedEditor = assignedEditorCheck.rows.length > 0;
+      }
+
+      const hasAccess = req.user.role === 'admin' ||
+                       fileRequest.created_by === userId ||
                        fileRequest.assigned_buyer_id === userId ||
-                       (fileRequest.assigned_editors && fileRequest.assigned_editors.includes(userId)) ||
-                       req.user.role === 'admin';
+                       isAssignedEditor;
 
       if (!hasAccess) {
         return res.status(403).json({
