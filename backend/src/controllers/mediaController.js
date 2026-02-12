@@ -1769,14 +1769,20 @@ class MediaController {
         ON CONFLICT (media_file_id, tag_id) DO NOTHING
       `, [id, resolvedTagId, userId]);
 
-      // Log activity
-      await this.activityLogModel.create({
-        user_id: userId,
-        action: 'tag_added',
-        entity_type: 'media_file',
-        entity_id: id,
-        details: { tag_id: resolvedTagId }
-      });
+      // Log activity (use shared activity logger; activityLogModel isn't initialized in this controller)
+      try {
+        await logActivity({
+          req,
+          userId,
+          actionType: 'tag_added',
+          resourceType: 'media_file',
+          resourceId: id,
+          details: { tag_id: resolvedTagId },
+          status: 'success'
+        });
+      } catch (e) {
+        logger.warn('Tag added: activity log failed (non-fatal)', { error: e.message, fileId: id, tagId: resolvedTagId });
+      }
 
       res.json({
         success: true,
@@ -1819,14 +1825,20 @@ class MediaController {
         });
       }
 
-      // Log activity
-      await this.activityLogModel.create({
-        user_id: userId,
-        action: 'tag_removed',
-        entity_type: 'media_file',
-        entity_id: id,
-        details: { tag_id: tagId }
-      });
+      // Log activity (use shared activity logger; activityLogModel isn't initialized in this controller)
+      try {
+        await logActivity({
+          req,
+          userId,
+          actionType: 'tag_removed',
+          resourceType: 'media_file',
+          resourceId: id,
+          details: { tag_id: tagId },
+          status: 'success'
+        });
+      } catch (e) {
+        logger.warn('Tag removed: activity log failed (non-fatal)', { error: e.message, fileId: id, tagId });
+      }
 
       res.json({
         success: true,
