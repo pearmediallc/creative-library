@@ -606,7 +606,7 @@ class PermissionController {
    * Create public link for a resource (legacy)
    * POST /api/permissions/:id/public-link
    */
-  async createPublicLink(req, res, next) {"}
+  async createPublicLink(req, res, next) {
     try {
       const { id } = req.params;
       const { password, expires_at, disable_download, max_views } = req.body;
