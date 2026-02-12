@@ -12,10 +12,13 @@ const logger = require('../utils/logger');
  */
 async function shareMediaWithTeam(req, res) {
   try {
-    const { teamId, fileRequestUploadId, shareMessage } = req.body;
+    const { teamId, shareMessage, fileRequestUploadId, file_request_upload_id } = req.body;
+    // Back-compat: some clients send file_id for the upload id
+    const { file_id } = req.body;
+    const effectiveUploadId = fileRequestUploadId || file_request_upload_id || file_id;
     const userId = req.user.id;
 
-    if (!teamId || !fileRequestUploadId) {
+    if (!teamId || !effectiveUploadId) {
       return res.status(400).json({ error: 'Team ID and file upload ID are required' });
     }
 
@@ -32,7 +35,7 @@ async function shareMediaWithTeam(req, res) {
     // Check if file exists
     const fileCheck = await query(
       'SELECT * FROM file_request_uploads WHERE id = $1',
-      [fileRequestUploadId]
+      [effectiveUploadId]
     );
 
     if (fileCheck.rows.length === 0) {
@@ -48,7 +51,7 @@ async function shareMediaWithTeam(req, res) {
            shared_by = EXCLUDED.shared_by,
            created_at = CURRENT_TIMESTAMP
        RETURNING *`,
-      [teamId, fileRequestUploadId, userId, shareMessage || null]
+      [teamId, effectiveUploadId, userId, shareMessage || null]
     );
 
     // Log activity
@@ -209,21 +212,22 @@ async function removeSharedMedia(req, res) {
  */
 async function shareMediaWithMultipleTeams(req, res) {
   try {
-    const { teamIds, fileRequestUploadId, shareMessage } = req.body;
+    const { teamIds, fileRequestUploadId, shareMessage, file_request_upload_id, file_id } = req.body;
+    const effectiveUploadId = fileRequestUploadId || file_request_upload_id || file_id;
     const userId = req.user.id;
 
     if (!teamIds || !Array.isArray(teamIds) || teamIds.length === 0) {
       return res.status(400).json({ error: 'At least one team ID is required' });
     }
 
-    if (!fileRequestUploadId) {
+    if (!effectiveUploadId) {
       return res.status(400).json({ error: 'File upload ID is required' });
     }
 
     // Check if file exists
     const fileCheck = await query(
       'SELECT * FROM file_request_uploads WHERE id = $1',
-      [fileRequestUploadId]
+      [effectiveUploadId]
     );
 
     if (fileCheck.rows.length === 0) {

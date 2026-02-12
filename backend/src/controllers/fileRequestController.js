@@ -1794,8 +1794,9 @@ class FileRequestController {
       const requestResult = await query(
         `SELECT fr.*, fre.accepted_at, fre.editor_id
          FROM file_requests fr
-         LEFT JOIN file_request_editors fre ON fr.id = fre.request_id AND fre.user_id = $1
-         WHERE fr.id = $2`,
+         LEFT JOIN file_request_editors fre ON fr.id = fre.request_id
+         LEFT JOIN editors e ON fre.editor_id = e.id
+         WHERE fr.id = $2 AND (e.user_id = $1 OR $1 = fr.created_by)`,
         [userId, id]
       );
 
@@ -1852,14 +1853,16 @@ class FileRequestController {
   async adminReassignRequest(req, res, next) {
     try {
       const { id } = req.params;
-      const { new_editor_ids, reason } = req.body;
+      // Back-compat: some clients send editor_ids
+      const { new_editor_ids, editor_ids, reason } = req.body;
+      const effectiveNewEditorIds = Array.isArray(new_editor_ids) && new_editor_ids.length ? new_editor_ids : editor_ids;
       const userId = req.user.id;
 
       if (req.user.role !== 'admin') {
         return res.status(403).json({ success: false, error: 'Admin only' });
       }
 
-      if (!Array.isArray(new_editor_ids) || new_editor_ids.length === 0) {
+      if (!Array.isArray(effectiveNewEditorIds) || effectiveNewEditorIds.length === 0) {
         return res.status(400).json({
           success: false,
           error: 'new_editor_ids must be a non-empty array'
@@ -1879,11 +1882,11 @@ class FileRequestController {
       );
       const currentEditorIds = currentEditorsResult.rows.map(row => row.editor_id);
 
-      const newlyAssignedEditors = new_editor_ids.filter(editorId => !currentEditorIds.includes(editorId));
+      const newlyAssignedEditors = effectiveNewEditorIds.filter(editorId => !currentEditorIds.includes(editorId));
 
       // Replace assignments
       await query('DELETE FROM file_request_editors WHERE request_id = $1', [id]);
-      for (const editorId of new_editor_ids) {
+      for (const editorId of effectiveNewEditorIds) {
         await query(
           `INSERT INTO file_request_editors (request_id, editor_id, status)
            VALUES ($1, $2, 'pending')`,
@@ -1899,7 +1902,7 @@ class FileRequestController {
         resourceName: requestResult.rows[0].title,
         details: {
           mode: 'admin_replace',
-          new_editor_ids,
+          new_editor_ids: effectiveNewEditorIds,
           newly_assigned_editor_ids: newlyAssignedEditors,
           previous_editor_ids: currentEditorIds,
           reason
@@ -1910,7 +1913,7 @@ class FileRequestController {
       res.json({
         success: true,
         message: 'Request reassigned successfully (admin)',
-        assigned_count: new_editor_ids.length,
+        assigned_count: effectiveNewEditorIds.length,
         newly_assigned_count: newlyAssignedEditors.length
       });
     } catch (error) {
@@ -1930,13 +1933,13 @@ class FileRequestController {
       const result = await query(
         `SELECT
            frf.*,
-           u.full_name as created_by_name,
+           u.name as created_by_name,
            COUNT(fru.id) as file_count
          FROM file_request_folders frf
          LEFT JOIN users u ON frf.created_by = u.id
          LEFT JOIN file_request_uploads fru ON fru.folder_id = frf.id
          WHERE frf.request_id = $1
-         GROUP BY frf.id, u.full_name
+         GROUP BY frf.id, u.name
          ORDER BY frf.created_at ASC`,
         [id]
       );
@@ -1964,11 +1967,11 @@ class FileRequestController {
            fre.*,
            e.name as editor_name,
            e.display_name as editor_display_name,
-           u.full_name as user_name,
+           u.name as user_name,
            u.email as user_email
          FROM file_request_editors fre
          LEFT JOIN editors e ON fre.editor_id = e.id
-         LEFT JOIN users u ON fre.user_id = u.id
+         LEFT JOIN users u ON e.user_id = u.id
          WHERE fre.request_id = $1
          ORDER BY fre.created_at ASC`,
         [id]
@@ -2300,8 +2303,21 @@ class FileRequestController {
 
       const fileRequest = requestResult.rows[0];
 
-      // Check permission: Only assigned editors can mark as uploaded
-      const isAssignedEditor = fileRequest.assigned_editors && fileRequest.assigned_editors.includes(userId);
+      // Check permission: Only assigned editors (by editor profile) can mark as uploaded
+      let isAssignedEditor = false;
+      if (userRole !== 'admin') {
+        const assignedEditorCheck = await query(
+          `SELECT 1
+           FROM file_request_editors fre
+           JOIN editors e ON fre.editor_id = e.id
+           WHERE fre.request_id = $1
+             AND e.user_id = $2
+           LIMIT 1`,
+          [id, userId]
+        );
+        isAssignedEditor = assignedEditorCheck.rows.length > 0;
+      }
+
       if (!isAssignedEditor && userRole !== 'admin') {
         return res.status(403).json({
           success: false,

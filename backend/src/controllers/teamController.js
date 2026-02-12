@@ -275,14 +275,22 @@ async function deleteTeam(req, res) {
 async function addTeamMember(req, res) {
   try {
     const { teamId } = req.params;
-    const { userId: newMemberId, teamRole = 'member' } = req.body;
+    // Back-compat: some clients send user_id/role
+    const {
+      userId: newMemberId,
+      user_id,
+      teamRole = 'member',
+      role
+    } = req.body;
+    const effectiveNewMemberId = newMemberId || user_id;
+    const effectiveTeamRole = role || teamRole;
     const currentUserId = req.user.id;
 
-    if (!newMemberId) {
+    if (!effectiveNewMemberId) {
       return res.status(400).json({ error: 'User ID is required' });
     }
 
-    if (!['lead', 'member', 'guest'].includes(teamRole)) {
+    if (!['lead', 'member', 'guest'].includes(effectiveTeamRole)) {
       return res.status(400).json({ error: 'Invalid team role. Must be lead, member, or guest' });
     }
 
@@ -313,7 +321,7 @@ async function addTeamMember(req, res) {
     }
 
     // Check if user exists
-    const userResult = await query('SELECT * FROM users WHERE id = $1', [newMemberId]);
+    const userResult = await query('SELECT * FROM users WHERE id = $1', [effectiveNewMemberId]);
     if (userResult.rows.length === 0) {
       return res.status(404).json({ error: 'User not found' });
     }
@@ -321,7 +329,7 @@ async function addTeamMember(req, res) {
     // Check if already a member
     const existingMember = await query(
       'SELECT * FROM team_members WHERE team_id = $1 AND user_id = $2',
-      [teamId, newMemberId]
+      [teamId, effectiveNewMemberId]
     );
 
     if (existingMember.rows.length > 0) {
@@ -366,8 +374,8 @@ async function addTeamMember(req, res) {
       RETURNING *`,
       [
         teamId,
-        newMemberId,
-        teamRole,
+        effectiveNewMemberId,
+        effectiveTeamRole,
         permissions.can_manage_members,
         permissions.can_create_folders,
         permissions.can_delete_files,
@@ -380,10 +388,10 @@ async function addTeamMember(req, res) {
     await query(
       `INSERT INTO team_activity (team_id, user_id, activity_type, activity_data)
        VALUES ($1, $2, 'member_joined', $3)`,
-      [teamId, currentUserId, JSON.stringify({ new_member_id: newMemberId, added_by: currentUserId, role: teamRole })]
+      [teamId, currentUserId, JSON.stringify({ new_member_id: effectiveNewMemberId, added_by: currentUserId, role: effectiveTeamRole })]
     );
 
-    logger.info('Team member added', { team_id: teamId, new_member_id: newMemberId, role: teamRole });
+    logger.info('Team member added', { team_id: teamId, new_member_id: effectiveNewMemberId, role: effectiveTeamRole });
 
     res.status(201).json({
       success: true,
