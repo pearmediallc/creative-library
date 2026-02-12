@@ -532,7 +532,7 @@ class PermissionController {
    */
   async createPublicLinkForResource(req, res, next) {
     try {
-      const { resource_type, resource_id, password, expires_at, expires_in_days, disable_download, max_views } = req.body;
+      const { resource_type, resource_id, password, expires_at, expires_in_days, disable_download, allow_download, max_views } = req.body;
       const userId = req.user.id;
 
       if (!resource_type || !resource_id) {
@@ -583,10 +583,15 @@ class PermissionController {
 
       // Reuse existing createPublicLink implementation by calling it with :id
       req.params.id = anchor.id;
+      // allow_download is a friendlier client flag; internally we store disable_download
+      const resolvedDisableDownload = typeof disable_download === 'boolean'
+        ? disable_download
+        : (typeof allow_download === 'boolean' ? !allow_download : false);
+
       req.body = {
         password: password || null,
         expires_at: resolvedExpiresAt,
-        disable_download: disable_download || false,
+        disable_download: resolvedDisableDownload,
         max_views: max_views || null
       };
 
