@@ -575,9 +575,8 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
 
   // Determine if user can reassign
   const canReassign = user && request && (
-    request.auto_assigned_head === user.id ||
-    request.assigned_editors?.some((e: any) => e.id === user.id) ||
-    user.role === 'admin'
+    user.role === 'admin' ||
+    request.auto_assigned_head === user.id
   );
 
   if (loading) {

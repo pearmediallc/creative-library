@@ -80,6 +80,9 @@ export function CreateFileRequestModal({ onClose, onSuccess, teamId }: CreateFil
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState('');
+  const [saveAsTemplate, setSaveAsTemplate] = useState(false);
+  const [templateName, setTemplateName] = useState('');
+  const [savingTemplate, setSavingTemplate] = useState(false);
   const [showCreateFolder, setShowCreateFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
   const [creatingFolder, setCreatingFolder] = useState(false);
@@ -320,12 +323,40 @@ export function CreateFileRequestModal({ onClose, onSuccess, teamId }: CreateFil
           await fileRequestApi.assignEditors(requestId, selectedEditorIds);
         }
 
+        // Optionally save as personal template
+        if (saveAsTemplate) {
+          if (!templateName.trim()) {
+            setError('Template name is required to save as template');
+            return;
+          }
+          setSavingTemplate(true);
+          try {
+            await teamApi.createPersonalTemplate({
+              name: templateName.trim(),
+              description: `Saved from request: ${requestType}`,
+              defaultTitle: requestType,
+              defaultRequestType: requestType,
+              defaultInstructions: conceptNotes.trim() || null,
+              defaultPlatform: platform,
+              defaultVertical: vertical,
+              defaultNumCreatives: parseInt(numCreatives) || 1,
+              defaultAllowMultipleUploads: allowMultipleUploads,
+              defaultRequireEmail: requireEmail,
+              defaultCustomMessage: customMessage.trim() || null,
+              requiredFields: []
+            });
+          } catch (e: any) {
+            console.error('Failed to save template:', e);
+            // non-fatal
+          } finally {
+            setSavingTemplate(false);
+          }
+        }
+
         // Open Canvas Editor if user toggled it on, otherwise close modal
         if (showCanvas) {
-          // Canvas toggle is ON - keep modal open and show canvas editor
           setError('');
         } else {
-          // Canvas toggle is OFF - close modal and refresh
           onSuccess();
         }
       } else {
@@ -367,6 +398,38 @@ export function CreateFileRequestModal({ onClose, onSuccess, teamId }: CreateFil
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           {/* Templates (Optional) */}
           <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+            <div className="flex items-center justify-between gap-3 mb-3">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                Use Template (Optional)
+              </label>
+              <label className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-300">
+                <input
+                  type="checkbox"
+                  checked={saveAsTemplate}
+                  onChange={(e) => setSaveAsTemplate(e.target.checked)}
+                  disabled={creating}
+                />
+                Save this request as template
+              </label>
+            </div>
+
+            {saveAsTemplate && (
+              <div className="mb-3">
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Template name
+                </label>
+                <input
+                  value={templateName}
+                  onChange={(e) => setTemplateName(e.target.value)}
+                  placeholder="e.g. UGC 20 assets"
+                  disabled={creating}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm dark:bg-gray-700 dark:text-white"
+                />
+                {savingTemplate && (
+                  <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">Saving template…</p>
+                )}
+              </div>
+            )}
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Use Template (Optional)
               </label>
