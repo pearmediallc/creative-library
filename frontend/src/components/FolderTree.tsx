@@ -22,13 +22,15 @@ interface FolderTreeProps {
   onFolderSelect: (folderId: string | null) => void;
   onCreateFolder: () => void;
   onFolderContextMenu: (folder: FolderNode, event: React.MouseEvent) => void;
+  refreshKey?: number;
 }
 
 export function FolderTree({
   currentFolderId,
   onFolderSelect,
   onCreateFolder,
-  onFolderContextMenu
+  onFolderContextMenu,
+  refreshKey
 }: FolderTreeProps) {
   const [folders, setFolders] = useState<FolderNode[]>([]);
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
@@ -36,7 +38,8 @@ export function FolderTree({
 
   useEffect(() => {
     fetchFolders();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshKey]);
 
   const fetchFolders = async () => {
     try {

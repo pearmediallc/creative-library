@@ -79,6 +79,7 @@ export function MediaLibraryPage() {
   // Folder context menu state
   const [contextMenuFolder, setContextMenuFolder] = useState<FolderNode | null>(null);
   const [contextMenuPosition, setContextMenuPosition] = useState({ x: 0, y: 0 });
+  const [folderTreeRefreshKey, setFolderTreeRefreshKey] = useState(0);
 
   // File context menu state
   const [contextMenuFile, setContextMenuFile] = useState<MediaFile | null>(null);
@@ -347,7 +348,10 @@ export function MediaLibraryPage() {
     const confirmed = confirm(`Delete folder "${contextMenuFolder.name}"? This will also delete all files inside.`);
     if (confirmed) {
       folderApi.delete(contextMenuFolder.id, true)
-        .then(() => fetchData())
+        .then(async () => {
+          await fetchData();
+          setFolderTreeRefreshKey(k => k + 1);
+        })
         .catch((error) => alert('Failed to delete folder: ' + error.message));
     }
   };
@@ -750,6 +754,7 @@ export function MediaLibraryPage() {
             onFolderSelect={handleFolderSelect}
             onCreateFolder={handleCreateFolder}
             onFolderContextMenu={handleFolderContextMenu}
+            refreshKey={folderTreeRefreshKey}
           />
         </div>
 
