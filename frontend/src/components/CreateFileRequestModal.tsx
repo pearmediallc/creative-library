@@ -421,7 +421,6 @@ export function CreateFileRequestModal({ onClose, onSuccess, teamId }: CreateFil
                 </p>
               )}
             </div>
-          )}
 
           {/* Request Type */}
           <div>
