@@ -32,6 +32,8 @@ interface FileRequest {
   buyer_email?: string;
   created_by_name?: string;
   assigned_editors?: string; // STRING_AGG returns a comma-separated string
+  completed_editors_count?: number;
+  total_editors_count?: number;
 }
 
 export function FileRequestsPage() {
@@ -565,7 +567,9 @@ export function FileRequestsPage() {
                         </span>
                       )}
                       <span className="text-sm text-muted-foreground">
-                        {request.upload_count} {request.upload_count === 1 ? 'file' : 'files'}
+                        {typeof request.completed_editors_count === 'number' && typeof request.total_editors_count === 'number'
+                          ? `Progress: ${request.completed_editors_count}/${request.total_editors_count}`
+                          : `${request.upload_count} ${request.upload_count === 1 ? 'file' : 'files'}`}
                       </span>
                     </div>
 

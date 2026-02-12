@@ -646,7 +646,9 @@ class FileRequestController {
             buyer.name as buyer_name,
             buyer.email as buyer_email,
             creator.name as created_by_name,
-            STRING_AGG(DISTINCT e.display_name, ', ') as assigned_editors
+            STRING_AGG(DISTINCT e.display_name, ', ') as assigned_editors,
+            COUNT(DISTINCT fre.editor_id) as total_editors_count,
+            COUNT(DISTINCT fre.editor_id) FILTER (WHERE fre.status = 'completed') as completed_editors_count
           FROM file_requests fr
           LEFT JOIN folders f ON fr.folder_id = f.id
           LEFT JOIN file_request_uploads fru ON fr.id = fru.file_request_id
@@ -861,6 +863,21 @@ class FileRequestController {
       const fileRequest = result.rows[0];
       fileRequest.uploads = uploadsResult.rows;
       fileRequest.assigned_editors = editorsResult.rows;
+
+      // Progress / fulfillment summary (how many assigned editors are done)
+      const totalAssigned = Array.isArray(editorsResult.rows) ? editorsResult.rows.length : 0;
+      const completedAssigned = editorsResult.rows.filter(r => r.status === 'completed').length;
+      const inProgressAssigned = editorsResult.rows.filter(r => r.status === 'in_progress').length;
+      const pendingAssigned = editorsResult.rows.filter(r => r.status === 'pending').length;
+
+      fileRequest.fulfillment = {
+        total_assigned: totalAssigned,
+        completed: completedAssigned,
+        in_progress: inProgressAssigned,
+        pending: pendingAssigned,
+        percent: totalAssigned > 0 ? Math.round((completedAssigned / totalAssigned) * 100) : 0,
+        text: totalAssigned > 0 ? `${completedAssigned}/${totalAssigned}` : '0/0'
+      };
 
       // ✨ Get reassignment history with notes
       let reassignmentsResult = { rows: [] };
@@ -1415,6 +1432,21 @@ class FileRequestController {
       );
 
       const editorId = editorResult.rows.length > 0 ? editorResult.rows[0].id : null;
+
+      // Reflect that this assigned editor has started working as soon as they upload something
+      if (editorId) {
+        await query(
+          `UPDATE file_request_editors
+           SET status = CASE
+             WHEN status IN ('completed','declined') THEN status
+             WHEN status = 'pending' THEN 'in_progress'
+             ELSE status
+           END,
+           started_at = COALESCE(started_at, NOW())
+           WHERE request_id = $1 AND editor_id = $2`,
+          [fileRequest.id, editorId]
+        );
+      }
 
       // Determine target folder for upload. If a folder_path is provided (folder upload),
       // create/find the hierarchy under the request folder so the structure is preserved.
@@ -2334,6 +2366,24 @@ class FileRequestController {
          WHERE id = $2`,
         [userId, id]
       );
+
+      // Mark this editor assignment as completed/fulfilled
+      try {
+        const editorResult = await query('SELECT id FROM editors WHERE user_id = $1', [userId]);
+        const editorId = editorResult.rows[0]?.id;
+        if (editorId) {
+          await query(
+            `UPDATE file_request_editors
+             SET status = 'completed',
+                 completed_at = NOW()
+             WHERE request_id = $1 AND editor_id = $2`,
+            [id, editorId]
+          );
+        }
+      } catch (e) {
+        logger.warn('Failed to mark file_request_editors completed on mark-uploaded (non-fatal)', { requestId: id, userId, error: e.message });
+      }
+
 
       // Log activity
       await logActivity({

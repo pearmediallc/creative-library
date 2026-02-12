@@ -100,6 +100,14 @@ interface FileRequestDetails {
   assigned_buyer_id?: string;
   auto_assigned_head?: string;
   reassignment_count?: number;
+  fulfillment?: {
+    total_assigned: number;
+    completed: number;
+    in_progress: number;
+    pending: number;
+    percent: number;
+    text: string;
+  };
 }
 
 export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRequestDetailsModalProps) {
@@ -589,7 +597,9 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
               {getStatusBadge(request.status)}
             </div>
             <p className="text-sm text-muted-foreground mt-1">
-              {request.upload_count} {request.upload_count === 1 ? 'file' : 'files'} uploaded
+              {request.fulfillment
+                ? `Progress: ${request.fulfillment.text} • ${request.fulfillment.percent}%`
+                : `${request.upload_count} ${request.upload_count === 1 ? 'file' : 'files'} uploaded`}
             </p>
           </div>
           <button
