@@ -623,6 +623,10 @@ export const fileRequestApi = {
   // Get upload history for file request
   getUploadHistory: (id: string) => api.get(`/file-requests/${id}/upload-history`),
 
+  // Soft-remove an upload session (tracks deletions/removals)
+  deleteUploadSession: (requestId: string, uploadId: string) =>
+    api.delete(`/file-requests/${requestId}/uploads/${uploadId}`),
+
   // Authenticated upload to file request (for editors)
   uploadToRequestAuth: (id: string, file: File, comments?: string) => {
     const formData = new FormData();

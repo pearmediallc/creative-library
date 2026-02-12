@@ -12,6 +12,7 @@ import { VideoPlayer } from './VideoPlayer';
 interface FileUpload {
   id: string;
   file_id: string;
+  upload_session_id?: string;
   original_filename: string;
   file_type: string;
   file_size: number;
@@ -26,9 +27,10 @@ interface UploadedFileCardProps {
   upload: FileUpload;
   onDownload: (upload: FileUpload) => void;
   onAddToLibrary?: (upload: FileUpload) => void;
+  onRemoveFromRequest?: (upload: FileUpload) => Promise<void> | void;
 }
 
-export function UploadedFileCard({ upload, onDownload, onAddToLibrary }: UploadedFileCardProps) {
+export function UploadedFileCard({ upload, onDownload, onAddToLibrary, onRemoveFromRequest }: UploadedFileCardProps) {
   const [showPreview, setShowPreview] = useState(false);
   const [adding, setAdding] = useState(false);
 
@@ -47,6 +49,11 @@ export function UploadedFileCard({ upload, onDownload, onAddToLibrary }: Uploade
     } finally {
       setAdding(false);
     }
+  };
+
+  const handleRemoveFromRequest = async () => {
+    if (!onRemoveFromRequest) return;
+    await onRemoveFromRequest(upload);
   };
 
   return (
@@ -128,6 +135,18 @@ export function UploadedFileCard({ upload, onDownload, onAddToLibrary }: Uploade
             >
               <Plus className="w-4 h-4" />
               {adding ? 'Adding...' : 'Add to Library'}
+            </Button>
+          )}
+
+          {/* Remove from request (keeps history; soft-delete) */}
+          {onRemoveFromRequest && upload.upload_session_id && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleRemoveFromRequest}
+              title="Remove from request"
+            >
+              <X className="w-4 h-4" />
             </Button>
           )}
 

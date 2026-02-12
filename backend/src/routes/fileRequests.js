@@ -94,6 +94,12 @@ router.post('/:id/upload',
   fileRequestController.uploadToRequestAuth.bind(fileRequestController)
 );
 
+// Soft-remove an upload session (tracks deletions/removals in history)
+router.delete('/:id/uploads/:uploadId',
+  authenticateToken,
+  fileRequestController.deleteUploadSession.bind(fileRequestController)
+);
+
 // Chunked upload - Upload single chunk
 router.post('/:id/upload-chunk',
   authenticateToken,

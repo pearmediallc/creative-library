@@ -41,6 +41,7 @@ interface FileRequestDetailsModalProps {
 interface FileUpload {
   id: string;
   file_id: string;
+  upload_session_id?: string;
   original_filename: string;
   file_type: string;
   file_size: number;
@@ -296,6 +297,24 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
     } catch (error: any) {
       console.error('Failed to add to library:', error);
       alert(error.response?.data?.error || 'Failed to add file to Media Library');
+    }
+  };
+
+  const handleRemoveFromRequest = async (upload: FileUpload) => {
+    if (!upload.upload_session_id) {
+      alert('This upload cannot be removed (missing upload session id).');
+      return;
+    }
+
+    const ok = window.confirm('Remove this upload from the request? (This will be tracked in history)');
+    if (!ok) return;
+
+    try {
+      await fileRequestApi.deleteUploadSession(requestId, upload.upload_session_id);
+      await fetchRequestDetails();
+    } catch (error: any) {
+      console.error('Failed to remove upload from request:', error);
+      alert(error.response?.data?.error || 'Failed to remove upload');
     }
   };
 
@@ -1200,6 +1219,7 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
                         upload={upload}
                         onDownload={handleDownload}
                         onAddToLibrary={user?.role !== 'creative' ? handleAddToLibrary : undefined}
+                        onRemoveFromRequest={user?.role === 'creative' ? handleRemoveFromRequest : undefined}
                       />
                     </div>
                   </div>

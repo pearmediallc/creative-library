@@ -555,7 +555,7 @@ class FileRequestController {
           `SELECT
             fr.*,
             f.name as folder_name,
-            COUNT(DISTINCT fru.id) as upload_count,
+            COUNT(DISTINCT fru.id) FILTER (WHERE COALESCE(fru.is_deleted, FALSE) = FALSE AND COALESCE(fru.file_count, 0) > 0) as upload_count,
             fre.status as my_assignment_status,
             fre.created_at as assigned_at,
             buyer.name as buyer_name,
@@ -642,7 +642,7 @@ class FileRequestController {
           `SELECT
             fr.*,
             f.name as folder_name,
-            COUNT(DISTINCT fru.id) as upload_count,
+            COUNT(DISTINCT fru.id) FILTER (WHERE COALESCE(fru.is_deleted, FALSE) = FALSE AND COALESCE(fru.file_count, 0) > 0) as upload_count,
             buyer.name as buyer_name,
             buyer.email as buyer_email,
             creator.name as created_by_name,
@@ -706,7 +706,7 @@ class FileRequestController {
           `SELECT
             fr.*,
             f.name as folder_name,
-            COUNT(DISTINCT fru.id) as upload_count,
+            COUNT(DISTINCT fru.id) FILTER (WHERE COALESCE(fru.is_deleted, FALSE) = FALSE AND COALESCE(fru.file_count, 0) > 0) as upload_count,
             u.name as creator_name,
             u.email as creator_email
           FROM file_request_editors fre
@@ -726,7 +726,7 @@ class FileRequestController {
             `SELECT
               fr.*,
               f.name as folder_name,
-              COUNT(DISTINCT fru.id) as upload_count,
+              COUNT(DISTINCT fru.id) FILTER (WHERE COALESCE(fru.is_deleted, FALSE) = FALSE AND COALESCE(fru.file_count, 0) > 0) as upload_count,
               u.name as creator_name,
               u.email as creator_email
             FROM file_requests fr
@@ -743,7 +743,7 @@ class FileRequestController {
             `SELECT
               fr.*,
               f.name as folder_name,
-              COUNT(DISTINCT fru.id) as upload_count,
+              COUNT(DISTINCT fru.id) FILTER (WHERE COALESCE(fru.is_deleted, FALSE) = FALSE AND COALESCE(fru.file_count, 0) > 0) as upload_count,
               u.name as creator_name,
               u.email as creator_email
             FROM file_requests fr
@@ -760,7 +760,7 @@ class FileRequestController {
             `SELECT
               fr.*,
               f.name as folder_name,
-              COUNT(DISTINCT fru.id) as upload_count,
+              COUNT(DISTINCT fru.id) FILTER (WHERE COALESCE(fru.is_deleted, FALSE) = FALSE AND COALESCE(fru.file_count, 0) > 0) as upload_count,
               u.name as creator_name,
               u.email as creator_email
             FROM file_requests fr
@@ -785,18 +785,36 @@ class FileRequestController {
       // 📝 LOGGING: Fetching file request uploads
       logger.info('Fetching uploaded files for file request', { file_request_id: id });
 
+      // Uploads for a request are represented as upload sessions in file_request_uploads.
+      // Media files are linked via media_files.upload_session_id.
+      // NOTE: We also support legacy rows that used fru.file_id directly.
       const uploadsResult = await query(
-        `SELECT
-          fru.*,
+        `SELECT DISTINCT ON (mf.id)
+          mf.id as id,
+          mf.id as file_id,
           mf.original_filename,
           mf.file_type,
           mf.file_size,
           mf.thumbnail_url,
-          mf.s3_url
-        FROM file_request_uploads fru
-        JOIN media_files mf ON fru.file_id = mf.id
+          mf.s3_url,
+          mf.created_at,
+          fru.id as upload_session_id,
+          fru.uploaded_by,
+          fru.uploaded_by_email,
+          fru.uploaded_by_name,
+          fru.comments,
+          fru.editor_id,
+          fru.created_at as upload_created_at
+        FROM media_files mf
+        LEFT JOIN file_request_uploads fru
+          ON (
+            (mf.upload_session_id = fru.id)
+            OR (fru.file_id IS NOT NULL AND fru.file_id = mf.id)
+          )
         WHERE fru.file_request_id = $1
-        ORDER BY fru.created_at DESC`,
+          AND COALESCE(fru.is_deleted, FALSE) = FALSE
+          AND mf.is_deleted = FALSE
+        ORDER BY mf.id, fru.created_at DESC`,
         [id]
       );
 
@@ -1226,19 +1244,38 @@ class FileRequestController {
       console.log('✅ Upload complete - File ID:', mediaFile.id);
       console.log('  └─ Folder ID in database:', mediaFile.folder_id);
 
-      // Track the upload with comments and editor
-      await query(
+      // Track the upload as an upload session (public uploads may not have an authenticated user)
+      const uploadSessionResult = await query(
         `INSERT INTO file_request_uploads
-        (file_request_id, file_id, uploaded_by_email, uploaded_by_name, editor_id, comments)
-        VALUES ($1, $2, $3, $4, $5, $6)`,
+         (file_request_id, uploaded_by, uploaded_by_email, uploaded_by_name, upload_type, file_count, total_size_bytes, folder_path, comments, editor_id, files_metadata)
+         VALUES ($1, NULL, $2, $3, 'file', 1, $4, NULL, $5, $6, $7)
+         RETURNING id`,
         [
           fileRequest.id,
-          mediaFile.id,
           uploader_email || null,
           uploader_name || null,
+          mediaFile.file_size,
+          comments || null,
           uploadEditorId,
-          comments || null
+          JSON.stringify([
+            {
+              file_id: mediaFile.id,
+              original_filename: mediaFile.original_filename,
+              file_size: mediaFile.file_size,
+              file_type: mediaFile.file_type,
+              mime_type: mediaFile.mime_type,
+              thumbnail_url: mediaFile.thumbnail_url || null,
+              s3_url: mediaFile.s3_url
+            }
+          ])
         ]
+      );
+      const uploadSessionId = uploadSessionResult.rows[0].id;
+
+      // Link media file to its upload session
+      await query(
+        `UPDATE media_files SET upload_session_id = $1 WHERE id = $2`,
+        [uploadSessionId, mediaFile.id]
       );
 
       logger.info('File uploaded via request', {
@@ -1409,13 +1446,29 @@ class FileRequestController {
 
       const uploadType = folder_path && String(folder_path).trim() ? 'folder' : 'file';
 
-      // 🆕 Create upload session to track this upload
+      // 🆕 Create upload session to track this upload (one session can contain 1+ files)
       const uploadSessionResult = await query(
         `INSERT INTO file_request_uploads
-        (file_request_id, uploaded_by, upload_type, file_count, total_size_bytes, folder_path)
-        VALUES ($1, $2, $3, 1, $4, $5)
-        RETURNING id`,
-        [fileRequest.id, userId, uploadType, req.file.size, folder_path || null]
+         (file_request_id, uploaded_by, upload_type, file_count, total_size_bytes, folder_path, comments, editor_id, files_metadata)
+         VALUES ($1, $2, $3, 1, $4, $5, $6, $7, $8)
+         RETURNING id`,
+        [
+          fileRequest.id,
+          userId,
+          uploadType,
+          req.file.size,
+          folder_path || null,
+          comments || null,
+          editorId,
+          JSON.stringify([
+            {
+              file_id: null,
+              original_filename: req.file.originalname,
+              file_size: req.file.size,
+              mime_type: req.file.mimetype
+            }
+          ])
+        ]
       );
       const uploadSessionId = uploadSessionResult.rows[0].id;
 
@@ -1443,13 +1496,28 @@ class FileRequestController {
         [uploadSessionId, mediaFile.id]
       );
 
-      // ✨ CRITICAL: Also create a file_request_uploads record linking the file
-      // This is what makes the file show up in the upload history!
+      // Update the session snapshot metadata now that we have the final media file record
       await query(
-        `INSERT INTO file_request_uploads
-        (file_request_id, file_id, uploaded_by, upload_type, editor_id, comments, folder_path)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-        [fileRequest.id, mediaFile.id, userId, uploadType, editorId, comments || null, folder_path || null]
+        `UPDATE file_request_uploads
+         SET files_metadata = $1,
+             file_count = 1,
+             total_size_bytes = $2
+         WHERE id = $3`,
+        [
+          JSON.stringify([
+            {
+              file_id: mediaFile.id,
+              original_filename: mediaFile.original_filename,
+              file_size: mediaFile.file_size,
+              file_type: mediaFile.file_type,
+              mime_type: mediaFile.mime_type,
+              thumbnail_url: mediaFile.thumbnail_url || null,
+              s3_url: mediaFile.s3_url
+            }
+          ]),
+          mediaFile.file_size,
+          uploadSessionId
+        ]
       );
 
       logger.info('File uploaded via request (authenticated)', {
@@ -1457,8 +1525,24 @@ class FileRequestController {
         fileId: mediaFile.id,
         userId,
         editorId,
-        hasComments: !!comments
+        hasComments: !!comments,
+        uploadSessionId
       });
+
+      // If an editor uploaded at least one file, reflect that in the request lifecycle
+      // (This is what powers the "Uploaded" state in the UI)
+      await query(
+        `UPDATE file_requests
+         SET status = CASE
+           WHEN status IN ('launched','closed') THEN status
+           ELSE 'uploaded'
+         END,
+         uploaded_at = COALESCE(uploaded_at, NOW()),
+         uploaded_by = COALESCE(uploaded_by, $1),
+         updated_at = NOW()
+         WHERE id = $2`,
+        [userId, fileRequest.id]
+      );
 
       // Log activity for the file upload
       await logActivity({
@@ -2375,9 +2459,11 @@ class FileRequestController {
       await query(
         `UPDATE file_requests
          SET status = 'closed',
+             is_active = FALSE,
              closed_at = NOW(),
              closed_by = $1,
-             completed_at = NOW()
+             completed_at = NOW(),
+             updated_at = NOW()
          WHERE id = $2`,
         [userId, id]
       );
@@ -2444,9 +2530,11 @@ class FileRequestController {
       await query(
         `UPDATE file_requests
          SET status = 'reopened',
+             is_active = TRUE,
              reopened_at = NOW(),
              reopened_by = $1,
-             reopen_count = reopen_count + 1
+             reopen_count = reopen_count + 1,
+             updated_at = NOW()
          WHERE id = $2`,
         [userId, id]
       );
@@ -2549,6 +2637,7 @@ class FileRequestController {
          FROM file_request_uploads fru
          LEFT JOIN users u ON fru.uploaded_by = u.id
          WHERE fru.file_request_id = $1
+           AND (COALESCE(fru.file_count, 0) > 0 OR COALESCE(fru.total_size_bytes, 0) > 0)
          ORDER BY fru.created_at DESC`,
         [id]
       );
@@ -2559,6 +2648,90 @@ class FileRequestController {
       });
     } catch (error) {
       logger.error('Get upload history failed', { error: error.message });
+      next(error);
+    }
+  }
+
+  /**
+   * Delete (soft-remove) an upload session from a file request
+   * DELETE /api/file-requests/:id/uploads/:uploadId
+   */
+  async deleteUploadSession(req, res, next) {
+    try {
+      const { id, uploadId } = req.params;
+      const userId = req.user.id;
+
+      // Fetch request
+      const requestResult = await query('SELECT * FROM file_requests WHERE id = $1', [id]);
+      if (requestResult.rows.length === 0) {
+        return res.status(404).json({ success: false, error: 'File request not found' });
+      }
+      const fileRequest = requestResult.rows[0];
+
+      // Access check (creator, assigned buyer, assigned editor, admin)
+      let isAssignedEditor = false;
+      if (req.user.role !== 'admin') {
+        const assignedEditorCheck = await query(
+          `SELECT 1
+           FROM file_request_editors fre
+           JOIN editors e ON fre.editor_id = e.id
+           WHERE fre.request_id = $1
+             AND e.user_id = $2
+           LIMIT 1`,
+          [id, userId]
+        );
+        isAssignedEditor = assignedEditorCheck.rows.length > 0;
+      }
+
+      const hasAccess = req.user.role === 'admin' ||
+        fileRequest.created_by === userId ||
+        fileRequest.assigned_buyer_id === userId ||
+        isAssignedEditor;
+
+      if (!hasAccess) {
+        return res.status(403).json({ success: false, error: 'Access denied' });
+      }
+
+      // Ensure upload session belongs to request
+      const uploadResult = await query(
+        `SELECT * FROM file_request_uploads WHERE id = $1 AND file_request_id = $2`,
+        [uploadId, id]
+      );
+      if (uploadResult.rows.length === 0) {
+        return res.status(404).json({ success: false, error: 'Upload session not found' });
+      }
+
+      // Soft-delete session
+      await query(
+        `UPDATE file_request_uploads
+         SET is_deleted = TRUE,
+             deleted_at = NOW(),
+             deleted_by = $1
+         WHERE id = $2`,
+        [userId, uploadId]
+      );
+
+      // Soft-delete all linked media files (do NOT hard delete; keeps audit/history intact)
+      await query(
+        `UPDATE media_files
+         SET is_deleted = TRUE
+         WHERE upload_session_id = $1`,
+        [uploadId]
+      );
+
+      await logActivity({
+        req,
+        actionType: 'file_request_upload_deleted',
+        resourceType: 'file_request',
+        resourceId: id,
+        resourceName: fileRequest.title,
+        details: { upload_session_id: uploadId },
+        status: 'success'
+      });
+
+      return res.json({ success: true, message: 'Upload removed from request' });
+    } catch (error) {
+      logger.error('Delete upload session failed', { error: error.message });
       next(error);
     }
   }
