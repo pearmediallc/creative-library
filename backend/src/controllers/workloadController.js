@@ -95,6 +95,48 @@ class WorkloadController {
    * Get detailed workload for a specific editor
    * GET /api/admin/workload/editor/:editorId
    */
+  async markEditorFree(req, res, next) {
+    try {
+      const { editorId } = req.params;
+      const { complete_active_requests = false } = req.body || {};
+
+      // Ensure capacity row exists
+      await query(
+        `INSERT INTO editor_capacity (editor_id, current_load_percentage, status, is_available)
+         VALUES ($1, 0, 'available', TRUE)
+         ON CONFLICT (editor_id) DO UPDATE
+         SET current_load_percentage = 0,
+             status = 'available',
+             is_available = TRUE,
+             unavailable_until = NULL,
+             unavailable_reason = NULL`,
+        [editorId]
+      );
+
+      if (complete_active_requests) {
+        await query(
+          `UPDATE file_request_editors
+           SET status = 'completed',
+               completed_at = COALESCE(completed_at, NOW()),
+               updated_at = CURRENT_TIMESTAMP
+           WHERE editor_id = $1
+             AND status IN ('pending','assigned','in_progress','picked_up')`,
+          [editorId]
+        );
+      }
+
+      res.json({
+        success: true,
+        message: complete_active_requests
+          ? 'Editor marked free and active assignments completed.'
+          : 'Editor marked free.'
+      });
+    } catch (error) {
+      logger.error('Mark editor free error', { error: error.message, editorId: req.params.editorId });
+      next(error);
+    }
+  }
+
   async getEditorWorkload(req, res, next) {
     try {
       const { editorId } = req.params;

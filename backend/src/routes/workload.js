@@ -18,6 +18,9 @@ router.get('/overview', workloadController.getOverview.bind(workloadController))
 // Get detailed workload for a specific editor
 router.get('/editor/:editorId', workloadController.getEditorWorkload.bind(workloadController));
 
+// Admin override: mark editor free (optionally complete active assignments)
+router.post('/editor/:editorId/mark-free', workloadController.markEditorFree.bind(workloadController));
+
 // Update editor capacity settings
 router.put('/capacity/:editorId', workloadController.updateCapacity.bind(workloadController));
 

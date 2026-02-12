@@ -614,7 +614,7 @@ export const fileRequestApi = {
     api.post(`/file-requests/${id}/complete`, data),
 
   // Reassign file request to another editor
-  reassign: (id: string, data: { reassign_to: string; note?: string }) =>
+  reassign: (id: string, data: { reassign_to?: string; editor_ids?: string[]; editor_quotas?: Record<string, number>; note?: string }) =>
     api.post(`/file-requests/${id}/reassign`, data),
 
   // Get reassignment history

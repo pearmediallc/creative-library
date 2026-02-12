@@ -856,7 +856,10 @@ class FileRequestController {
             fre.created_at,
             fre.accepted_at,
             fre.started_at,
-            fre.completed_at
+            fre.completed_at,
+            fre.deliverables_quota,
+            fre.deliverables_uploaded,
+            fre.deliverables_completed_at
           FROM file_request_editors fre
           JOIN editors e ON fre.editor_id = e.id
           WHERE fre.request_id = $1
@@ -1627,6 +1630,35 @@ class FileRequestController {
          WHERE id = $2`,
         [userId, fileRequest.id]
       );
+
+      // Per-editor quota progress: increment and complete if quota reached
+      try {
+        if (editorId) {
+          const upd = await query(
+            `UPDATE file_request_editors
+             SET deliverables_uploaded = COALESCE(deliverables_uploaded, 0) + 1,
+                 updated_at = CURRENT_TIMESTAMP
+             WHERE request_id = $1 AND editor_id = $2
+             RETURNING deliverables_quota, deliverables_uploaded`,
+            [fileRequest.id, editorId]
+          );
+
+          const quota = upd.rows[0]?.deliverables_quota;
+          const uploaded = upd.rows[0]?.deliverables_uploaded;
+          if (quota && uploaded >= quota) {
+            await query(
+              `UPDATE file_request_editors
+               SET status = 'completed',
+                   completed_at = COALESCE(completed_at, NOW()),
+                   deliverables_completed_at = COALESCE(deliverables_completed_at, NOW())
+               WHERE request_id = $1 AND editor_id = $2`,
+              [fileRequest.id, editorId]
+            );
+          }
+        }
+      } catch (e) {
+        logger.warn('Per-editor quota progress update failed (non-fatal)', { requestId: fileRequest.id, editorId, error: e.message });
+      }
 
       // Log activity for the file upload
       await logActivity({
@@ -2430,6 +2462,35 @@ class FileRequestController {
         ]
       );
 
+      // Per-editor quota progress (chunked): increment and complete if quota reached
+      try {
+        if (editorId) {
+          const upd = await query(
+            `UPDATE file_request_editors
+             SET deliverables_uploaded = COALESCE(deliverables_uploaded, 0) + 1,
+                 updated_at = CURRENT_TIMESTAMP
+             WHERE request_id = $1 AND editor_id = $2
+             RETURNING deliverables_quota, deliverables_uploaded`,
+            [id, editorId]
+          );
+
+          const quota = upd.rows[0]?.deliverables_quota;
+          const uploaded = upd.rows[0]?.deliverables_uploaded;
+          if (quota && uploaded >= quota) {
+            await query(
+              `UPDATE file_request_editors
+               SET status = 'completed',
+                   completed_at = COALESCE(completed_at, NOW()),
+                   deliverables_completed_at = COALESCE(deliverables_completed_at, NOW())
+               WHERE request_id = $1 AND editor_id = $2`,
+              [id, editorId]
+            );
+          }
+        }
+      } catch (e) {
+        logger.warn('Per-editor quota progress update failed for chunked upload (non-fatal)', { requestId: id, editorId, error: e.message });
+      }
+
       // Clean up temp files
       fs.unlinkSync(mergedFilePath);
       for (let i = 0; i < totalChunks; i++) {
@@ -3077,6 +3138,8 @@ class FileRequestController {
       // Resolve target editors. Supports:
       // - single: reassign_to (editor_id or user_id)
       // - multiple: editor_ids[] (editor_id or user_id entries)
+      // Optional: editor_quotas map { [editor_id]: number }
+      const { editor_quotas } = req.body;
       const targets = hasMultiple ? editor_ids : [reassign_to];
 
       const resolvedTargets = [];
@@ -3116,14 +3179,21 @@ class FileRequestController {
         [id]
       );
 
-      // Ensure target editor assignments exist (set to pending)
+      // Ensure target editor assignments exist (set to pending) + optional quota
       for (const editorId of targetEditorIds) {
+        const quota = editor_quotas && typeof editor_quotas === 'object'
+          ? Number(editor_quotas[editorId])
+          : null;
+        const safeQuota = quota && !Number.isNaN(quota) && quota > 0 ? Math.floor(quota) : null;
+
         await query(
-          `INSERT INTO file_request_editors (request_id, editor_id, status)
-           VALUES ($1, $2, 'pending')
+          `INSERT INTO file_request_editors (request_id, editor_id, status, deliverables_quota)
+           VALUES ($1, $2, 'pending', $3)
            ON CONFLICT (request_id, editor_id) DO UPDATE
-           SET status = 'pending', updated_at = CURRENT_TIMESTAMP`,
-          [id, editorId]
+           SET status = 'pending',
+               deliverables_quota = COALESCE($3, file_request_editors.deliverables_quota),
+               updated_at = CURRENT_TIMESTAMP`,
+          [id, editorId, safeQuota]
         );
       }
 

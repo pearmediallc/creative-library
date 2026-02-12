@@ -39,6 +39,7 @@ export function ReassignFileRequestModal({
     currentEditors.map(e => e.id)
   );
   const [reassignReason, setReassignReason] = useState('');
+  const [editorQuotas, setEditorQuotas] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [workloadData, setWorkloadData] = useState<Map<string, EditorWorkload>>(new Map());
@@ -98,11 +99,18 @@ export function ReassignFileRequestModal({
       setLoading(true);
       setError('');
 
-      await fileRequestApi.assignEditors(requestId, selectedEditorIds);
+      // Build quotas map (optional)
+      const quotas: Record<string, number> = {};
+      Object.entries(editorQuotas).forEach(([editorId, val]) => {
+        const n = Number(val);
+        if (!Number.isNaN(n) && n > 0) quotas[editorId] = Math.floor(n);
+      });
 
-      // Optionally log the reassignment reason (if backend supports it)
-      // You could add this to your API if needed
-      console.log('Reassignment reason:', reassignReason);
+      await fileRequestApi.reassign(requestId, {
+        editor_ids: selectedEditorIds,
+        editor_quotas: Object.keys(quotas).length ? quotas : undefined,
+        note: reassignReason
+      });
 
       onSuccess();
     } catch (err: any) {
@@ -202,15 +210,15 @@ export function ReassignFileRequestModal({
                       const status = workload ? getStatusBadge(workload.loadPercentage, workload.isAvailable) : null;
 
                       return (
-                        <label
+                        <div
                           key={editor.id}
-                          className="flex items-center gap-3 p-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer"
+                          className="flex items-start gap-3 p-3 hover:bg-gray-50 dark:hover:bg-gray-700/50"
                         >
                           <input
                             type="checkbox"
                             checked={selectedEditorIds.includes(editor.id)}
                             onChange={() => toggleEditor(editor.id)}
-                            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 mt-1"
                           />
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2">
@@ -240,10 +248,20 @@ export function ReassignFileRequestModal({
                               </div>
                             )}
                           </div>
-                          <span className="text-xs text-gray-500 dark:text-gray-400">
-                            Editor
-                          </span>
-                        </label>
+                          <div className="flex flex-col items-end gap-1">
+                            <span className="text-xs text-gray-500 dark:text-gray-400">Editor</span>
+                            {selectedEditorIds.includes(editor.id) && (
+                              <input
+                                type="number"
+                                min={0}
+                                placeholder="Quota (optional)"
+                                value={editorQuotas[editor.id] || ''}
+                                onChange={(e) => setEditorQuotas(prev => ({ ...prev, [editor.id]: e.target.value }))}
+                                className="w-28 px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700"
+                              />
+                            )}
+                          </div>
+                        </div>
                       );
                     })}
                   </div>
