@@ -116,17 +116,39 @@ export const NotificationBell: React.FC = () => {
 
     // Navigate based on notification type
     if (notification.type === 'access_request') {
-      // Navigate to access requests to review page
       navigate('/access-requests?tab=to-review');
       setShowDropdown(false);
-    } else if (notification.type === 'access_request_approved' || notification.type === 'access_request_denied') {
-      // Navigate to my requests page
+      return;
+    }
+
+    if (notification.type === 'access_request_approved' || notification.type === 'access_request_denied') {
       navigate('/access-requests?tab=my-requests');
       setShowDropdown(false);
-    } else if (notification.reference_type === 'canvas' && notification.metadata?.fileRequestId) {
+      return;
+    }
+
+    // File request notifications
+    if (notification.reference_type === 'file_request' && notification.reference_id) {
+      navigate(`/file-requests?openRequestId=${notification.reference_id}`);
+      setShowDropdown(false);
+      return;
+    }
+
+    // Media file notifications
+    if (notification.reference_type === 'file' && notification.reference_id) {
+      navigate(`/media/${notification.reference_id}`);
+      setShowDropdown(false);
+      return;
+    }
+
+    if (notification.reference_type === 'canvas' && notification.metadata?.fileRequestId) {
       navigate(`/dashboard?requestId=${notification.metadata.fileRequestId}&openCanvas=true`);
       setShowDropdown(false);
+      return;
     }
+
+    // Fallback
+    setShowDropdown(false);
   };
 
   // Close dropdown when clicking outside

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { DashboardLayout } from '../components/layout/DashboardLayout';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
@@ -41,6 +42,7 @@ interface FileRequest {
 
 export function FileRequestsPage() {
   const { user } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [requests, setRequests] = useState<FileRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'active' | 'closed'>('all');
@@ -67,6 +69,19 @@ export function FileRequestsPage() {
   useEffect(() => {
     fetchRequests();
   }, [filter, dateFrom, dateTo, selectedEditorIds, selectedMediaType]);
+
+  // Auto-open request details when coming from a notification
+  useEffect(() => {
+    const openId = searchParams.get('openRequestId');
+    if (openId) {
+      setSelectedRequest({ id: openId } as any);
+      setShowDetailsModal(true);
+      // Clear param so it doesn't re-open on refresh
+      searchParams.delete('openRequestId');
+      setSearchParams(searchParams, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const fetchEditors = async () => {
     try {
