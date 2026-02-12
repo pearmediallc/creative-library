@@ -58,6 +58,8 @@ const schemas = {
   // Media Upload
   mediaUpload: Joi.object({
     editor_id: Joi.string().uuid().required(),
+    // IMPORTANT: folder_id comes from multipart form-data; if not declared here it can be stripped/ignored
+    folder_id: Joi.string().uuid().allow(null, ''),
     tags: Joi.alternatives().try(
       Joi.array().items(Joi.string().max(50)).max(10),
       Joi.string().allow('', null)

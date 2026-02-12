@@ -1701,7 +1701,7 @@ class MediaController {
   async addFileTag(req, res, next) {
     try {
       const { id } = req.params;
-      const { tag_id } = req.body;
+      const { tag_id, name } = req.body;
       const userId = req.user.id;
 
       // Verify file exists and user has access
@@ -1713,10 +1713,46 @@ class MediaController {
         });
       }
 
+      // Resolve tag id:
+      // - preferred: tag_id
+      // - convenience: name (auto-create tag if missing)
+      let resolvedTagId = tag_id;
+
+      if (!resolvedTagId && name && String(name).trim()) {
+        const tagName = String(name).trim();
+
+        // Try find active tag by name
+        const existing = await this.pool.query(
+          `SELECT id FROM metadata_tags WHERE LOWER(name) = LOWER($1) LIMIT 1`,
+          [tagName]
+        );
+
+        if (existing.rows.length > 0) {
+          resolvedTagId = existing.rows[0].id;
+          // Ensure active
+          await this.pool.query(`UPDATE metadata_tags SET is_active = TRUE WHERE id = $1`, [resolvedTagId]);
+        } else {
+          const created = await this.pool.query(
+            `INSERT INTO metadata_tags (name, is_active, created_at)
+             VALUES ($1, TRUE, NOW())
+             RETURNING id`,
+            [tagName]
+          );
+          resolvedTagId = created.rows[0].id;
+        }
+      }
+
+      if (!resolvedTagId) {
+        return res.status(400).json({
+          success: false,
+          error: 'tag_id or name is required'
+        });
+      }
+
       // Verify tag exists and is active
       const tagResult = await this.pool.query(
         'SELECT id FROM metadata_tags WHERE id = $1 AND is_active = TRUE',
-        [tag_id]
+        [resolvedTagId]
       );
 
       if (tagResult.rows.length === 0) {
@@ -1731,7 +1767,7 @@ class MediaController {
         INSERT INTO media_file_tags (media_file_id, tag_id, added_by)
         VALUES ($1, $2, $3)
         ON CONFLICT (media_file_id, tag_id) DO NOTHING
-      `, [id, tag_id, userId]);
+      `, [id, resolvedTagId, userId]);
 
       // Log activity
       await this.activityLogModel.create({
@@ -1739,12 +1775,13 @@ class MediaController {
         action: 'tag_added',
         entity_type: 'media_file',
         entity_id: id,
-        details: { tag_id }
+        details: { tag_id: resolvedTagId }
       });
 
       res.json({
         success: true,
-        message: 'Tag added successfully'
+        message: 'Tag added successfully',
+        data: { tag_id: resolvedTagId }
       });
     } catch (error) {
       logger.error('Add file tag error', { error: error.message, fileId: req.params.id });

@@ -20,12 +20,16 @@ class PermissionController {
         grantee_type,
         grantee_id,
         permission_type,
+        // Backward-compat alias (some clients send permission_level)
+        permission_level,
         expires_at
       } = req.body;
       const userId = req.user.id;
 
+      const effectivePermissionType = permission_type || permission_level;
+
       // Validate required fields
-      if (!resource_type || !resource_id || !grantee_type || !grantee_id || !permission_type) {
+      if (!resource_type || !resource_id || !grantee_type || !grantee_id || !effectivePermissionType) {
         return res.status(400).json({
           error: 'Missing required fields: resource_type, resource_id, grantee_type, grantee_id, permission_type'
         });
@@ -42,7 +46,7 @@ class PermissionController {
         resource_id,
         grantee_type,
         grantee_id,
-        permission_type,
+        permission_type: effectivePermissionType,
         granted_by: userId,
         expires_at: expires_at || null
       });
@@ -521,10 +525,83 @@ class PermissionController {
   }
 
   /**
-   * Create public link for a resource
+   * Create (or update) public link for a resource
+   * POST /api/permissions/public-link
+   *
+   * This is the ergonomic API that UIs expect: pass the resource_type/resource_id.
+   */
+  async createPublicLinkForResource(req, res, next) {
+    try {
+      const { resource_type, resource_id, password, expires_at, expires_in_days, disable_download, max_views } = req.body;
+      const userId = req.user.id;
+
+      if (!resource_type || !resource_id) {
+        return res.status(400).json({ success: false, error: 'resource_type and resource_id are required' });
+      }
+
+      // Verify user owns the resource
+      const hasPermission = await this.verifyUserOwnership(resource_type, resource_id, userId);
+      if (!hasPermission) {
+        return res.status(403).json({ success: false, error: 'Access denied' });
+      }
+
+      // Create or reuse a permission row (we anchor on a self-view permission)
+      // so file_permissions constraints (non-null grantee fields) are satisfied.
+      const anchor = await FilePermission.grantPermission({
+        resource_type,
+        resource_id,
+        grantee_type: 'user',
+        grantee_id: userId,
+        permission_type: 'view',
+        granted_by: userId,
+        expires_at: null
+      }).catch(async (e) => {
+        // If it already exists due to UNIQUE constraint, fetch it
+        const existing = await FilePermission.raw(
+          `SELECT * FROM file_permissions
+           WHERE resource_type = $1 AND resource_id = $2
+             AND grantee_type = 'user' AND grantee_id = $3
+             AND permission_type = 'view'
+           LIMIT 1`,
+          [resource_type, resource_id, userId]
+        );
+        return Array.isArray(existing) ? existing[0] : existing.rows?.[0];
+      });
+
+      if (!anchor || !anchor.id) {
+        return res.status(500).json({ success: false, error: 'Failed to create public link anchor permission' });
+      }
+
+      // Resolve expiry
+      let resolvedExpiresAt = expires_at || null;
+      if (!resolvedExpiresAt && expires_in_days) {
+        const days = Number(expires_in_days);
+        if (!Number.isNaN(days) && days > 0) {
+          resolvedExpiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
+        }
+      }
+
+      // Reuse existing createPublicLink implementation by calling it with :id
+      req.params.id = anchor.id;
+      req.body = {
+        password: password || null,
+        expires_at: resolvedExpiresAt,
+        disable_download: disable_download || false,
+        max_views: max_views || null
+      };
+
+      return this.createPublicLink(req, res, next);
+    } catch (error) {
+      logger.error('Create public link (resource) failed', { error: error.message });
+      next(error);
+    }
+  }
+
+  /**
+   * Create public link for a resource (legacy)
    * POST /api/permissions/:id/public-link
    */
-  async createPublicLink(req, res, next) {
+  async createPublicLink(req, res, next) {"}
     try {
       const { id } = req.params;
       const { password, expires_at, disable_download, max_views } = req.body;

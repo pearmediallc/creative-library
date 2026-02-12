@@ -9,7 +9,7 @@ class StarredController {
   async toggleStarred(req, res, next) {
     try {
       const { fileId } = req.params;
-      const { is_starred } = req.body;
+      let { is_starred } = req.body || {};
       const userId = req.user.id;
 
       // Verify file exists and user has access
@@ -21,7 +21,12 @@ class StarredController {
       // For now, allow any authenticated user to star files they can see
       // In production, you might want to check permissions
 
-      const updatedFile = await MediaFile.toggleStarred(fileId, is_starred);
+      // If caller didn't provide is_starred, treat this endpoint as a true toggle.
+      if (typeof is_starred === 'undefined' || is_starred === null) {
+        is_starred = !Boolean(file.is_starred);
+      }
+
+      const updatedFile = await MediaFile.toggleStarred(fileId, Boolean(is_starred));
 
       logger.info('File starred status toggled', {
         fileId,

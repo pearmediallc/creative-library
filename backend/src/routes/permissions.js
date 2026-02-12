@@ -16,6 +16,9 @@ router.get('/shared-by-me', permissionController.getSharedByMe.bind(permissionCo
 router.get('/shared-with-me', permissionController.getSharedWithMe.bind(permissionController));
 
 // Public link management (protected routes)
+// Ergonomic resource-based endpoint (preferred)
+router.post('/public-link', permissionController.createPublicLinkForResource.bind(permissionController));
+// Legacy: permission-id based endpoint
 router.post('/:id/public-link', permissionController.createPublicLink.bind(permissionController));
 router.patch('/public-link/:linkId', permissionController.updatePublicLink.bind(permissionController));
 router.delete('/public-link/:linkId', permissionController.revokePublicLink.bind(permissionController));

@@ -71,26 +71,42 @@ function splitSQLStatements(sql) {
   });
 }
 
-async function runMigration(migrationNumber) {
+async function runMigration(migrationArg) {
   try {
-    // Try different file name patterns
-    let migrationFile = path.join(__dirname, 'migrations', `${migrationNumber}_file_request_enhancements.sql`);
+    // Allow passing an exact filename/path for deterministic migrations.
+    // Examples:
+    //   node run-migration.js migrations/008_fix_file_request_upload_tracking.sql
+    //   node run-migration.js 008
+    let migrationFile = null;
 
-    if (!fs.existsSync(migrationFile)) {
-      migrationFile = path.join(__dirname, 'migrations', `${migrationNumber}_vertical_based_assignment.sql`);
-    }
-
-    if (!fs.existsSync(migrationFile)) {
-      // Try just the number pattern
+    const looksLikePath = String(migrationArg).includes('/') || String(migrationArg).endsWith('.sql');
+    if (looksLikePath) {
+      migrationFile = path.isAbsolute(migrationArg)
+        ? migrationArg
+        : path.join(__dirname, migrationArg);
+    } else {
+      const migrationNumber = String(migrationArg);
       const migrationFiles = fs.readdirSync(path.join(__dirname, 'migrations'));
-      const matchingFile = migrationFiles.find(file => file.startsWith(migrationNumber + '_'));
-      if (matchingFile) {
-        migrationFile = path.join(__dirname, 'migrations', matchingFile);
+      const matches = migrationFiles.filter(f => f.startsWith(migrationNumber + '_'));
+
+      if (matches.length === 0) {
+        console.error(`❌ Migration file not found for migration number: ${migrationNumber}`);
+        process.exit(1);
       }
+
+      if (matches.length > 1) {
+        console.error(`❌ Ambiguous migration number "${migrationNumber}". Multiple files match:`);
+        for (const m of matches) console.error('  - ' + m);
+        console.error('➡️  Re-run with an exact file path, e.g.:');
+        console.error(`   node run-migration.js migrations/${matches[0]}`);
+        process.exit(1);
+      }
+
+      migrationFile = path.join(__dirname, 'migrations', matches[0]);
     }
 
     if (!fs.existsSync(migrationFile)) {
-      console.error(`❌ Migration file not found for migration number: ${migrationNumber}`);
+      console.error(`❌ Migration file not found: ${migrationFile}`);
       process.exit(1);
     }
 
