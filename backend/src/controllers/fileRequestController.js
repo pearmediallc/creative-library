@@ -2192,7 +2192,7 @@ class FileRequestController {
 
     try {
       const { id } = req.params;
-      const { fileName, fileSize, totalChunks, comments } = req.body;
+      const { fileName, fileSize, totalChunks, comments, folder_path } = req.body;
       const userId = req.user.id;
 
       logger.info('Finalizing chunked upload', {
@@ -2275,19 +2275,75 @@ class FileRequestController {
       const userResult = await query('SELECT name FROM users WHERE id = $1', [userId]);
       const uploaderName = userResult.rows[0]?.name || 'Unknown';
 
-      // 🆕 Create upload session to track this chunked upload
-      const uploadSessionResult = await query(
-        `INSERT INTO file_request_uploads
-        (file_request_id, uploaded_by, upload_type, file_count, total_size_bytes)
-        VALUES ($1, $2, 'file', 1, $3)
-        RETURNING id`,
-        [id, userId, fileSize]
-      );
-      const uploadSessionId = uploadSessionResult.rows[0].id;
-
       // Get user's editor ID
       const editorResult = await query('SELECT id FROM editors WHERE user_id = $1', [userId]);
       const editorId = editorResult.rows.length > 0 ? editorResult.rows[0].id : null;
+
+      // If folder_path is provided, preserve hierarchy under the request folder (same behavior as normal uploads)
+      let targetFolderIdForUpload = request.folder_id;
+      let s3FolderPathForUpload = null;
+
+      if (folder_path && String(folder_path).trim()) {
+        try {
+          const mediaController = require('./mediaController');
+          targetFolderIdForUpload = await mediaController.createFolderHierarchy(
+            request.folder_id,
+            String(folder_path).trim(),
+            userId
+          );
+
+          const targetFolder = await Folder.findById(targetFolderIdForUpload);
+          if (targetFolder) {
+            s3FolderPathForUpload = targetFolder.s3_path;
+          }
+        } catch (hierErr) {
+          logger.warn('Folder hierarchy creation failed for chunked request upload (continuing without hierarchy)', {
+            requestId: id,
+            folder_path,
+            error: hierErr.message
+          });
+        }
+      }
+
+      // Ensure the editor assignment reflects that work has started
+      if (editorId) {
+        await query(
+          `UPDATE file_request_editors
+           SET status = CASE
+             WHEN status IN ('completed','declined') THEN status
+             WHEN status = 'pending' THEN 'in_progress'
+             ELSE status
+           END,
+           started_at = COALESCE(started_at, NOW())
+           WHERE request_id = $1 AND editor_id = $2`,
+          [id, editorId]
+        );
+      }
+
+      // 🆕 Create upload session to track this chunked upload
+      const uploadSessionResult = await query(
+        `INSERT INTO file_request_uploads
+         (file_request_id, uploaded_by, upload_type, file_count, total_size_bytes, folder_path, comments, editor_id, files_metadata)
+         VALUES ($1, $2, 'file', 1, $3, $4, $5, $6, $7)
+         RETURNING id`,
+        [
+          id,
+          userId,
+          fileSize,
+          folder_path || null,
+          comments || null,
+          editorId,
+          JSON.stringify([
+            {
+              file_id: null,
+              original_filename: fileName,
+              file_size: fileSize,
+              mime_type: this.getMimeType(fileName)
+            }
+          ])
+        ]
+      );
+      const uploadSessionId = uploadSessionResult.rows[0].id;
 
       // Upload merged file to S3 using mediaService
       const uploadResult = await mediaService.uploadMedia(
@@ -2302,10 +2358,11 @@ class FileRequestController {
         {
           tags: ['file-request-upload'],
           description: comments || `Uploaded via file request (chunked)`,
-          folder_id: request.folder_id,
+          folder_id: targetFolderIdForUpload,
           request_id: id,
           is_file_request_upload: true,
-          upload_session_id: uploadSessionId
+          upload_session_id: uploadSessionId,
+          s3_folder_path: s3FolderPathForUpload
         }
       );
 
@@ -2313,6 +2370,30 @@ class FileRequestController {
       await query(
         `UPDATE media_files SET upload_session_id = $1 WHERE id = $2`,
         [uploadSessionId, uploadResult.id]
+      );
+
+      // Update session snapshot metadata with final file
+      await query(
+        `UPDATE file_request_uploads
+         SET files_metadata = $1,
+             file_count = 1,
+             total_size_bytes = $2
+         WHERE id = $3`,
+        [
+          JSON.stringify([
+            {
+              file_id: uploadResult.id,
+              original_filename: uploadResult.original_filename || fileName,
+              file_size: fileSize,
+              file_type: uploadResult.file_type,
+              mime_type: this.getMimeType(fileName),
+              thumbnail_url: uploadResult.thumbnail_url || null,
+              s3_url: uploadResult.s3_url
+            }
+          ]),
+          fileSize,
+          uploadSessionId
+        ]
       );
 
       // Clean up temp files

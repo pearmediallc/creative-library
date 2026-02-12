@@ -605,11 +605,28 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
               {getStatusBadge(request.status)}
             </div>
             <p className="text-sm text-muted-foreground mt-1">
-              {request.deliverables
-                ? `Deliverables: ${request.deliverables.uploaded}/${request.deliverables.required}${request.deliverables.is_complete ? ' (complete)' : ''}`
-                : request.fulfillment
-                  ? `Progress: ${request.fulfillment.text} • ${request.fulfillment.percent}%`
-                  : `${request.upload_count} ${request.upload_count === 1 ? 'file' : 'files'} uploaded`}
+              {request.deliverables || request.fulfillment ? (
+                <span className="space-y-0.5 block">
+                  {request.deliverables && (
+                    <span className="block">
+                      Deliverables: {request.deliverables.uploaded}/{request.deliverables.required}
+                      {request.deliverables.remaining > 0 ? ` • ${request.deliverables.remaining} remaining` : ''}
+                      {request.deliverables.is_complete ? ' (complete)' : ''}
+                    </span>
+                  )}
+                  {request.fulfillment && (
+                    <span className="block">
+                      Editors: {request.fulfillment.text} completed
+                      {request.fulfillment.in_progress ? ` • ${request.fulfillment.in_progress} in progress` : ''}
+                      {request.fulfillment.pending ? ` • ${request.fulfillment.pending} pending` : ''}
+                    </span>
+                  )}
+                </span>
+              ) : (
+                <span>
+                  {request.upload_count} {request.upload_count === 1 ? 'file' : 'files'} uploaded
+                </span>
+              )}
             </p>
           </div>
           <button
