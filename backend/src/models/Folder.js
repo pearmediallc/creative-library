@@ -143,6 +143,25 @@ class Folder extends BaseModel {
                 AND fp.permission_type = $3
                 AND (fp.expires_at IS NULL OR fp.expires_at > NOW())
             )
+            -- File request folders: creator/assigned buyer can access any folder under the request folder
+            OR EXISTS (
+              WITH RECURSIVE ancestors AS (
+                SELECT f2.id, f2.parent_folder_id
+                FROM folders f2
+                WHERE f2.id = f.id
+
+                UNION ALL
+
+                SELECT f3.id, f3.parent_folder_id
+                FROM folders f3
+                JOIN ancestors a ON a.parent_folder_id = f3.id
+              )
+              SELECT 1
+              FROM file_requests fr
+              WHERE fr.folder_id IN (SELECT id FROM ancestors)
+                AND (fr.created_by = $2 OR fr.assigned_buyer_id = $2)
+              LIMIT 1
+            )
             -- Member of team with access
             OR EXISTS (
               SELECT 1

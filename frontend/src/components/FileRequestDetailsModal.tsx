@@ -108,6 +108,14 @@ interface FileRequestDetails {
     percent: number;
     text: string;
   };
+  deliverables_required?: number;
+  deliverables_type?: string;
+  deliverables?: {
+    required: number;
+    uploaded: number;
+    remaining: number;
+    is_complete: boolean;
+  };
 }
 
 export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRequestDetailsModalProps) {
@@ -597,9 +605,11 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
               {getStatusBadge(request.status)}
             </div>
             <p className="text-sm text-muted-foreground mt-1">
-              {request.fulfillment
-                ? `Progress: ${request.fulfillment.text} • ${request.fulfillment.percent}%`
-                : `${request.upload_count} ${request.upload_count === 1 ? 'file' : 'files'} uploaded`}
+              {request.deliverables
+                ? `Deliverables: ${request.deliverables.uploaded}/${request.deliverables.required}${request.deliverables.is_complete ? ' (complete)' : ''}`
+                : request.fulfillment
+                  ? `Progress: ${request.fulfillment.text} • ${request.fulfillment.percent}%`
+                  : `${request.upload_count} ${request.upload_count === 1 ? 'file' : 'files'} uploaded`}
             </p>
           </div>
           <button

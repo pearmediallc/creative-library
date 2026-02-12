@@ -52,7 +52,10 @@ class FileRequestController {
         custom_message,
         editor_id,
         editor_ids,
-        assigned_buyer_id
+        assigned_buyer_id,
+        // New: deliverables progress (e.g. buyer asked for 20 videos)
+        deliverables_required,
+        deliverables_type
       } = req.body;
 
       console.log('Parsed values:', {
@@ -301,8 +304,9 @@ class FileRequestController {
         result = await query(
           `INSERT INTO file_requests
           (title, description, request_type, concept_notes, num_creatives, platform, vertical, created_by, folder_id, request_token, deadline,
-           allow_multiple_uploads, require_email, custom_message, assigned_buyer_id, auto_assigned_head, assigned_at)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+           allow_multiple_uploads, require_email, custom_message, assigned_buyer_id, auto_assigned_head, assigned_at,
+           deliverables_required, deliverables_type)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
           RETURNING *`,
           [
             requestTitle.trim(),
@@ -321,7 +325,9 @@ class FileRequestController {
             custom_message || null,
             assigned_buyer_id || null,
             autoAssignedHead || null,
-            (editor_id || finalEditorIds.length > 0) ? new Date() : null
+            (editor_id || finalEditorIds.length > 0) ? new Date() : null,
+            deliverables_required || null,
+            deliverables_type || 'file'
           ]
         );
         console.log('Insert successful, returned:', result.rows[0]);
@@ -863,6 +869,18 @@ class FileRequestController {
       const fileRequest = result.rows[0];
       fileRequest.uploads = uploadsResult.rows;
       fileRequest.assigned_editors = editorsResult.rows;
+
+      // Deliverables progress (files uploaded vs buyer-required count)
+      const deliverablesRequired = fileRequest.deliverables_required ? Number(fileRequest.deliverables_required) : null;
+      const deliverablesUploaded = Array.isArray(uploadsResult.rows) ? uploadsResult.rows.length : 0;
+      if (deliverablesRequired && deliverablesRequired > 0) {
+        fileRequest.deliverables = {
+          required: deliverablesRequired,
+          uploaded: deliverablesUploaded,
+          remaining: Math.max(0, deliverablesRequired - deliverablesUploaded),
+          is_complete: deliverablesUploaded >= deliverablesRequired
+        };
+      }
 
       // Progress / fulfillment summary (how many assigned editors are done)
       const totalAssigned = Array.isArray(editorsResult.rows) ? editorsResult.rows.length : 0;
@@ -1610,6 +1628,70 @@ class FileRequestController {
             uploaded_by: req.user.name || req.user.email
           }
         });
+      }
+
+      // Deliverables counter + notify buyer when target reached
+      try {
+        if (fileRequest.deliverables_required && Number(fileRequest.deliverables_required) > 0) {
+          const countResult = await query(
+            `SELECT COUNT(*)::int AS cnt
+             FROM media_files mf
+             JOIN file_request_uploads fru ON mf.upload_session_id = fru.id
+             WHERE fru.file_request_id = $1
+               AND COALESCE(fru.is_deleted, FALSE) = FALSE
+               AND mf.is_deleted = FALSE`,
+            [fileRequest.id]
+          );
+
+          const uploadedCount = countResult.rows[0]?.cnt || 0;
+
+          // Mark completed_at and send a one-time notification
+          if (uploadedCount >= Number(fileRequest.deliverables_required)) {
+            const updated = await query(
+              `UPDATE file_requests
+               SET deliverables_completed_at = COALESCE(deliverables_completed_at, NOW()),
+                   deliverables_notified_at = COALESCE(deliverables_notified_at, NOW())
+               WHERE id = $1
+                 AND deliverables_notified_at IS NULL
+               RETURNING deliverables_notified_at`,
+              [fileRequest.id]
+            );
+
+            if ((updated.rows || []).length > 0) {
+              // Notify creator (buyer)
+              await Notification.create({
+                userId: fileRequest.creator_id,
+                type: 'file_request_fulfilled',
+                title: 'Request Completed',
+                message: `All deliverables have been uploaded for "${fileRequest.title}" (${uploadedCount}/${fileRequest.deliverables_required}).`,
+                referenceType: 'file_request',
+                referenceId: fileRequest.id,
+                metadata: {
+                  deliverables_required: fileRequest.deliverables_required,
+                  uploaded_count: uploadedCount
+                }
+              });
+
+              // Notify assigned buyer if different
+              if (fileRequest.assigned_buyer_id && fileRequest.assigned_buyer_id !== fileRequest.creator_id) {
+                await Notification.create({
+                  userId: fileRequest.assigned_buyer_id,
+                  type: 'file_request_fulfilled',
+                  title: 'Request Completed',
+                  message: `All deliverables have been uploaded for "${fileRequest.title}" (${uploadedCount}/${fileRequest.deliverables_required}).`,
+                  referenceType: 'file_request',
+                  referenceId: fileRequest.id,
+                  metadata: {
+                    deliverables_required: fileRequest.deliverables_required,
+                    uploaded_count: uploadedCount
+                  }
+                });
+              }
+            }
+          }
+        }
+      } catch (e) {
+        logger.warn('Deliverables progress update failed (non-fatal)', { requestId: fileRequest.id, error: e.message });
       }
 
       logger.info('✅ ====== UPLOAD TO REQUEST (AUTH) - SUCCESS ======', {
@@ -2809,10 +2891,11 @@ class FileRequestController {
   async reassignRequest(req, res, next) {
     try {
       const { id } = req.params;
-      const { reassign_to, note } = req.body;
+      const { reassign_to, editor_ids, note } = req.body;
       const userId = req.user.id;
 
-      if (!reassign_to) {
+      const hasMultiple = Array.isArray(editor_ids) && editor_ids.length > 0;
+      if (!hasMultiple && !reassign_to) {
         return res.status(400).json({
           success: false,
           error: 'reassign_to is required'
@@ -2860,52 +2943,58 @@ class FileRequestController {
         });
       }
 
-      // Resolve reassign_to into (targetEditorId, targetUserId)
-      // Frontend may send either editor_id OR user_id. Support both.
-      const editorCheck = await query(
-        `SELECT e.id as editor_id, e.user_id as user_id
-         FROM editors e
-         WHERE e.is_active = TRUE
-           AND (e.id = $1 OR e.user_id = $1)
-         LIMIT 1`,
-        [reassign_to]
-      );
+      // Resolve target editors. Supports:
+      // - single: reassign_to (editor_id or user_id)
+      // - multiple: editor_ids[] (editor_id or user_id entries)
+      const targets = hasMultiple ? editor_ids : [reassign_to];
 
-      if (editorCheck.rows.length === 0) {
-        return res.status(404).json({
-          success: false,
-          error: 'Target editor not found'
-        });
+      const resolvedTargets = [];
+      for (const t of targets) {
+        const editorCheck = await query(
+          `SELECT e.id as editor_id, e.user_id as user_id
+           FROM editors e
+           WHERE e.is_active = TRUE
+             AND (e.id = $1 OR e.user_id = $1)
+           LIMIT 1`,
+          [t]
+        );
+        if (editorCheck.rows.length === 0) {
+          return res.status(404).json({ success: false, error: 'Target editor not found', target: t });
+        }
+        resolvedTargets.push({ editor_id: editorCheck.rows[0].editor_id, user_id: editorCheck.rows[0].user_id });
       }
 
-      const targetEditorId = editorCheck.rows[0].editor_id;
-      const targetUserId = editorCheck.rows[0].user_id;
+      const targetEditorIds = resolvedTargets.map(r => r.editor_id);
 
-      // Create reassignment record (store reassigned_to as USER id)
-      await query(
-        `INSERT INTO request_reassignments
-         (file_request_id, reassigned_from, reassigned_to, reassignment_note)
-         VALUES ($1, $2, $3, $4)`,
-        [id, userId, targetUserId, note || null]
-      );
+      // Create reassignment records (store reassigned_to as USER id)
+      for (const r of resolvedTargets) {
+        await query(
+          `INSERT INTO request_reassignments
+           (file_request_id, reassigned_from, reassigned_to, reassignment_note)
+           VALUES ($1, $2, $3, $4)`,
+          [id, userId, r.user_id, note || null]
+        );
+      }
 
       // Mark existing active/pending assignments as reassigned (keeps history)
       await query(
         `UPDATE file_request_editors
          SET status = 'reassigned', updated_at = CURRENT_TIMESTAMP
          WHERE request_id = $1
-           AND editor_id <> $2
            AND status IN ('pending', 'accepted', 'in_progress', 'picked_up')`,
-        [id, targetEditorId]
+        [id]
       );
 
-      // Add/ensure target editor assignment
-      await query(
-        `INSERT INTO file_request_editors (request_id, editor_id, status)
-         VALUES ($1, $2, 'pending')
-         ON CONFLICT (request_id, editor_id) DO UPDATE SET status = 'pending', updated_at = CURRENT_TIMESTAMP`,
-        [id, targetEditorId]
-      );
+      // Ensure target editor assignments exist (set to pending)
+      for (const editorId of targetEditorIds) {
+        await query(
+          `INSERT INTO file_request_editors (request_id, editor_id, status)
+           VALUES ($1, $2, 'pending')
+           ON CONFLICT (request_id, editor_id) DO UPDATE
+           SET status = 'pending', updated_at = CURRENT_TIMESTAMP`,
+          [id, editorId]
+        );
+      }
 
       // Update reassignment count
       await query(
@@ -2915,21 +3004,28 @@ class FileRequestController {
         [id]
       );
 
-      // Send notification to reassigned editor with note
-      await Notification.create({
-        userId: targetUserId,
-        type: 'file_request_reassigned',
-        title: 'File Request Reassigned to You',
-        message: `"${fileRequest.title}" has been reassigned to you by ${req.user.name || req.user.email}${note ? ': ' + note : ''}`,
-        referenceType: 'file_request',
-        referenceId: id,
-        metadata: {
-          request_title: fileRequest.title,
-          reassigned_from: req.user.name || req.user.email,
-          reassignment_note: note,
-          deadline: fileRequest.deadline
-        }
-      });
+      // Send notification(s) to reassigned editor(s) with note
+      // (one per editor user)
+      // NOTE: fileRequest variable is available above
+      //
+      // For multiple targets, notify all
+      for (const r of resolvedTargets) {
+        await Notification.create({
+          userId: r.user_id,
+          type: 'file_request_reassigned',
+          title: 'File Request Reassigned to You',
+          message: `"${fileRequest.title}" has been reassigned to you by ${req.user.name || req.user.email}${note ? ': ' + note : ''}`,
+          referenceType: 'file_request',
+          referenceId: id,
+          metadata: {
+            request_title: fileRequest.title,
+            reassigned_from: req.user.name || req.user.email,
+            reassignment_note: note,
+            deadline: fileRequest.deadline,
+            editor_id: r.editor_id
+          }
+        });
+      }
 
       // Log activity
       await logActivity({
@@ -2939,8 +3035,8 @@ class FileRequestController {
         resourceId: id,
         resourceName: fileRequest.title,
         details: {
-          reassigned_to: targetUserId,
-          reassigned_to_editor_id: targetEditorId,
+          reassigned_to_user_ids: resolvedTargets.map(x => x.user_id),
+          reassigned_to_editor_ids: resolvedTargets.map(x => x.editor_id),
           note
         },
         status: 'success'
@@ -2949,14 +3045,15 @@ class FileRequestController {
       logger.info('File request reassigned', {
         requestId: id,
         reassigned_from: userId,
-        reassigned_to: targetUserId,
-        reassigned_to_editor_id: targetEditorId,
+        reassigned_to_user_ids: resolvedTargets.map(x => x.user_id),
+        reassigned_to_editor_ids: resolvedTargets.map(x => x.editor_id),
         note
       });
 
       res.json({
         success: true,
-        message: 'Request reassigned successfully'
+        message: 'Request reassigned successfully',
+        assigned_count: resolvedTargets.length
       });
     } catch (error) {
       logger.error('Reassign request failed', { error: error.message });
