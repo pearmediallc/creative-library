@@ -7,7 +7,7 @@ const { query } = require('../config/database');
 const logger = require('../utils/logger');
 
 /**
- * Create request template
+ * Create request template (team)
  * POST /api/teams/:teamId/templates
  */
 async function createTemplate(req, res) {
@@ -397,11 +397,109 @@ async function useTemplate(req, res) {
   }
 }
 
+/**
+ * Create personal template
+ * POST /api/templates
+ */
+async function createPersonalTemplate(req, res) {
+  try {
+    const userId = req.user.id;
+    const {
+      name,
+      description,
+      defaultTitle,
+      defaultRequestType,
+      defaultInstructions,
+      defaultPriority = 'normal',
+      defaultDueDays,
+      defaultPlatform,
+      defaultVertical,
+      defaultNumCreatives,
+      defaultAllowMultipleUploads,
+      defaultRequireEmail,
+      defaultCustomMessage,
+      requiredFields
+    } = req.body;
+
+    if (!name || name.trim().length === 0) {
+      return res.status(400).json({ error: 'Template name is required' });
+    }
+
+    const result = await query(
+      `INSERT INTO request_templates (
+        team_id, created_by, name, description,
+        default_title, default_request_type, default_instructions, default_priority,
+        default_due_days, default_platform, default_vertical, default_num_creatives,
+        default_allow_multiple_uploads, default_require_email, default_custom_message,
+        required_fields
+      ) VALUES (NULL, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+      RETURNING *`,
+      [
+        userId,
+        name.trim(),
+        description || null,
+        defaultTitle || null,
+        defaultRequestType || null,
+        defaultInstructions || null,
+        defaultPriority,
+        defaultDueDays || null,
+        defaultPlatform || null,
+        defaultVertical || null,
+        defaultNumCreatives || null,
+        defaultAllowMultipleUploads !== undefined ? defaultAllowMultipleUploads : null,
+        defaultRequireEmail !== undefined ? defaultRequireEmail : null,
+        defaultCustomMessage || null,
+        JSON.stringify(requiredFields || [])
+      ]
+    );
+
+    res.status(201).json({ success: true, data: result.rows[0], message: 'Template created successfully' });
+  } catch (error) {
+    logger.error('Create personal template failed', { error: error.message, user_id: req.user?.id });
+    res.status(500).json({ error: 'Failed to create template' });
+  }
+}
+
+/**
+ * Get templates accessible to user (personal + team templates for teams they belong to)
+ * GET /api/templates
+ */
+async function getAccessibleTemplates(req, res) {
+  try {
+    const userId = req.user.id;
+
+    const result = await query(
+      `SELECT rt.*, u.name as created_by_username
+       FROM request_templates rt
+       LEFT JOIN users u ON rt.created_by = u.id
+       WHERE rt.is_active = TRUE
+         AND (
+           (rt.team_id IS NULL AND rt.created_by = $1)
+           OR (
+             rt.team_id IS NOT NULL AND EXISTS (
+               SELECT 1 FROM team_members tm
+               WHERE tm.team_id = rt.team_id AND tm.user_id = $1
+             )
+           )
+         )
+       ORDER BY rt.created_at DESC`,
+      [userId]
+    );
+
+    res.json({ success: true, data: result.rows });
+  } catch (error) {
+    logger.error('Get accessible templates failed', { error: error.message, user_id: req.user?.id });
+    res.status(500).json({ error: 'Failed to fetch templates' });
+  }
+}
+
 module.exports = {
   createTemplate,
   getTeamTemplates,
   getTemplate,
   updateTemplate,
   deleteTemplate,
-  useTemplate
+  useTemplate,
+  createPersonalTemplate,
+  getAccessibleTemplates
 };

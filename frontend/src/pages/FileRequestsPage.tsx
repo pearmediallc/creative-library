@@ -35,6 +35,8 @@ interface FileRequest {
   assigned_editors?: string; // STRING_AGG returns a comma-separated string
   completed_editors_count?: number;
   total_editors_count?: number;
+  uploaded_files_count?: number;
+  my_uploaded_files_count?: number;
 }
 
 export function FileRequestsPage() {
@@ -466,7 +468,11 @@ export function FileRequestsPage() {
                         {request.buyer_name || request.created_by_name || '-'}
                       </td>
                       <td className="p-4 text-sm">{request.platform || '-'}</td>
-                      <td className="p-4 text-sm">{request.num_creatives || '-'}</td>
+                      <td className="p-4 text-sm">
+                        {user?.role === 'creative'
+                          ? (typeof request.my_uploaded_files_count === 'number' ? request.my_uploaded_files_count : 'N/A')
+                          : (request.num_creatives || '-')}
+                      </td>
                       <td className="p-4">
                         {request.vertical ? (
                           <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getVerticalColor(request.vertical)}`}>

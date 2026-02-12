@@ -525,7 +525,8 @@ class FileRequestController {
 
         const editorId = editorResult.rows[0].id;
         whereClause = `WHERE fre.editor_id = $1`;
-        params = [editorId];
+        // params[0]=editorId, params[1]=userId (used for my_uploaded_files_count)
+        params = [editorId, userId];
 
         if (status === 'active') {
           whereClause += ' AND fr.is_active = TRUE';
@@ -566,6 +567,8 @@ class FileRequestController {
             fr.*,
             f.name as folder_name,
             COUNT(DISTINCT fru.id) FILTER (WHERE COALESCE(fru.is_deleted, FALSE) = FALSE AND COALESCE(fru.file_count, 0) > 0) as upload_count,
+            COUNT(mf.id) FILTER (WHERE COALESCE(fru.is_deleted, FALSE) = FALSE AND mf.is_deleted = FALSE) as uploaded_files_count,
+            COUNT(mf.id) FILTER (WHERE COALESCE(fru.is_deleted, FALSE) = FALSE AND mf.is_deleted = FALSE AND fru.uploaded_by = $2) as my_uploaded_files_count,
             fre.status as my_assignment_status,
             fre.created_at as assigned_at,
             buyer.name as buyer_name,
@@ -576,6 +579,7 @@ class FileRequestController {
           JOIN file_requests fr ON fre.request_id = fr.id
           LEFT JOIN folders f ON fr.folder_id = f.id
           LEFT JOIN file_request_uploads fru ON fr.id = fru.file_request_id
+          LEFT JOIN media_files mf ON mf.upload_session_id = fru.id
           LEFT JOIN users buyer ON fr.assigned_buyer_id = buyer.id
           LEFT JOIN users creator ON fr.created_by = creator.id
           LEFT JOIN file_request_editors fre_all ON fr.id = fre_all.request_id
@@ -1471,6 +1475,29 @@ class FileRequestController {
            WHERE request_id = $1 AND editor_id = $2`,
           [fileRequest.id, editorId]
         );
+
+        // Heuristic for workload accuracy:
+        // If the request's num_creatives matches the number of assigned editors, treat 1 upload as fulfillment for that editor.
+        try {
+          const assignedCountRes = await query(
+            'SELECT COUNT(*)::int AS cnt FROM file_request_editors WHERE request_id = $1',
+            [fileRequest.id]
+          );
+          const assignedCount = assignedCountRes.rows[0]?.cnt || 0;
+          const numCreatives = fileRequest.num_creatives ? Number(fileRequest.num_creatives) : null;
+
+          if (numCreatives && assignedCount === numCreatives) {
+            await query(
+              `UPDATE file_request_editors
+               SET status = 'completed',
+                   completed_at = COALESCE(completed_at, NOW())
+               WHERE request_id = $1 AND editor_id = $2`,
+              [fileRequest.id, editorId]
+            );
+          }
+        } catch (e) {
+          logger.warn('Auto-complete editor assignment heuristic failed (non-fatal)', { requestId: fileRequest.id, editorId, error: e.message });
+        }
       }
 
       // Determine target folder for upload. If a folder_path is provided (folder upload),

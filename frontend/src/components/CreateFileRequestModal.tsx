@@ -145,9 +145,10 @@ export function CreateFileRequestModal({ onClose, onSuccess, teamId }: CreateFil
     }
   };
 
-  const fetchTemplates = async (teamId: string) => {
+  const fetchTemplates = async () => {
     try {
-      const response = await teamApi.getTemplates(teamId);
+      // Accessible templates includes personal + team templates for teams the user belongs to
+      const response = await teamApi.getAccessibleTemplates();
       const activeTemplates = (response.data.data || []).filter((t: Template) => t.is_active !== false);
       setTemplates(activeTemplates);
     } catch (error: any) {
@@ -226,14 +227,9 @@ export function CreateFileRequestModal({ onClose, onSuccess, teamId }: CreateFil
   }, []);
 
   useEffect(() => {
-    if (selectedTeamId) {
-      fetchTemplates(selectedTeamId);
-    } else {
-      setTemplates([]);
-      setSelectedTemplateId('');
-    }
+    fetchTemplates();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedTeamId]);
+  }, []);
 
   const handleCreateFolder = async () => {
     if (!newFolderName.trim()) {
@@ -373,7 +369,7 @@ export function CreateFileRequestModal({ onClose, onSuccess, teamId }: CreateFil
           {teams.length > 0 && (
             <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Use Team Template (Optional)
+                Use Template (Optional)
               </label>
               <select
                 value={selectedTeamId}
@@ -393,7 +389,7 @@ export function CreateFileRequestModal({ onClose, onSuccess, teamId }: CreateFil
               </select>
 
               {/* Template Selection */}
-              {selectedTeamId && templates.length > 0 && (
+              {templates.length > 0 && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     Select Template to Auto-Fill Form
@@ -420,7 +416,7 @@ export function CreateFileRequestModal({ onClose, onSuccess, teamId }: CreateFil
                 </div>
               )}
 
-              {selectedTeamId && templates.length === 0 && (
+              {templates.length === 0 && (
                 <p className="text-sm text-gray-600 dark:text-gray-400 italic">
                   No templates available for this team yet.
                 </p>

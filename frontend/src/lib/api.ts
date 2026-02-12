@@ -900,6 +900,10 @@ export const teamApi = {
     api.post(`/teams/${teamId}/templates`, data),
   getTemplates: (teamId: string, params?: { active?: boolean }) =>
     api.get(`/teams/${teamId}/templates`, { params }),
+
+  // Personal + accessible templates
+  getAccessibleTemplates: () => api.get('/templates'),
+  createPersonalTemplate: (data: any) => api.post('/templates', data),
   getTemplate: (templateId: string) =>
     api.get(`/teams/templates/${templateId}`),
   updateTemplate: (templateId: string, data: any) =>
