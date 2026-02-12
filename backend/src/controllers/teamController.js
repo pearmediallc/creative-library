@@ -338,7 +338,7 @@ async function addTeamMember(req, res) {
 
     // Define role-based permissions without database lookup
     let permissions = {};
-    if (teamRole === 'lead') {
+    if (effectiveTeamRole === 'lead') {
       permissions = {
         can_manage_members: true,
         can_create_folders: true,
@@ -346,7 +346,7 @@ async function addTeamMember(req, res) {
         can_manage_templates: true,
         can_view_analytics: true
       };
-    } else if (teamRole === 'member') {
+    } else if (effectiveTeamRole === 'member') {
       permissions = {
         can_manage_members: false,
         can_create_folders: true,
@@ -354,7 +354,7 @@ async function addTeamMember(req, res) {
         can_manage_templates: false,
         can_view_analytics: true
       };
-    } else if (teamRole === 'guest') {
+    } else if (effectiveTeamRole === 'guest') {
       permissions = {
         can_manage_members: false,
         can_create_folders: false,
@@ -362,6 +362,12 @@ async function addTeamMember(req, res) {
         can_manage_templates: false,
         can_view_analytics: false
       };
+    }
+
+    // Buyers should be able to manage templates by default (unless guest)
+    const newUserRole = userResult.rows[0]?.role;
+    if (newUserRole === 'buyer' && effectiveTeamRole !== 'guest') {
+      permissions.can_manage_templates = true;
     }
 
     // Add member

@@ -18,6 +18,7 @@ interface FileRequest {
   description?: string;
   request_token: string;
   is_active: boolean;
+  status?: 'open' | 'in_progress' | 'uploaded' | 'launched' | 'closed' | 'reopened';
   deadline?: string;
   folder_name?: string;
   upload_count: number;
@@ -482,17 +483,9 @@ export function FileRequestsPage() {
                         {request.assigned_editors || '-'}
                       </td>
                       <td className="p-4">
-                        {request.is_active ? (
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
-                            <CheckCircle className="w-3 h-3 mr-1" />
-                            Active
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200">
-                            <XCircle className="w-3 h-3 mr-1" />
-                            Closed
-                          </span>
-                        )}
+                        <span className="text-sm">
+                          {request.status || (request.is_active ? 'open' : 'closed')}
+                        </span>
                       </td>
                       <td className="p-4">
                         <div className="flex items-center gap-2">

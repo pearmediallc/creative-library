@@ -152,7 +152,7 @@ async function getTemplate(req, res) {
     const result = await query(
       `SELECT
         rt.*,
-        u.username as created_by_username
+        u.name as created_by_username
        FROM request_templates rt
        LEFT JOIN users u ON rt.created_by = u.id
        WHERE rt.id = $1`,

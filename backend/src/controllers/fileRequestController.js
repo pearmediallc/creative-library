@@ -496,8 +496,12 @@ class FileRequestController {
       const userRole = req.user.role;
       const { status, date_from, date_to, editor_ids, media_type } = req.query;
 
+      // Global reviewers: always see all requests (like admin) even if they are creatives
+      const reviewerEmails = ['parmeet.singh@pearmediallc.com', 'ritu.singh@pearmediallc.com'];
+      const isGlobalReviewer = reviewerEmails.includes(String(req.user.email || '').toLowerCase());
+
       // Check if user is an editor (creative role)
-      const isEditor = userRole === 'creative';
+      const isEditor = userRole === 'creative' && !isGlobalReviewer;
       const isAdminOrBuyer = userRole === 'admin' || userRole === 'buyer';
 
       let whereClause;
@@ -594,8 +598,8 @@ class FileRequestController {
         });
       } else {
         // For non-editors: differentiate between admin and buyers/regular users
-        if (userRole === 'admin') {
-          // Only admins see ALL requests
+        if (userRole === 'admin' || isGlobalReviewer) {
+          // Admins and global reviewers see ALL requests
           whereClause = 'WHERE 1=1';
           params = [];
           logger.info('Admin viewing all file requests', { userId, userRole });
@@ -689,8 +693,11 @@ class FileRequestController {
       const userRole = req.user.role;
       const { id } = req.params;
 
+      const reviewerEmails = ['parmeet.singh@pearmediallc.com', 'ritu.singh@pearmediallc.com'];
+      const isGlobalReviewer = reviewerEmails.includes(String(req.user.email || '').toLowerCase());
+
       // Check if user is an editor
-      const isEditor = userRole === 'creative';
+      const isEditor = userRole === 'creative' && !isGlobalReviewer;
 
       let result;
       if (isEditor) {
@@ -728,8 +735,8 @@ class FileRequestController {
         );
       } else {
         // For non-editors: differentiate between admin and buyers/regular users
-        if (userRole === 'admin') {
-          // Only admins can view any request
+        if (userRole === 'admin' || isGlobalReviewer) {
+          // Admins and global reviewers can view any request
           result = await query(
             `SELECT
               fr.*,
@@ -2616,20 +2623,35 @@ class FileRequestController {
         });
       }
 
-      // Update status
+      // Launch is equivalent to close in your workflow
       await query(
         `UPDATE file_requests
-         SET status = 'launched',
+         SET status = 'closed',
+             is_active = FALSE,
              launched_at = NOW(),
-             launched_by = $1
+             launched_by = $1,
+             closed_at = NOW(),
+             closed_by = $1,
+             completed_at = NOW(),
+             updated_at = NOW()
          WHERE id = $2`,
         [userId, id]
+      );
+
+      // Mark all editor assignments completed (so workload drops immediately)
+      await query(
+        `UPDATE file_request_editors
+         SET status = 'completed',
+             completed_at = COALESCE(completed_at, NOW())
+         WHERE request_id = $1
+           AND status IN ('pending','accepted','in_progress','picked_up')`,
+        [id]
       );
 
       // Log activity
       await logActivity({
         req,
-        actionType: 'file_request_launched',
+        actionType: 'file_request_closed',
         resourceType: 'file_request',
         resourceId: id,
         resourceName: fileRequest.title,
@@ -2639,7 +2661,7 @@ class FileRequestController {
 
       res.json({
         success: true,
-        message: 'File request launched successfully'
+        message: 'File request launched and closed successfully'
       });
     } catch (error) {
       logger.error('Launch request failed', { error: error.message });
@@ -2710,7 +2732,8 @@ class FileRequestController {
 
       res.json({
         success: true,
-        message: 'File request closed successfully'
+        message: 'File request closed successfully',
+        note: 'Launch is the primary close action in this workflow.'
       });
     } catch (error) {
       logger.error('Close request failed', { error: error.message });

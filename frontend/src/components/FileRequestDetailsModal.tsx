@@ -741,19 +741,7 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
                   </Button>
                 )}
 
-                {/* Close - Only for creator/assigned buyer when status is launched */}
-                {(request.created_by === user.id || request.assigned_buyer_id === user.id) &&
-                  request.status === 'launched' && (
-                  <Button
-                    onClick={handleClose}
-                    size="sm"
-                    variant="outline"
-                    className="border-gray-400 text-gray-700 dark:text-gray-300"
-                  >
-                    <XCircle className="w-4 h-4 mr-2" />
-                    Close Request
-                  </Button>
-                )}
+                {/* Close step removed: Launch is equivalent to Close in this workflow */}
 
                 {/* Reopen - Only for creator/assigned buyer when status is closed */}
                 {(request.created_by === user.id || request.assigned_buyer_id === user.id) &&
