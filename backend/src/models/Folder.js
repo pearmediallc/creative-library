@@ -56,6 +56,12 @@ class Folder extends BaseModel {
           -- Base case: root folders or specified parent
           SELECT
             f.*,
+            (
+              SELECT COUNT(*)
+              FROM media_files mf
+              WHERE mf.folder_id = f.id
+                AND mf.is_deleted = FALSE
+            )::int as file_count,
             0 as depth,
             ARRAY[f.id] as path
           FROM folders f
@@ -91,6 +97,12 @@ class Folder extends BaseModel {
           -- Recursive case: child folders
           SELECT
             f.*,
+            (
+              SELECT COUNT(*)
+              FROM media_files mf
+              WHERE mf.folder_id = f.id
+                AND mf.is_deleted = FALSE
+            )::int as file_count,
             ft.depth + 1,
             ft.path || f.id
           FROM folders f

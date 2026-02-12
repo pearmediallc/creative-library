@@ -365,9 +365,8 @@ export function CreateFileRequestModal({ onClose, onSuccess, teamId }: CreateFil
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          {/* Team Selection (Optional) */}
-          {teams.length > 0 && (
-            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+          {/* Templates (Optional) */}
+          <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Use Template (Optional)
               </label>
@@ -378,9 +377,9 @@ export function CreateFileRequestModal({ onClose, onSuccess, teamId }: CreateFil
                   setSelectedTemplateId('');
                 }}
                 disabled={creating}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white mb-3"
+                className="hidden w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white mb-3"
               >
-                <option value="">No team template</option>
+                <option value="">No template</option>
                 {teams.map((team) => (
                   <option key={team.id} value={team.id}>
                     {team.name}
@@ -418,7 +417,7 @@ export function CreateFileRequestModal({ onClose, onSuccess, teamId }: CreateFil
 
               {templates.length === 0 && (
                 <p className="text-sm text-gray-600 dark:text-gray-400 italic">
-                  No templates available for this team yet.
+                  No templates available yet.
                 </p>
               )}
             </div>

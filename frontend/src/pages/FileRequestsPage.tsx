@@ -470,7 +470,9 @@ export function FileRequestsPage() {
                       <td className="p-4 text-sm">{request.platform || '-'}</td>
                       <td className="p-4 text-sm">
                         {user?.role === 'creative'
-                          ? (typeof request.my_uploaded_files_count === 'number' ? request.my_uploaded_files_count : 'N/A')
+                          ? (request.my_uploaded_files_count !== undefined && request.my_uploaded_files_count !== null
+                              ? Number(request.my_uploaded_files_count)
+                              : 'N/A')
                           : (request.num_creatives || '-')}
                       </td>
                       <td className="p-4">
