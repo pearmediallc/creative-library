@@ -4,7 +4,7 @@ import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { permissionApi, mediaApi, folderApi } from '../lib/api';
 import { formatBytes, formatDate } from '../lib/utils';
-import { Image as ImageIcon, Video, Download, Folder, User, Info } from 'lucide-react';
+import { Image as ImageIcon, Video, Download, Folder, User, Info, ChevronRight, ChevronDown } from 'lucide-react';
 
 interface SharedResource {
   resource_type: 'file' | 'folder';
@@ -22,10 +22,19 @@ interface SharedResource {
   permissions: string[];
 }
 
+interface UserGroup {
+  owner_email: string;
+  owner_name: string;
+  resources: SharedResource[];
+  file_count: number;
+  total_size: number;
+}
+
 export function SharedWithMePage() {
   const [resources, setResources] = useState<SharedResource[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [expandedOwners, setExpandedOwners] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     fetchSharedResources();
@@ -100,6 +109,41 @@ export function SharedWithMePage() {
     return resource.permissions.includes(permission);
   };
 
+  // Group resources by owner
+  const groupResourcesByOwner = (): UserGroup[] => {
+    const grouped = new Map<string, SharedResource[]>();
+
+    resources.forEach(resource => {
+      const ownerKey = resource.owner_email;
+      if (!grouped.has(ownerKey)) {
+        grouped.set(ownerKey, []);
+      }
+      grouped.get(ownerKey)!.push(resource);
+    });
+
+    return Array.from(grouped.entries()).map(([email, ownerResources]) => ({
+      owner_email: email,
+      owner_name: ownerResources[0].owner_name,
+      resources: ownerResources,
+      file_count: ownerResources.filter(r => r.resource_type === 'file').length,
+      total_size: ownerResources
+        .filter(r => r.resource_type === 'file')
+        .reduce((sum, r) => sum + (r.file_size || 0), 0)
+    }));
+  };
+
+  const toggleOwner = (ownerEmail: string) => {
+    const newExpanded = new Set(expandedOwners);
+    if (newExpanded.has(ownerEmail)) {
+      newExpanded.delete(ownerEmail);
+    } else {
+      newExpanded.add(ownerEmail);
+    }
+    setExpandedOwners(newExpanded);
+  };
+
+  const userGroups = groupResourcesByOwner();
+
   if (loading) {
     return (
       <DashboardLayout>
@@ -127,11 +171,47 @@ export function SharedWithMePage() {
           </div>
         )}
 
-        {/* Resources Grid */}
-        {resources.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {resources.map((resource) => (
-              <Card key={`${resource.resource_type}-${resource.resource_id}`} className="overflow-hidden">
+        {/* Resources Grouped by Owner */}
+        {userGroups.length > 0 ? (
+          <div className="space-y-6">
+            {userGroups.map((userGroup) => (
+              <div key={userGroup.owner_email} className="space-y-3">
+                {/* Owner Header - Collapsible */}
+                <div
+                  className="flex items-center justify-between p-4 bg-muted/50 rounded-lg cursor-pointer hover:bg-muted transition-colors"
+                  onClick={() => toggleOwner(userGroup.owner_email)}
+                >
+                  <div className="flex items-center gap-3 flex-1">
+                    {expandedOwners.has(userGroup.owner_email) ? (
+                      <ChevronDown className="w-5 h-5 text-muted-foreground" />
+                    ) : (
+                      <ChevronRight className="w-5 h-5 text-muted-foreground" />
+                    )}
+                    <div className="flex items-center gap-2">
+                      <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                        <User className="w-5 h-5 text-primary" />
+                      </div>
+                      <div>
+                        <h3 className="font-medium text-lg">{userGroup.owner_name}</h3>
+                        <p className="text-sm text-muted-foreground">{userGroup.owner_email}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-4 ml-auto mr-4">
+                      <span className="text-sm text-muted-foreground">
+                        {userGroup.file_count} {userGroup.file_count === 1 ? 'file' : 'files'}
+                      </span>
+                      <span className="text-sm text-muted-foreground">
+                        {formatBytes(userGroup.total_size)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Owner's Resources - Only show when expanded */}
+                {expandedOwners.has(userGroup.owner_email) && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 pl-4">
+                    {userGroup.resources.map((resource) => (
+                      <Card key={`${resource.resource_type}-${resource.resource_id}`} className="overflow-hidden">
                 {/* Preview/Thumbnail */}
                 <div className="aspect-video bg-muted relative">
                   {resource.resource_type === 'file' ? (
@@ -225,6 +305,10 @@ export function SharedWithMePage() {
                   </div>
                 </div>
               </Card>
+                    ))}
+                  </div>
+                )}
+              </div>
             ))}
           </div>
         ) : (
