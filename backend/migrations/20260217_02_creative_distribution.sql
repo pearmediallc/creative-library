@@ -11,18 +11,34 @@
 ALTER TABLE file_request_editors
 ADD COLUMN IF NOT EXISTS num_creatives_assigned INTEGER DEFAULT 0;
 
--- Ensure non-negative values
-ALTER TABLE file_request_editors
-ADD CONSTRAINT IF NOT EXISTS check_creatives_assigned_non_negative
-CHECK (num_creatives_assigned >= 0);
-
 -- Add column to track if editor completed their assigned creatives
 ALTER TABLE file_request_editors
 ADD COLUMN IF NOT EXISTS creatives_completed INTEGER DEFAULT 0;
 
-ALTER TABLE file_request_editors
-ADD CONSTRAINT IF NOT EXISTS check_creatives_completed_valid
-CHECK (creatives_completed >= 0 AND creatives_completed <= num_creatives_assigned);
+-- Ensure non-negative values (use DO block to handle IF NOT EXISTS)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'check_creatives_assigned_non_negative'
+  ) THEN
+    ALTER TABLE file_request_editors
+    ADD CONSTRAINT check_creatives_assigned_non_negative
+    CHECK (num_creatives_assigned >= 0);
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'check_creatives_completed_valid'
+  ) THEN
+    ALTER TABLE file_request_editors
+    ADD CONSTRAINT check_creatives_completed_valid
+    CHECK (creatives_completed >= 0 AND creatives_completed <= num_creatives_assigned);
+  END IF;
+END $$;
 
 -- ============================================================================
 -- MIGRATE EXISTING DATA
@@ -154,7 +170,6 @@ SELECT
   fre.created_at,
   e.name as editor_name,
   e.display_name as editor_display_name,
-  u.email as editor_email,
   fr.num_creatives as total_requested,
   CASE
     WHEN fre.num_creatives_assigned > 0
@@ -163,7 +178,6 @@ SELECT
   END as completion_percentage
 FROM file_request_editors fre
 JOIN editors e ON e.id = fre.editor_id
-JOIN users u ON u.id = e.user_id
 JOIN file_requests fr ON fr.id = fre.request_id;
 
 -- ============================================================================

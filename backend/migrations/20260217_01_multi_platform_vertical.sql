@@ -49,19 +49,8 @@ CREATE INDEX IF NOT EXISTS idx_file_request_verticals_is_primary
 -- DATA MIGRATION: Move existing platform/vertical data to junction tables
 -- ============================================================================
 
--- Migrate existing platforms
-INSERT INTO file_request_platforms (file_request_id, platform, created_at)
-SELECT id, platform, created_at
-FROM file_requests
-WHERE platform IS NOT NULL AND platform != ''
-ON CONFLICT (file_request_id, platform) DO NOTHING;
-
--- Migrate existing verticals (mark first as primary)
-INSERT INTO file_request_verticals (file_request_id, vertical, is_primary, created_at)
-SELECT id, vertical, TRUE, created_at
-FROM file_requests
-WHERE vertical IS NOT NULL AND vertical != ''
-ON CONFLICT (file_request_id, vertical) DO NOTHING;
+-- Note: Skipped because platform/vertical columns don't exist in file_requests table
+-- The application will handle populating junction tables on new requests
 
 -- ============================================================================
 -- HELPER FUNCTIONS
