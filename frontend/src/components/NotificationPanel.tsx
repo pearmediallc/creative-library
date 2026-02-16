@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Bell, X, Check, Trash2, CheckCheck } from 'lucide-react';
 import { useNotifications } from '../hooks/useNotifications';
 import { formatDistanceToNow } from 'date-fns';
@@ -6,6 +7,7 @@ import { Button } from './ui/Button';
 import { Card } from './ui/Card';
 
 export function NotificationPanel() {
+  const navigate = useNavigate();
   const [isOpen, setIsOpen] = useState(false);
   const {
     notifications,
@@ -19,6 +21,41 @@ export function NotificationPanel() {
     enableSound: true,
     enableBrowserNotifications: true
   });
+
+  /**
+   * Handle notification click - navigate to relevant page
+   */
+  const handleNotificationClick = async (notification: any) => {
+    // Mark as read
+    if (!notification.is_read) {
+      await markAsRead(notification.id);
+    }
+
+    // Close panel
+    setIsOpen(false);
+
+    // Route based on notification type and reference
+    if (notification.reference_type === 'file_request' && notification.reference_id) {
+      navigate(`/file-requests/${notification.reference_id}`);
+    } else if (notification.reference_type === 'file' && notification.reference_id) {
+      navigate(`/media/${notification.reference_id}`);
+    } else if (notification.reference_type === 'canvas' && notification.reference_id) {
+      // Canvas notifications usually have a file request ID in metadata
+      const metadata = notification.metadata || {};
+      if (metadata.fileRequestId) {
+        navigate(`/file-requests/${metadata.fileRequestId}`);
+      }
+    } else if (notification.reference_type === 'folder' && notification.reference_id) {
+      navigate(`/folders/${notification.reference_id}`);
+    } else if (notification.type === 'file_shared') {
+      navigate('/shared-with-me');
+    } else if (notification.type === 'file_request_assigned') {
+      navigate('/file-requests');
+    } else {
+      // Default: go to dashboard
+      navigate('/dashboard');
+    }
+  };
 
   const getNotificationIcon = (type: string) => {
     switch (type) {
@@ -119,7 +156,8 @@ export function NotificationPanel() {
                   {notifications.map((notification) => (
                     <div
                       key={notification.id}
-                      className={`p-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors ${
+                      onClick={() => handleNotificationClick(notification)}
+                      className={`p-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors cursor-pointer ${
                         !notification.is_read ? 'bg-blue-50 dark:bg-blue-900/10' : ''
                       }`}
                     >
@@ -152,7 +190,10 @@ export function NotificationPanel() {
                             <div className="flex items-center gap-1">
                               {!notification.is_read && (
                                 <button
-                                  onClick={() => markAsRead(notification.id)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    markAsRead(notification.id);
+                                  }}
                                   className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
                                   title="Mark as read"
                                 >
@@ -160,7 +201,10 @@ export function NotificationPanel() {
                                 </button>
                               )}
                               <button
-                                onClick={() => deleteNotification(notification.id)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  deleteNotification(notification.id);
+                                }}
                                 className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
                                 title="Delete"
                               >

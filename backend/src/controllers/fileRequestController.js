@@ -8,6 +8,59 @@ const Folder = require('../models/Folder');
 
 class FileRequestController {
   /**
+   * Cache for checking if platform/vertical tables exist
+   */
+  _platformVerticalTablesExist = null;
+
+  /**
+   * Check if file_request_platforms and file_request_verticals tables exist
+   */
+  async checkPlatformVerticalTables() {
+    if (this._platformVerticalTablesExist !== null) {
+      return this._platformVerticalTablesExist;
+    }
+
+    try {
+      const result = await query(`
+        SELECT table_name FROM information_schema.tables
+        WHERE table_name IN ('file_request_platforms', 'file_request_verticals')
+      `);
+      this._platformVerticalTablesExist = result.rows.length === 2;
+      return this._platformVerticalTablesExist;
+    } catch (error) {
+      logger.warn('Failed to check platform/vertical tables', { error: error.message });
+      return false;
+    }
+  }
+
+  /**
+   * Get platform/vertical query fragment
+   */
+  async getPlatformVerticalQuery() {
+    const exists = await this.checkPlatformVerticalTables();
+
+    if (exists) {
+      return `
+        COALESCE(
+          (SELECT json_agg(DISTINCT frp.platform ORDER BY frp.platform)
+           FROM file_request_platforms frp WHERE frp.file_request_id = fr.id),
+          '[]'::json
+        ) as platforms,
+        COALESCE(
+          (SELECT json_agg(DISTINCT frv.vertical ORDER BY CASE WHEN frv.is_primary THEN 0 ELSE 1 END, frv.vertical)
+           FROM file_request_verticals frv WHERE frv.file_request_id = fr.id),
+          '[]'::json
+        ) as verticals
+      `;
+    } else {
+      return `
+        '[]'::json as platforms,
+        '[]'::json as verticals
+      `;
+    }
+  }
+
+  /**
    * Generate unique token for file request
    */
   generateToken() {
@@ -416,8 +469,10 @@ class FileRequestController {
         }
       }
 
-      // 🆕 INSERT PLATFORMS into junction table
-      if (platformArray && platformArray.length > 0) {
+      // 🆕 INSERT PLATFORMS into junction table (if table exists)
+      const hasPlatformVerticalTables = await this.checkPlatformVerticalTables();
+
+      if (hasPlatformVerticalTables && platformArray && platformArray.length > 0) {
         console.log('📝 Inserting platforms:', platformArray);
         for (const plt of platformArray) {
           if (plt && plt.trim()) {
@@ -429,10 +484,12 @@ class FileRequestController {
             );
           }
         }
+      } else if (!hasPlatformVerticalTables && (platformArray && platformArray.length > 0)) {
+        logger.warn('Platform/vertical tables not yet created. Run migration 20260217_01_multi_platform_vertical.sql');
       }
 
-      // 🆕 INSERT VERTICALS into junction table
-      if (verticalArray && verticalArray.length > 0) {
+      // 🆕 INSERT VERTICALS into junction table (if table exists)
+      if (hasPlatformVerticalTables && verticalArray && verticalArray.length > 0) {
         console.log('📝 Inserting verticals:', verticalArray);
         for (let i = 0; i < verticalArray.length; i++) {
           const vrt = verticalArray[i];
@@ -603,6 +660,8 @@ class FileRequestController {
         }
 
         // Query for editor: show requests assigned to them via file_request_editors
+        const platformVerticalQuery = await this.getPlatformVerticalQuery();
+
         const result = await query(
           `SELECT
             fr.*,
@@ -616,16 +675,7 @@ class FileRequestController {
             buyer.email as buyer_email,
             creator.name as created_by_name,
             STRING_AGG(DISTINCT e.display_name, ', ' ORDER BY e.display_name) as assigned_editors,
-            COALESCE(
-              (SELECT json_agg(DISTINCT frp.platform ORDER BY frp.platform)
-               FROM file_request_platforms frp WHERE frp.file_request_id = fr.id),
-              '[]'::json
-            ) as platforms,
-            COALESCE(
-              (SELECT json_agg(DISTINCT frv.vertical ORDER BY CASE WHEN frv.is_primary THEN 0 ELSE 1 END, frv.vertical)
-               FROM file_request_verticals frv WHERE frv.file_request_id = fr.id),
-              '[]'::json
-            ) as verticals
+            ${platformVerticalQuery}
           FROM file_request_editors fre
           JOIN file_requests fr ON fre.request_id = fr.id
           LEFT JOIN folders f ON fr.folder_id = f.id
@@ -703,6 +753,8 @@ class FileRequestController {
           params.push(`${media_type}/%`);
         }
 
+        const platformVerticalQuery2 = await this.getPlatformVerticalQuery();
+
         const result = await query(
           `SELECT
             fr.*,
@@ -714,16 +766,7 @@ class FileRequestController {
             STRING_AGG(DISTINCT e.display_name, ', ') as assigned_editors,
             COUNT(DISTINCT fre.editor_id) as total_editors_count,
             COUNT(DISTINCT fre.editor_id) FILTER (WHERE fre.status = 'completed') as completed_editors_count,
-            COALESCE(
-              (SELECT json_agg(DISTINCT frp.platform ORDER BY frp.platform)
-               FROM file_request_platforms frp WHERE frp.file_request_id = fr.id),
-              '[]'::json
-            ) as platforms,
-            COALESCE(
-              (SELECT json_agg(DISTINCT frv.vertical ORDER BY CASE WHEN frv.is_primary THEN 0 ELSE 1 END, frv.vertical)
-               FROM file_request_verticals frv WHERE frv.file_request_id = fr.id),
-              '[]'::json
-            ) as verticals
+            ${platformVerticalQuery2}
           FROM file_requests fr
           LEFT JOIN folders f ON fr.folder_id = f.id
           LEFT JOIN file_request_uploads fru ON fr.id = fru.file_request_id
@@ -782,6 +825,7 @@ class FileRequestController {
         const editorId = editorResult.rows[0].id;
 
         // Query with editor assignment check
+        const pvQuery1 = await this.getPlatformVerticalQuery();
         result = await query(
           `SELECT
             fr.*,
@@ -789,16 +833,7 @@ class FileRequestController {
             COUNT(DISTINCT fru.id) FILTER (WHERE COALESCE(fru.is_deleted, FALSE) = FALSE AND COALESCE(fru.file_count, 0) > 0) as upload_count,
             u.name as creator_name,
             u.email as creator_email,
-            COALESCE(
-              (SELECT json_agg(DISTINCT frp.platform ORDER BY frp.platform)
-               FROM file_request_platforms frp WHERE frp.file_request_id = fr.id),
-              '[]'::json
-            ) as platforms,
-            COALESCE(
-              (SELECT json_agg(DISTINCT frv.vertical ORDER BY CASE WHEN frv.is_primary THEN 0 ELSE 1 END, frv.vertical)
-               FROM file_request_verticals frv WHERE frv.file_request_id = fr.id),
-              '[]'::json
-            ) as verticals
+            ${pvQuery1}
           FROM file_request_editors fre
           JOIN file_requests fr ON fre.request_id = fr.id
           LEFT JOIN folders f ON fr.folder_id = f.id
@@ -810,6 +845,8 @@ class FileRequestController {
         );
       } else {
         // For non-editors: differentiate between admin and buyers/regular users
+        const pvQuery2 = await this.getPlatformVerticalQuery();
+
         if (userRole === 'admin' || isGlobalReviewer) {
           // Admins and global reviewers can view any request
           result = await query(
@@ -819,16 +856,7 @@ class FileRequestController {
               COUNT(DISTINCT fru.id) FILTER (WHERE COALESCE(fru.is_deleted, FALSE) = FALSE AND COALESCE(fru.file_count, 0) > 0) as upload_count,
               u.name as creator_name,
               u.email as creator_email,
-              COALESCE(
-                (SELECT json_agg(DISTINCT frp.platform ORDER BY frp.platform)
-                 FROM file_request_platforms frp WHERE frp.file_request_id = fr.id),
-                '[]'::json
-              ) as platforms,
-              COALESCE(
-                (SELECT json_agg(DISTINCT frv.vertical ORDER BY CASE WHEN frv.is_primary THEN 0 ELSE 1 END, frv.vertical)
-                 FROM file_request_verticals frv WHERE frv.file_request_id = fr.id),
-                '[]'::json
-              ) as verticals
+              ${pvQuery2}
             FROM file_requests fr
             LEFT JOIN folders f ON fr.folder_id = f.id
             LEFT JOIN file_request_uploads fru ON fr.id = fru.file_request_id
@@ -846,16 +874,7 @@ class FileRequestController {
               COUNT(DISTINCT fru.id) FILTER (WHERE COALESCE(fru.is_deleted, FALSE) = FALSE AND COALESCE(fru.file_count, 0) > 0) as upload_count,
               u.name as creator_name,
               u.email as creator_email,
-              COALESCE(
-                (SELECT json_agg(DISTINCT frp.platform ORDER BY frp.platform)
-                 FROM file_request_platforms frp WHERE frp.file_request_id = fr.id),
-                '[]'::json
-              ) as platforms,
-              COALESCE(
-                (SELECT json_agg(DISTINCT frv.vertical ORDER BY CASE WHEN frv.is_primary THEN 0 ELSE 1 END, frv.vertical)
-                 FROM file_request_verticals frv WHERE frv.file_request_id = fr.id),
-                '[]'::json
-              ) as verticals
+              ${pvQuery2}
             FROM file_requests fr
             LEFT JOIN folders f ON fr.folder_id = f.id
             LEFT JOIN file_request_uploads fru ON fr.id = fru.file_request_id
@@ -873,16 +892,12 @@ class FileRequestController {
               COUNT(DISTINCT fru.id) FILTER (WHERE COALESCE(fru.is_deleted, FALSE) = FALSE AND COALESCE(fru.file_count, 0) > 0) as upload_count,
               u.name as creator_name,
               u.email as creator_email,
-              COALESCE(
-                (SELECT json_agg(DISTINCT frp.platform ORDER BY frp.platform)
-                 FROM file_request_platforms frp WHERE frp.file_request_id = fr.id),
+              ${pvQuery2}
                 '[]'::json
               ) as platforms,
               COALESCE(
                 (SELECT json_agg(DISTINCT frv.vertical ORDER BY CASE WHEN frv.is_primary THEN 0 ELSE 1 END, frv.vertical)
                  FROM file_request_verticals frv WHERE frv.file_request_id = fr.id),
-                '[]'::json
-              ) as verticals
             FROM file_requests fr
             LEFT JOIN folders f ON fr.folder_id = f.id
             LEFT JOIN file_request_uploads fru ON fr.id = fru.file_request_id

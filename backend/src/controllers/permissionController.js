@@ -379,16 +379,17 @@ class PermissionController {
             WHEN fp.resource_type = 'file' THEN mf.created_at
             WHEN fp.resource_type = 'folder' THEN f.created_at
           END as created_at,
-          u.name as owner_name,
-          u.email as owner_email
+          COALESCE(uploader.name, granter.name, 'Unknown User') as owner_name,
+          COALESCE(uploader.email, granter.email) as owner_email
         FROM file_permissions fp
         LEFT JOIN team_members tm ON fp.grantee_type = 'team' AND fp.grantee_id = tm.team_id
         LEFT JOIN media_files mf ON fp.resource_type = 'file' AND fp.resource_id = mf.id AND mf.is_deleted = FALSE
         LEFT JOIN folders f ON fp.resource_type = 'folder' AND fp.resource_id = f.id AND f.is_deleted = FALSE
-        LEFT JOIN users u ON (
-          (fp.resource_type = 'file' AND mf.uploaded_by = u.id) OR
-          (fp.resource_type = 'folder' AND f.owner_id = u.id)
+        LEFT JOIN users uploader ON (
+          (fp.resource_type = 'file' AND mf.uploaded_by = uploader.id) OR
+          (fp.resource_type = 'folder' AND f.owner_id = uploader.id)
         )
+        LEFT JOIN users granter ON fp.granted_by = granter.id
         WHERE (
           (fp.grantee_type = 'user' AND fp.grantee_id = $1)
           OR (fp.grantee_type = 'team' AND tm.user_id = $1 AND tm.is_active = TRUE)

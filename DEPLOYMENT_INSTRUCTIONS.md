@@ -281,3 +281,159 @@ All of these should be true after deployment:
 **Deployment Date:** _______________
 **Deployed By:** _______________
 **Verification Status:** _______________
+
+---
+
+# NEW DEPLOYMENT - February 17, 2026
+
+## Summary of Fixes
+
+This deployment includes the following critical bug fixes:
+
+1. ✅ **File Requests Query Error** - Fixed "relation 'file_request_platforms' does not exist" error
+2. ✅ **Unknown User in Shared Files** - Fixed user display showing "unknown user" instead of actual sharer name (Juan Elia)
+3. ✅ **Notification Routing** - Added click handlers to notifications to navigate to correct screens
+4. ✅ **Multi-Platform/Vertical Support** - Graceful handling when migration tables don't exist yet
+
+---
+
+## Pre-Deployment Steps
+
+### 1. Run Database Migration
+
+The migration needs to be applied to the production database to create the platform/vertical tables:
+
+```bash
+# Via Render Shell (Recommended)
+# 1. Go to Render.com dashboard
+# 2. Navigate to your backend service
+# 3. Go to "Shell" tab
+# 4. Run:
+cd /opt/render/project/src/backend
+node run-migration.js 20260217_01_multi_platform_vertical.sql
+```
+
+**Verification:**
+After running the migration, verify the tables were created:
+
+```sql
+SELECT table_name FROM information_schema.tables
+WHERE table_name IN ('file_request_platforms', 'file_request_verticals');
+```
+
+You should see both tables listed.
+
+---
+
+## Files Changed - February 17, 2026
+
+### Backend Files
+1. **[backend/src/controllers/fileRequestController.js](backend/src/controllers/fileRequestController.js)**
+   - Added helper methods to check for platform/vertical table existence
+   - Updated all queries to gracefully handle missing tables
+   - Platform/vertical queries now fallback to empty arrays if tables don't exist
+
+2. **[backend/src/controllers/permissionController.js](backend/src/controllers/permissionController.js:388-393)**
+   - Fixed SharedWithMe query to properly join with granter user
+   - Changed from single `users u` join to separate `uploader` and `granter` joins
+   - Now uses COALESCE to fallback to granter name if uploader is missing
+
+### Frontend Files
+3. **[frontend/src/components/NotificationPanel.tsx](frontend/src/components/NotificationPanel.tsx)**
+   - Added `useNavigate` hook
+   - Implemented `handleNotificationClick` function to route based on notification type
+   - Made notification items clickable with cursor pointer
+   - Added event.stopPropagation() to action buttons
+
+---
+
+## Deployment Steps - February 17, 2026
+
+### 1. Commit Changes
+
+```bash
+git add .
+git commit -m "Fix file requests query, unknown user display, and notification routing
+
+- Add graceful handling for missing platform/vertical tables
+- Fix SharedWithMe query to show correct user names (Juan Elia)
+- Add notification click handlers for proper navigation
+
+Fixes:
+- File requests API error (relation does not exist)
+- Unknown user in shared files
+- Notification routing to correct screens"
+```
+
+### 2. Push to Repository
+
+```bash
+git push origin main
+```
+
+### 3. Run Migration on Production
+
+**Important**: Run the migration AFTER the code is deployed, so the new graceful handling is in place.
+
+```bash
+# Connect to Render backend shell and run:
+node run-migration.js 20260217_01_multi_platform_vertical.sql
+```
+
+### 4. Verify Deployment
+
+After deployment, verify each fix:
+
+#### A. File Requests Query
+- Navigate to `/api/file-requests?status=all`
+- Should return results without "relation does not exist" error
+- Response should include `platforms` and `verticals` arrays
+
+#### B. Shared Files User Display
+- Navigate to "Shared with Me" page
+- Files shared by Juan Elia should show "Juan Elia" (not "unknown user")
+- Files should be grouped by uploader with correct names
+
+#### C. Notification Routing
+- Click on any notification
+- Should navigate to the correct page:
+  - File request notifications → `/file-requests/:id`
+  - File shared notifications → `/shared-with-me`
+  - Canvas mentions → `/file-requests/:fileRequestId`
+  - Default → `/dashboard`
+
+---
+
+## Testing Checklist - February 17, 2026
+
+- [ ] File requests API returns data without errors
+- [ ] Shared files show correct user names (Juan Elia, etc.)
+- [ ] Notifications navigate to correct pages
+- [ ] Platform/vertical selections work in new file requests
+- [ ] Existing file requests still display correctly
+- [ ] No console errors in browser or backend logs
+
+---
+
+## Rollback Plan - February 17, 2026
+
+If issues occur:
+
+1. **Code Rollback**: Revert to previous commit
+   ```bash
+   git revert HEAD
+   git push origin main
+   ```
+
+2. **Database Rollback**: The migration creates tables only, no data changes
+   - If needed (tables are empty):
+   ```sql
+   DROP TABLE IF EXISTS file_request_platforms CASCADE;
+   DROP TABLE IF EXISTS file_request_verticals CASCADE;
+   ```
+
+---
+
+**Deployment Date (Feb 17):** _______________
+**Deployed By:** _______________
+**Verification Status:** _______________
