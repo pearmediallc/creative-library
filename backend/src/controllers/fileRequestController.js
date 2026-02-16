@@ -674,7 +674,7 @@ class FileRequestController {
             buyer.name as buyer_name,
             buyer.email as buyer_email,
             creator.name as created_by_name,
-            (SELECT STRING_AGG(DISTINCT display_name, ', ' ORDER BY display_name)
+            (SELECT STRING_AGG(display_name, ', ' ORDER BY display_name)
              FROM (SELECT DISTINCT e2.display_name FROM file_request_editors fre2
                    JOIN editors e2 ON fre2.editor_id = e2.id
                    WHERE fre2.request_id = fr.id) AS editor_names) as assigned_editors,
@@ -766,7 +766,7 @@ class FileRequestController {
             buyer.name as buyer_name,
             buyer.email as buyer_email,
             creator.name as created_by_name,
-            (SELECT STRING_AGG(DISTINCT display_name, ', ' ORDER BY display_name)
+            (SELECT STRING_AGG(display_name, ', ' ORDER BY display_name)
              FROM (SELECT DISTINCT e2.display_name FROM file_request_editors fre2
                    JOIN editors e2 ON fre2.editor_id = e2.id
                    WHERE fre2.request_id = fr.id) AS editor_names) as assigned_editors,
