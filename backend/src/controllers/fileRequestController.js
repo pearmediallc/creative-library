@@ -42,12 +42,12 @@ class FileRequestController {
     if (exists) {
       return `
         COALESCE(
-          (SELECT json_agg(DISTINCT frp.platform ORDER BY frp.platform)
+          (SELECT json_agg(frp.platform ORDER BY frp.platform)
            FROM file_request_platforms frp WHERE frp.file_request_id = fr.id),
           '[]'::json
         ) as platforms,
         COALESCE(
-          (SELECT json_agg(DISTINCT frv.vertical ORDER BY CASE WHEN frv.is_primary THEN 0 ELSE 1 END, frv.vertical)
+          (SELECT json_agg(frv.vertical ORDER BY CASE WHEN frv.is_primary THEN 0 ELSE 1 END, frv.vertical)
            FROM file_request_verticals frv WHERE frv.file_request_id = fr.id),
           '[]'::json
         ) as verticals
