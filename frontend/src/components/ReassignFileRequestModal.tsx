@@ -2,11 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { X, UserPlus, AlertCircle, TrendingUp } from 'lucide-react';
 import { Button } from './ui/Button';
 import { fileRequestApi, editorApi, workloadApi } from '../lib/api';
+import { CreativeDistributionInput } from './CreativeDistributionInput';
 
 interface ReassignFileRequestModalProps {
   requestId: string;
   requestTitle: string;
   currentEditors: Array<{ id: string; name: string }>;
+  numCreatives?: number; // 🆕 Total creatives for distribution
   onClose: () => void;
   onSuccess: () => void;
 }
@@ -31,6 +33,7 @@ export function ReassignFileRequestModal({
   requestId,
   requestTitle,
   currentEditors,
+  numCreatives = 0,
   onClose,
   onSuccess
 }: ReassignFileRequestModalProps) {
@@ -42,6 +45,7 @@ export function ReassignFileRequestModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [workloadData, setWorkloadData] = useState<Map<string, EditorWorkload>>(new Map());
+  const [editorDistribution, setEditorDistribution] = useState<Array<{ editor_id: string; num_creatives: number }>>([]);
 
   useEffect(() => {
     fetchEditors();
@@ -98,11 +102,16 @@ export function ReassignFileRequestModal({
       setLoading(true);
       setError('');
 
-      await fileRequestApi.assignEditors(requestId, selectedEditorIds);
-
-      // Optionally log the reassignment reason (if backend supports it)
-      // You could add this to your API if needed
-      console.log('Reassignment reason:', reassignReason);
+      // Use reassign endpoint with creative distribution if numCreatives > 0
+      if (numCreatives > 0 && editorDistribution.length > 0) {
+        await fileRequestApi.reassign(requestId, {
+          editor_distribution: editorDistribution,
+          reason: reassignReason
+        });
+      } else {
+        // Fall back to simple assignment
+        await fileRequestApi.assignEditors(requestId, selectedEditorIds);
+      }
 
       onSuccess();
     } catch (err: any) {
@@ -257,6 +266,29 @@ export function ReassignFileRequestModal({
                 {selectedEditorIds.length} editor(s) selected
               </p>
             </div>
+
+            {/* Creative Distribution (if numCreatives > 0) */}
+            {numCreatives > 0 && selectedEditorIds.length > 0 && (
+              <div className="border border-gray-300 dark:border-gray-600 rounded-lg p-4 bg-gray-50 dark:bg-gray-700/50">
+                <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-3">
+                  Distribute Creatives Among Editors
+                </h3>
+                <CreativeDistributionInput
+                  editors={allEditors.map(e => ({
+                    ...e,
+                    workload: workloadData.get(e.id) ? {
+                      loadPercentage: workloadData.get(e.id)!.loadPercentage,
+                      activeRequests: workloadData.get(e.id)!.activeRequests,
+                      maxConcurrentRequests: workloadData.get(e.id)!.maxConcurrentRequests,
+                      isAvailable: workloadData.get(e.id)!.isAvailable
+                    } : undefined
+                  }))}
+                  totalCreatives={numCreatives}
+                  selectedEditorIds={selectedEditorIds}
+                  onDistributionChange={setEditorDistribution}
+                />
+              </div>
+            )}
 
             {/* Reassignment Reason */}
             <div>

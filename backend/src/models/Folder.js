@@ -598,7 +598,7 @@ class Folder extends BaseModel {
    * @param {string} parentFolderId - Optional parent folder ID (defaults to root)
    * @returns {Promise<Object>} Folder object
    */
-  async getOrCreateRequestFolder(userId, userName, parentFolderId = null) {
+  async getOrCreateRequestFolder(userId, userName, parentFolderId = null, requestType = null, vertical = null) {
     try {
       // Fetch user name from database if not provided
       if (!userName) {
@@ -613,55 +613,109 @@ class Folder extends BaseModel {
         }
       }
 
-      // Generate folder name with format: UserName-YYYY-MM-DD
+      // STEP 1: Get or create DATED PARENT FOLDER (UserName-YYYY-MM-DD)
       const today = new Date();
       const dateStr = today.toISOString().split('T')[0]; // YYYY-MM-DD
-      const sanitizedName = userName.trim().replace(/\s+/g, '-'); // Replace spaces with hyphens
-      const folderName = `${sanitizedName}-${dateStr}`;
+      const sanitizedName = userName.trim().replace(/\s+/g, '-');
+      const datedFolderName = `${sanitizedName}-${dateStr}`;
 
-      // Check if folder already exists for this user + date combination
-      const existing = await query(
+      // Check if dated folder already exists
+      const existingDated = await query(
         `SELECT * FROM folders
          WHERE name = $1
            AND owner_id = $2
            AND parent_folder_id ${parentFolderId ? '= $3' : 'IS NULL'}
            AND is_deleted = FALSE
          LIMIT 1`,
-        parentFolderId ? [folderName, userId, parentFolderId] : [folderName, userId]
+        parentFolderId ? [datedFolderName, userId, parentFolderId] : [datedFolderName, userId]
       );
 
-      if (existing.rows && existing.rows.length > 0) {
-        logger.info('Reusing existing file request folder', {
-          folderId: existing.rows[0].id,
-          folderName,
+      let datedFolder;
+      if (existingDated.rows && existingDated.rows.length > 0) {
+        datedFolder = existingDated.rows[0];
+        logger.info('Reusing existing dated folder', {
+          folderId: datedFolder.id,
+          folderName: datedFolderName,
           userId
         });
-        return existing.rows[0];
+      } else {
+        // Create new dated folder
+        datedFolder = await this.create({
+          name: datedFolderName,
+          owner_id: userId,
+          parent_folder_id: parentFolderId,
+          description: `File requests for ${userName} on ${dateStr}`,
+          color: '#3B82F6', // Blue color
+          is_auto_created: true,
+          folder_type: 'file_request'
+        });
+
+        logger.info('Created new dated folder', {
+          folderId: datedFolder.id,
+          folderName: datedFolderName,
+          userId
+        });
       }
 
-      // Create new folder
-      const newFolder = await this.create({
-        name: folderName,
-        owner_id: userId,
-        parent_folder_id: parentFolderId,
-        description: `File requests for ${userName} on ${dateStr}`,
-        color: '#3B82F6', // Blue color for file request folders
-        is_auto_created: true,
-        folder_type: 'file_request'
-      });
+      // STEP 2: If requestType or vertical provided, create NESTED FOLDER (RequestType+Vertical)
+      if (requestType || vertical) {
+        const requestTypePart = requestType ? requestType.trim().replace(/\s+/g, '-') : 'Request';
+        const verticalPart = vertical ? vertical.trim().replace(/\s+/g, '-') : '';
+        const nestedFolderName = verticalPart
+          ? `${requestTypePart}+${verticalPart}`
+          : requestTypePart;
 
-      logger.info('Created new file request folder', {
-        folderId: newFolder.id,
-        folderName,
-        userId
-      });
+        // Check if nested folder already exists
+        const existingNested = await query(
+          `SELECT * FROM folders
+           WHERE name = $1
+             AND owner_id = $2
+             AND parent_folder_id = $3
+             AND is_deleted = FALSE
+           LIMIT 1`,
+          [nestedFolderName, userId, datedFolder.id]
+        );
 
-      return newFolder;
+        if (existingNested.rows && existingNested.rows.length > 0) {
+          logger.info('Reusing existing nested request folder', {
+            folderId: existingNested.rows[0].id,
+            folderName: nestedFolderName,
+            parentId: datedFolder.id,
+            userId
+          });
+          return existingNested.rows[0];
+        }
+
+        // Create nested folder
+        const nestedFolder = await this.create({
+          name: nestedFolderName,
+          owner_id: userId,
+          parent_folder_id: datedFolder.id,
+          description: `${requestType || 'Request'}${vertical ? ' - ' + vertical : ''}`,
+          color: '#8B5CF6', // Purple color for nested request folders
+          is_auto_created: true,
+          folder_type: 'file_request_nested'
+        });
+
+        logger.info('Created new nested request folder', {
+          folderId: nestedFolder.id,
+          folderName: nestedFolderName,
+          parentId: datedFolder.id,
+          userId
+        });
+
+        return nestedFolder;
+      }
+
+      // No nesting - return dated folder
+      return datedFolder;
     } catch (error) {
       logger.error('Get or create request folder failed', {
         error: error.message,
         userId,
-        userName
+        userName,
+        requestType,
+        vertical
       });
       throw error;
     }

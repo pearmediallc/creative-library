@@ -10,24 +10,14 @@ import { UploadHistoryTimeline } from './UploadHistoryTimeline';
 import { ReassignmentModal } from './ReassignmentModal';
 import type { Canvas } from '../lib/canvasTemplates';
 import { useAuth } from '../contexts/AuthContext';
+import { getFileRequestStatusColor, getVerticalBadgeClasses } from '../constants/statusColors';
 
-// Status badge helper
+// Status badge helper using centralized colors
 function getStatusBadge(status: string | undefined) {
-  if (!status) status = 'open';
-
-  const badges = {
-    open: { label: 'Open', color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300' },
-    in_progress: { label: 'In Progress', color: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300' },
-    uploaded: { label: 'Uploaded', color: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300' },
-    launched: { label: 'Launched', color: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' },
-    closed: { label: 'Closed', color: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300' },
-    reopened: { label: 'Reopened', color: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300' }
-  };
-
-  const badge = badges[status as keyof typeof badges] || badges.open;
+  const statusColor = getFileRequestStatusColor(status);
   return (
-    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${badge.color}`}>
-      {badge.label}
+    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusColor.full}`}>
+      {statusColor.label}
     </span>
   );
 }
@@ -58,6 +48,8 @@ interface AssignedEditor {
   assigned_at: string;
   status: string;
   assigned_by_name?: string;
+  num_creatives_assigned?: number;  // 🆕 Creative distribution
+  creatives_completed?: number;     // 🆕 Creative completion tracking
 }
 
 interface FileRequestDetails {
@@ -99,6 +91,11 @@ interface FileRequestDetails {
   assigned_buyer_id?: string;
   auto_assigned_head?: string;
   reassignment_count?: number;
+  // 🆕 Multi-platform/vertical support
+  platforms?: string[];
+  verticals?: string[];
+  platform?: string;  // Backward compatibility
+  vertical?: string;  // Backward compatibility
 }
 
 export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRequestDetailsModalProps) {
@@ -614,6 +611,34 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
                 </div>
               )}
 
+              {/* Platforms */}
+              {(request.platforms && request.platforms.length > 0) || request.platform ? (
+                <div>
+                  <span className="text-blue-700 dark:text-blue-300 font-medium">Platforms:</span>
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {(request.platforms || (request.platform ? [request.platform] : [])).map((platform, idx) => (
+                      <span key={idx} className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded bg-blue-200 text-blue-900 dark:bg-blue-800 dark:text-blue-100">
+                        {platform}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
+              {/* Verticals */}
+              {(request.verticals && request.verticals.length > 0) || request.vertical ? (
+                <div>
+                  <span className="text-blue-700 dark:text-blue-300 font-medium">Verticals:</span>
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {(request.verticals || (request.vertical ? [request.vertical] : [])).map((vertical, idx) => (
+                      <span key={idx} className={getVerticalBadgeClasses(vertical)}>
+                        {vertical}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
               {/* Created Date */}
               <div>
                 <span className="text-blue-700 dark:text-blue-300 font-medium">Created:</span>
@@ -828,14 +853,32 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
                 <div className="space-y-2">
                   {request.assigned_editors.map((editor) => (
                     <div key={editor.id} className="flex items-center justify-between text-sm bg-white dark:bg-gray-800 rounded p-2 border border-gray-200 dark:border-gray-700">
-                      <div>
+                      <div className="flex-1">
                         <span className="font-medium text-gray-900 dark:text-white">
                           {editor.display_name || editor.name}
                         </span>
+                        {/* Creative Distribution Display */}
+                        {editor.num_creatives_assigned !== undefined && editor.num_creatives_assigned > 0 && (
+                          <div className="mt-1 flex items-center gap-2">
+                            <span className="text-xs text-gray-600 dark:text-gray-400">
+                              Assigned: <span className="font-medium text-blue-600 dark:text-blue-400">{editor.num_creatives_assigned}</span> creative{editor.num_creatives_assigned !== 1 ? 's' : ''}
+                            </span>
+                            {editor.creatives_completed !== undefined && editor.creatives_completed > 0 && (
+                              <>
+                                <span className="text-xs text-gray-400">•</span>
+                                <span className="text-xs text-gray-600 dark:text-gray-400">
+                                  Completed: <span className="font-medium text-green-600 dark:text-green-400">{editor.creatives_completed}</span>
+                                </span>
+                              </>
+                            )}
+                          </div>
+                        )}
                       </div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                      <div className="text-xs text-gray-500 dark:text-gray-400 text-right">
                         {formatDate(editor.assigned_at)}
-                        {editor.assigned_by_name && ` by ${editor.assigned_by_name}`}
+                        {editor.assigned_by_name && (
+                          <div className="mt-0.5">by {editor.assigned_by_name}</div>
+                        )}
                       </div>
                     </div>
                   ))}
