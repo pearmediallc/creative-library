@@ -12,6 +12,7 @@ import { ReassignFileRequestModal } from '../components/ReassignFileRequestModal
 import { useAuth } from '../contexts/AuthContext';
 import { VERTICALS } from '../constants/verticals';
 import { PLATFORMS } from '../constants/platforms';
+import { getVerticalBadgeClasses } from '../constants/statusColors';
 
 interface FileRequest {
   id: string;
@@ -38,6 +39,9 @@ interface FileRequest {
   total_editors_count?: number;
   uploaded_files_count?: number;
   my_uploaded_files_count?: number;
+  // 🆕 Multi-platform/vertical support
+  platforms?: string[];
+  verticals?: string[];
 }
 
 export function FileRequestsPage() {
@@ -170,26 +174,6 @@ export function FileRequestsPage() {
     setShowReassignModal(true);
   };
 
-  const getVerticalColor = (vertical?: string) => {
-    if (!vertical) return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200';
-
-    switch (vertical) {
-      case 'E-Comm':
-        return 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200';
-      case 'Bizop':
-        return 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200';
-      case 'Medicare':
-        return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
-      case 'Auto Insurance':
-        return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
-      case 'VSL':
-        return 'bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-200';
-      case 'Nutra':
-        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200';
-      default:
-        return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200';
-    }
-  };
 
   const filteredRequests = requests.filter((request) => {
     // Search filter
@@ -200,14 +184,20 @@ export function FileRequestsPage() {
       return false;
     }
 
-    // Vertical filter
-    if (selectedVertical !== 'All' && request.vertical !== selectedVertical) {
-      return false;
+    // Vertical filter - check both array and single value
+    if (selectedVertical !== 'All') {
+      const hasVertical = request.verticals?.includes(selectedVertical) || request.vertical === selectedVertical;
+      if (!hasVertical) {
+        return false;
+      }
     }
 
-    // Platform filter
-    if (selectedPlatform !== 'All' && request.platform !== selectedPlatform) {
-      return false;
+    // Platform filter - check both array and single value
+    if (selectedPlatform !== 'All') {
+      const hasPlatform = request.platforms?.includes(selectedPlatform) || request.platform === selectedPlatform;
+      if (!hasPlatform) {
+        return false;
+      }
     }
 
     return true;
@@ -482,7 +472,19 @@ export function FileRequestsPage() {
                       <td className="p-4 text-sm">
                         {request.buyer_name || request.created_by_name || '-'}
                       </td>
-                      <td className="p-4 text-sm">{request.platform || '-'}</td>
+                      <td className="p-4">
+                        {(request.platforms && request.platforms.length > 0) || request.platform ? (
+                          <div className="flex flex-wrap gap-1">
+                            {(request.platforms || (request.platform ? [request.platform] : [])).map((platform, idx) => (
+                              <span key={idx} className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                                {platform}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-sm text-muted-foreground">-</span>
+                        )}
+                      </td>
                       <td className="p-4 text-sm">
                         {user?.role === 'creative'
                           ? (request.my_uploaded_files_count !== undefined && request.my_uploaded_files_count !== null
@@ -491,10 +493,14 @@ export function FileRequestsPage() {
                           : (request.num_creatives || '-')}
                       </td>
                       <td className="p-4">
-                        {request.vertical ? (
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getVerticalColor(request.vertical)}`}>
-                            {request.vertical}
-                          </span>
+                        {(request.verticals && request.verticals.length > 0) || request.vertical ? (
+                          <div className="flex flex-wrap gap-1">
+                            {(request.verticals || (request.vertical ? [request.vertical] : [])).map((vertical, idx) => (
+                              <span key={idx} className={getVerticalBadgeClasses(vertical)}>
+                                {vertical}
+                              </span>
+                            ))}
+                          </div>
                         ) : (
                           <span className="text-sm text-muted-foreground">-</span>
                         )}
@@ -604,15 +610,28 @@ export function FileRequestsPage() {
                       {request.buyer_name && (
                         <p>Buyer: {request.buyer_name}</p>
                       )}
-                      {request.platform && (
-                        <p>Platform: {request.platform}</p>
-                      )}
-                      {request.vertical && (
+                      {((request.platforms && request.platforms.length > 0) || request.platform) && (
                         <div className="flex items-center gap-2">
-                          <span>Type:</span>
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getVerticalColor(request.vertical)}`}>
-                            {request.vertical}
-                          </span>
+                          <span>Platform{((request.platforms?.length || 0) > 1) ? 's' : ''}:</span>
+                          <div className="flex flex-wrap gap-1">
+                            {(request.platforms || (request.platform ? [request.platform] : [])).map((platform, idx) => (
+                              <span key={idx} className="inline-flex items-center px-2 py-0.5 text-xs font-medium rounded bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                                {platform}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {((request.verticals && request.verticals.length > 0) || request.vertical) && (
+                        <div className="flex items-center gap-2">
+                          <span>Vertical{((request.verticals?.length || 0) > 1) ? 's' : ''}:</span>
+                          <div className="flex flex-wrap gap-1">
+                            {(request.verticals || (request.vertical ? [request.vertical] : [])).map((vertical, idx) => (
+                              <span key={idx} className={getVerticalBadgeClasses(vertical)}>
+                                {vertical}
+                              </span>
+                            ))}
+                          </div>
                         </div>
                       )}
                       {request.num_creatives && (

@@ -5,6 +5,7 @@ import { Card } from '../components/ui/Card';
 import { permissionApi } from '../lib/api';
 import { formatBytes, formatDate } from '../lib/utils';
 import { Image as ImageIcon, Video, Folder, Users, UserPlus, X, Share2, Calendar } from 'lucide-react';
+import { UserFolderSection } from '../components/UserFolderSection';
 
 interface Share {
   permission_id: string;
@@ -28,6 +29,9 @@ interface SharedResource {
   shares: Share[];
   share_count: number;
   most_recent_share: string;
+  uploaded_by?: string;  // 🆕 For grouping by uploader
+  uploaded_by_name?: string;  // 🆕 For display
+  uploaded_by_email?: string;  // 🆕 Optional email
 }
 
 export function SharedByMePage() {
@@ -51,6 +55,30 @@ export function SharedByMePage() {
       setLoading(false);
     }
   };
+
+  // 🆕 Group resources by uploader
+  const groupResourcesByUser = () => {
+    const grouped = new Map<string, typeof resources>();
+
+    resources.forEach(resource => {
+      const uploaderId = resource.uploaded_by || 'unknown';
+      if (!grouped.has(uploaderId)) {
+        grouped.set(uploaderId, []);
+      }
+      grouped.get(uploaderId)!.push(resource);
+    });
+
+    return Array.from(grouped.entries()).map(([uploaderId, userResources]) => ({
+      uploaded_by: uploaderId,
+      uploaded_by_name: userResources[0]?.uploaded_by_name || 'Unknown User',
+      uploaded_by_email: userResources[0]?.uploaded_by_email,
+      resources: userResources,
+      file_count: userResources.length,
+      total_size: userResources.reduce((sum, r) => sum + (r.file_size || 0), 0)
+    }));
+  };
+
+  const userGroups = groupResourcesByUser();
 
   const handleRevokeShare = async (permissionId: string) => {
     if (!window.confirm('Are you sure you want to revoke this share?')) return;
@@ -194,84 +222,18 @@ export function SharedByMePage() {
           <div className="flex items-center justify-center h-96">
             <p className="text-muted-foreground">Loading...</p>
           </div>
-        ) : resources.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {resources.map((resource) => (
-              <Card
-                key={`${resource.resource_type}-${resource.resource_id}`}
-                className="overflow-hidden cursor-pointer hover:shadow-lg transition-shadow"
-                onClick={() => {
+        ) : userGroups.length > 0 ? (
+          <div className="space-y-4">
+            {userGroups.map((userGroup) => (
+              <UserFolderSection
+                key={userGroup.uploaded_by}
+                userGroup={userGroup}
+                onResourceClick={(resource) => {
                   setSelectedResource(resource);
                   setShowDetailsModal(true);
                 }}
-              >
-                <div className="aspect-video bg-muted relative flex items-center justify-center">
-                  {resource.resource_type === 'file' && resource.thumbnail_url ? (
-                    <img
-                      src={resource.thumbnail_url}
-                      alt={resource.resource_name}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <ResourceIcon resource={resource} />
-                  )}
-                  <div className="absolute top-2 right-2">
-                    <span className="px-2 py-1 text-xs font-medium rounded bg-background/80 backdrop-blur">
-                      {resource.resource_type}
-                    </span>
-                  </div>
-                  <div className="absolute top-2 left-2">
-                    <span
-                      className={`px-2 py-1 text-xs font-medium rounded flex items-center gap-1 ${getShareCountColor(
-                        resource.share_count
-                      )}`}
-                    >
-                      <Share2 className="w-3 h-3" />
-                      {resource.share_count}
-                    </span>
-                  </div>
-                </div>
-                <div className="p-4 space-y-2">
-                  <h3 className="font-medium truncate" title={resource.resource_name}>
-                    {resource.resource_name}
-                  </h3>
-                  <div className="text-sm text-muted-foreground space-y-1">
-                    <p className="flex items-center gap-1">
-                      <Users className="w-3.5 h-3.5" />
-                      Shared with {resource.share_count} {resource.share_count === 1 ? 'recipient' : 'recipients'}
-                    </p>
-                    {resource.resource_type === 'file' && resource.file_size && (
-                      <p>Size: {formatBytes(resource.file_size)}</p>
-                    )}
-                    <p className="flex items-center gap-1 text-xs">
-                      <Calendar className="w-3 h-3" />
-                      Last shared {formatDate(resource.most_recent_share)}
-                    </p>
-                  </div>
-                  <div className="pt-3 border-t border-border">
-                    <div className="flex flex-wrap gap-1">
-                      {resource.shares.slice(0, 3).map((share, idx) => (
-                        <span
-                          key={idx}
-                          className="px-2 py-0.5 text-xs rounded-full bg-accent/20 text-accent-foreground flex items-center gap-1"
-                        >
-                          {share.grantee_type === 'team' ? (
-                            <Users className="w-3 h-3" />
-                          ) : (
-                            <UserPlus className="w-3 h-3" />
-                          )}
-                          {share.grantee_name}
-                        </span>
-                      ))}
-                      {resource.share_count > 3 && (
-                        <span className="px-2 py-0.5 text-xs rounded-full bg-accent/20 text-accent-foreground">
-                          +{resource.share_count - 3} more
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </Card>
+                onRevokeShare={handleRevokeShare}
+              />
             ))}
           </div>
         ) : (

@@ -540,6 +540,8 @@ export const fileRequestApi = {
     num_creatives?: number;
     platform?: string;
     vertical?: string;
+    platforms?: string[];  // 🆕 Multi-platform support
+    verticals?: string[];  // 🆕 Multi-vertical support
     folder_id?: string;
     deadline?: string;
     allow_multiple_uploads?: boolean;
@@ -613,9 +615,15 @@ export const fileRequestApi = {
   complete: (id: string, data?: { delivery_note?: string }) =>
     api.post(`/file-requests/${id}/complete`, data),
 
-  // Reassign file request to another editor
-  reassign: (id: string, data: { reassign_to?: string; editor_ids?: string[]; editor_quotas?: Record<string, number>; note?: string }) =>
-    api.post(`/file-requests/${id}/reassign`, data),
+  // Reassign file request with creative distribution and per-editor quotas (supports all legacy formats)
+  reassign: (id: string, data: {
+    reassign_to?: string;  // Legacy single editor assignment
+    editor_ids?: string[];  // Multiple editor assignment
+    editor_quotas?: Record<string, number>;  // Per-editor quotas (main branch feature)
+    note?: string;         // Legacy reassignment note
+    reason?: string;       // 🆕 New reassignment reason field
+    editor_distribution?: Array<{ editor_id: string; num_creatives: number }>;  // 🆕 Creative distribution
+  }) => api.post(`/file-requests/${id}/reassign`, data),
 
   // Get reassignment history
   getReassignments: (id: string) => api.get(`/file-requests/${id}/reassignments`),

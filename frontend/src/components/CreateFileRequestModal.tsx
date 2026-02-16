@@ -60,8 +60,8 @@ interface Template {
 
 export function CreateFileRequestModal({ onClose, onSuccess, teamId }: CreateFileRequestModalProps) {
   const [requestType, setRequestType] = useState('');
-  const [platform, setPlatform] = useState('');
-  const [vertical, setVertical] = useState('');
+  const [platforms, setPlatforms] = useState<string[]>([]); // 🆕 Changed to array
+  const [verticals, setVerticals] = useState<string[]>([]); // 🆕 Changed to array
   const [conceptNotes, setConceptNotes] = useState('');
   const [numCreatives, setNumCreatives] = useState<string>(''); // Changed to string for empty placeholder
   const [folderId, setFolderId] = useState<string>('');
@@ -167,8 +167,8 @@ export function CreateFileRequestModal({ onClose, onSuccess, teamId }: CreateFil
       // Clear form when "No team template" is selected
       setRequestType('');
       setConceptNotes('');
-      setPlatform('');
-      setVertical('');
+      setPlatforms([]);
+      setVerticals([]);
       setNumCreatives('');
       setDeadline('');
       return;
@@ -185,10 +185,10 @@ export function CreateFileRequestModal({ onClose, onSuccess, teamId }: CreateFil
       setConceptNotes(template.default_instructions);
     }
     if (template.default_platform) {
-      setPlatform(template.default_platform);
+      setPlatforms([template.default_platform]);
     }
     if (template.default_vertical) {
-      setVertical(template.default_vertical);
+      setVerticals([template.default_vertical]);
     }
     if (template.default_num_creatives) {
       setNumCreatives(template.default_num_creatives.toString());
@@ -269,13 +269,13 @@ export function CreateFileRequestModal({ onClose, onSuccess, teamId }: CreateFil
       return;
     }
 
-    if (!platform) {
-      setError('Platform is required');
+    if (platforms.length === 0) {
+      setError('At least one platform is required');
       return;
     }
 
-    if (!vertical) {
-      setError('Vertical is required');
+    if (verticals.length === 0) {
+      setError('At least one vertical is required');
       return;
     }
 
@@ -307,8 +307,10 @@ export function CreateFileRequestModal({ onClose, onSuccess, teamId }: CreateFil
         editor_id: selectedEditorIds[0] || undefined,
         assigned_buyer_id: assignedBuyerId || undefined,
         request_type: requestType,
-        platform: platform,
-        vertical: vertical,
+        platforms: platforms, // 🆕 Send as array
+        verticals: verticals, // 🆕 Send as array
+        platform: platforms[0] || undefined, // Backward compatibility
+        vertical: verticals[0] || undefined, // Backward compatibility
         concept_notes: conceptNotes.trim() || undefined,
         num_creatives: parseInt(numCreatives) || 1,
       });
@@ -505,44 +507,38 @@ export function CreateFileRequestModal({ onClose, onSuccess, teamId }: CreateFil
             </select>
           </div>
 
-          {/* Platform */}
+          {/* Platforms - Multi-Select */}
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Platform *
+              Platforms * (select multiple)
             </label>
-            <select
-              value={platform}
-              onChange={(e) => setPlatform(e.target.value)}
+            <MultiSelect
+              options={PLATFORMS.map(p => ({ id: p, label: p }))}
+              selectedIds={platforms}
+              onChange={setPlatforms}
+              placeholder="Select platforms..."
               disabled={creating}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-            >
-              <option value="">Select Platform</option>
-              {PLATFORMS.map((plat) => (
-                <option key={plat} value={plat}>
-                  {plat}
-                </option>
-              ))}
-            </select>
+            />
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              {platforms.length > 0 ? `${platforms.length} platform(s) selected` : 'Select at least one platform'}
+            </p>
           </div>
 
-          {/* Vertical */}
+          {/* Verticals - Multi-Select */}
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Vertical *
+              Verticals * (select multiple)
             </label>
-            <select
-              value={vertical}
-              onChange={(e) => setVertical(e.target.value)}
+            <MultiSelect
+              options={VERTICALS.map(v => ({ id: v, label: v }))}
+              selectedIds={verticals}
+              onChange={setVerticals}
+              placeholder="Select verticals..."
               disabled={creating}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-            >
-              <option value="">Select Vertical</option>
-              {VERTICALS.map((vert) => (
-                <option key={vert} value={vert}>
-                  {vert}
-                </option>
-              ))}
-            </select>
+            />
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              {verticals.length > 0 ? `${verticals.length} vertical(s) selected` : 'Select at least one vertical'}
+            </p>
           </div>
 
           {/* Concept Notes with Canvas Toggle */}
@@ -684,24 +680,24 @@ export function CreateFileRequestModal({ onClose, onSuccess, teamId }: CreateFil
               disabled={creating}
             />
             <p className="text-xs text-muted-foreground mt-1">
-              {vertical ? 'Auto-assigned to vertical head. You can select additional editors here.' : 'Search and select multiple editors easily'}
+              {verticals.length > 0 ? 'Auto-assigned to vertical head(s). You can select additional editors here.' : 'Search and select multiple editors easily'}
             </p>
           </div>
 
           {/* Vertical Auto-Assignment Notice */}
-          {vertical && (
+          {verticals.length > 0 && (
             <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
               <p className="text-sm text-blue-900 dark:text-blue-200 font-medium">
                 📌 Vertical-Based Assignment Active
               </p>
               <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
-                This request will be automatically assigned to the {vertical} vertical head. Buyer assignment is hidden when vertical is selected.
+                This request will be automatically assigned to the vertical head(s) for: {verticals.join(', ')}. Buyer assignment is hidden when verticals are selected.
               </p>
             </div>
           )}
 
-          {/* Buyer Assignment - Hidden when vertical is selected */}
-          {!vertical && (
+          {/* Buyer Assignment - Hidden when verticals are selected */}
+          {verticals.length === 0 && (
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Assign to Buyer (optional)
@@ -835,7 +831,7 @@ export function CreateFileRequestModal({ onClose, onSuccess, teamId }: CreateFil
             {!createdRequestId && (
               <Button
                 type="submit"
-                disabled={creating || !requestType || !platform || !vertical}
+                disabled={creating || !requestType || platforms.length === 0 || verticals.length === 0}
               >
                 {creating ? 'Creating...' : 'Create Request'}
               </Button>

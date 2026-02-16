@@ -45,6 +45,8 @@ class FileRequestController {
         num_creatives = 1,
         platform,
         vertical,
+        platforms, // 🆕 Array of platforms
+        verticals, // 🆕 Array of verticals
         folder_id,
         deadline,
         allow_multiple_uploads = true,
@@ -57,6 +59,11 @@ class FileRequestController {
         deliverables_required,
         deliverables_type
       } = req.body;
+
+      // 🆕 Handle platform/vertical arrays (backward compatible with single values)
+      const platformArray = platforms || (platform ? [platform] : []);
+      const verticalArray = verticals || (vertical ? [vertical] : []);
+      const primaryVertical = verticalArray[0] || vertical || null; // First vertical for auto-assignment
 
       console.log('Parsed values:', {
         userId,
@@ -98,15 +105,18 @@ class FileRequestController {
         }
       }
 
-      // 🆕 AUTO-CREATE DATE FOLDER if no folder specified
-      // Format: "UserName-YYYY-MM-DD" (reuses same folder for multiple requests on same day)
+      // 🆕 AUTO-CREATE NESTED FOLDER STRUCTURE if no folder specified
+      // Structure: "UserName-YYYY-MM-DD" (parent) → "RequestType+Vertical" (child)
       let targetFolderId = folder_id;
       if (!targetFolderId) {
         try {
+          // Create nested folder structure
           const requestFolder = await Folder.getOrCreateRequestFolder(
             userId,
             req.user.name,
-            null // Root level
+            null, // Root level (dated folder)
+            request_type || requestTitle, // Request type for nested folder
+            primaryVertical // Vertical for nested folder name
           );
           targetFolderId = requestFolder.id;
           console.log('✅ Auto-created/reused request folder:', {
@@ -208,11 +218,11 @@ class FileRequestController {
       let autoAssignedHead = null;
       let autoAssignedEditors = [];
 
-      if (vertical && (!editor_ids || editor_ids.length === 0)) {
-        console.log('🔍 Vertical provided, checking for vertical head:', vertical);
+      if (primaryVertical && (!editor_ids || editor_ids.length === 0)) {
+        console.log('🔍 Vertical provided, checking for vertical head:', primaryVertical);
         try {
           // Normalize vertical for lookup: lowercase, trim
-          const normalizedVertical = vertical.toLowerCase().trim();
+          const normalizedVertical = primaryVertical.toLowerCase().trim();
           console.log('🔄 Normalized vertical for lookup:', normalizedVertical);
 
           // Strategy: Check if the input contains any of the stored vertical keywords
@@ -406,6 +416,37 @@ class FileRequestController {
         }
       }
 
+      // 🆕 INSERT PLATFORMS into junction table
+      if (platformArray && platformArray.length > 0) {
+        console.log('📝 Inserting platforms:', platformArray);
+        for (const plt of platformArray) {
+          if (plt && plt.trim()) {
+            await query(
+              `INSERT INTO file_request_platforms (file_request_id, platform)
+               VALUES ($1, $2)
+               ON CONFLICT (file_request_id, platform) DO NOTHING`,
+              [fileRequest.id, plt.trim()]
+            );
+          }
+        }
+      }
+
+      // 🆕 INSERT VERTICALS into junction table
+      if (verticalArray && verticalArray.length > 0) {
+        console.log('📝 Inserting verticals:', verticalArray);
+        for (let i = 0; i < verticalArray.length; i++) {
+          const vrt = verticalArray[i];
+          if (vrt && vrt.trim()) {
+            await query(
+              `INSERT INTO file_request_verticals (file_request_id, vertical, is_primary)
+               VALUES ($1, $2, $3)
+               ON CONFLICT (file_request_id, vertical) DO NOTHING`,
+              [fileRequest.id, vrt.trim(), i === 0] // First vertical is primary
+            );
+          }
+        }
+      }
+
       // Handle multi-editor assignment (includes auto-assigned + manually selected)
       const editorsToAssign = finalEditorIds.length > 0 ? finalEditorIds : (editor_id ? [editor_id] : []);
       if (editorsToAssign.length > 0) {
@@ -574,7 +615,17 @@ class FileRequestController {
             buyer.name as buyer_name,
             buyer.email as buyer_email,
             creator.name as created_by_name,
-            STRING_AGG(DISTINCT e.display_name, ', ' ORDER BY e.display_name) as assigned_editors
+            STRING_AGG(DISTINCT e.display_name, ', ' ORDER BY e.display_name) as assigned_editors,
+            COALESCE(
+              (SELECT json_agg(DISTINCT frp.platform ORDER BY frp.platform)
+               FROM file_request_platforms frp WHERE frp.file_request_id = fr.id),
+              '[]'::json
+            ) as platforms,
+            COALESCE(
+              (SELECT json_agg(DISTINCT frv.vertical ORDER BY CASE WHEN frv.is_primary THEN 0 ELSE 1 END, frv.vertical)
+               FROM file_request_verticals frv WHERE frv.file_request_id = fr.id),
+              '[]'::json
+            ) as verticals
           FROM file_request_editors fre
           JOIN file_requests fr ON fre.request_id = fr.id
           LEFT JOIN folders f ON fr.folder_id = f.id
@@ -662,7 +713,17 @@ class FileRequestController {
             creator.name as created_by_name,
             STRING_AGG(DISTINCT e.display_name, ', ') as assigned_editors,
             COUNT(DISTINCT fre.editor_id) as total_editors_count,
-            COUNT(DISTINCT fre.editor_id) FILTER (WHERE fre.status = 'completed') as completed_editors_count
+            COUNT(DISTINCT fre.editor_id) FILTER (WHERE fre.status = 'completed') as completed_editors_count,
+            COALESCE(
+              (SELECT json_agg(DISTINCT frp.platform ORDER BY frp.platform)
+               FROM file_request_platforms frp WHERE frp.file_request_id = fr.id),
+              '[]'::json
+            ) as platforms,
+            COALESCE(
+              (SELECT json_agg(DISTINCT frv.vertical ORDER BY CASE WHEN frv.is_primary THEN 0 ELSE 1 END, frv.vertical)
+               FROM file_request_verticals frv WHERE frv.file_request_id = fr.id),
+              '[]'::json
+            ) as verticals
           FROM file_requests fr
           LEFT JOIN folders f ON fr.folder_id = f.id
           LEFT JOIN file_request_uploads fru ON fr.id = fru.file_request_id
@@ -727,7 +788,17 @@ class FileRequestController {
             f.name as folder_name,
             COUNT(DISTINCT fru.id) FILTER (WHERE COALESCE(fru.is_deleted, FALSE) = FALSE AND COALESCE(fru.file_count, 0) > 0) as upload_count,
             u.name as creator_name,
-            u.email as creator_email
+            u.email as creator_email,
+            COALESCE(
+              (SELECT json_agg(DISTINCT frp.platform ORDER BY frp.platform)
+               FROM file_request_platforms frp WHERE frp.file_request_id = fr.id),
+              '[]'::json
+            ) as platforms,
+            COALESCE(
+              (SELECT json_agg(DISTINCT frv.vertical ORDER BY CASE WHEN frv.is_primary THEN 0 ELSE 1 END, frv.vertical)
+               FROM file_request_verticals frv WHERE frv.file_request_id = fr.id),
+              '[]'::json
+            ) as verticals
           FROM file_request_editors fre
           JOIN file_requests fr ON fre.request_id = fr.id
           LEFT JOIN folders f ON fr.folder_id = f.id
@@ -747,7 +818,17 @@ class FileRequestController {
               f.name as folder_name,
               COUNT(DISTINCT fru.id) FILTER (WHERE COALESCE(fru.is_deleted, FALSE) = FALSE AND COALESCE(fru.file_count, 0) > 0) as upload_count,
               u.name as creator_name,
-              u.email as creator_email
+              u.email as creator_email,
+              COALESCE(
+                (SELECT json_agg(DISTINCT frp.platform ORDER BY frp.platform)
+                 FROM file_request_platforms frp WHERE frp.file_request_id = fr.id),
+                '[]'::json
+              ) as platforms,
+              COALESCE(
+                (SELECT json_agg(DISTINCT frv.vertical ORDER BY CASE WHEN frv.is_primary THEN 0 ELSE 1 END, frv.vertical)
+                 FROM file_request_verticals frv WHERE frv.file_request_id = fr.id),
+                '[]'::json
+              ) as verticals
             FROM file_requests fr
             LEFT JOIN folders f ON fr.folder_id = f.id
             LEFT JOIN file_request_uploads fru ON fr.id = fru.file_request_id
@@ -764,7 +845,17 @@ class FileRequestController {
               f.name as folder_name,
               COUNT(DISTINCT fru.id) FILTER (WHERE COALESCE(fru.is_deleted, FALSE) = FALSE AND COALESCE(fru.file_count, 0) > 0) as upload_count,
               u.name as creator_name,
-              u.email as creator_email
+              u.email as creator_email,
+              COALESCE(
+                (SELECT json_agg(DISTINCT frp.platform ORDER BY frp.platform)
+                 FROM file_request_platforms frp WHERE frp.file_request_id = fr.id),
+                '[]'::json
+              ) as platforms,
+              COALESCE(
+                (SELECT json_agg(DISTINCT frv.vertical ORDER BY CASE WHEN frv.is_primary THEN 0 ELSE 1 END, frv.vertical)
+                 FROM file_request_verticals frv WHERE frv.file_request_id = fr.id),
+                '[]'::json
+              ) as verticals
             FROM file_requests fr
             LEFT JOIN folders f ON fr.folder_id = f.id
             LEFT JOIN file_request_uploads fru ON fr.id = fru.file_request_id
@@ -781,7 +872,17 @@ class FileRequestController {
               f.name as folder_name,
               COUNT(DISTINCT fru.id) FILTER (WHERE COALESCE(fru.is_deleted, FALSE) = FALSE AND COALESCE(fru.file_count, 0) > 0) as upload_count,
               u.name as creator_name,
-              u.email as creator_email
+              u.email as creator_email,
+              COALESCE(
+                (SELECT json_agg(DISTINCT frp.platform ORDER BY frp.platform)
+                 FROM file_request_platforms frp WHERE frp.file_request_id = fr.id),
+                '[]'::json
+              ) as platforms,
+              COALESCE(
+                (SELECT json_agg(DISTINCT frv.vertical ORDER BY CASE WHEN frv.is_primary THEN 0 ELSE 1 END, frv.vertical)
+                 FROM file_request_verticals frv WHERE frv.file_request_id = fr.id),
+                '[]'::json
+              ) as verticals
             FROM file_requests fr
             LEFT JOIN folders f ON fr.folder_id = f.id
             LEFT JOIN file_request_uploads fru ON fr.id = fru.file_request_id
@@ -853,6 +954,8 @@ class FileRequestController {
             e.name,
             e.display_name,
             fre.status,
+            fre.num_creatives_assigned,
+            fre.creatives_completed,
             fre.created_at,
             fre.accepted_at,
             fre.started_at,
@@ -2034,46 +2137,122 @@ class FileRequestController {
     try {
       const { id } = req.params;
       // Back-compat: some clients send editor_ids
-      const { new_editor_ids, editor_ids, reason } = req.body;
-      const effectiveNewEditorIds = Array.isArray(new_editor_ids) && new_editor_ids.length ? new_editor_ids : editor_ids;
+      const { new_editor_ids, editor_ids, reason, editor_distribution } = req.body;
       const userId = req.user.id;
 
       if (req.user.role !== 'admin') {
         return res.status(403).json({ success: false, error: 'Admin only' });
       }
 
-      if (!Array.isArray(effectiveNewEditorIds) || effectiveNewEditorIds.length === 0) {
+      // Support both old format (array of IDs) and new format (array of {editor_id, num_creatives})
+      let editorAssignments = [];
+
+      if (editor_distribution && Array.isArray(editor_distribution)) {
+        // New format with creative distribution
+        editorAssignments = editor_distribution;
+      } else if (Array.isArray(new_editor_ids) && new_editor_ids.length > 0) {
+        // Old format - convert to new format with 0 creatives (unspecified)
+        editorAssignments = new_editor_ids.map(editorId => ({
+          editor_id: editorId,
+          num_creatives: 0
+        }));
+      } else if (Array.isArray(editor_ids) && editor_ids.length > 0) {
+        // Even older format - also support editor_ids
+        editorAssignments = editor_ids.map(editorId => ({
+          editor_id: editorId,
+          num_creatives: 0
+        }));
+      } else {
         return res.status(400).json({
           success: false,
-          error: 'new_editor_ids must be a non-empty array'
+          error: 'Either new_editor_ids or editor_distribution must be provided'
         });
       }
 
-      // Verify file request exists
-      const requestResult = await query('SELECT id, title FROM file_requests WHERE id = $1', [id]);
+      if (editorAssignments.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'At least one editor must be assigned'
+        });
+      }
+
+      // Verify file request exists and get num_creatives
+      const requestResult = await query(
+        'SELECT id, num_creatives, title FROM file_requests WHERE id = $1',
+        [id]
+      );
       if (requestResult.rows.length === 0) {
         return res.status(404).json({ success: false, error: 'File request not found' });
       }
 
+      const fileRequest = requestResult.rows[0];
+      const totalCreativesRequested = fileRequest.num_creatives || 0;
+
+      // Validate creative distribution if specified
+      if (editor_distribution && totalCreativesRequested > 0) {
+        const totalAssigned = editorAssignments.reduce(
+          (sum, assignment) => sum + (assignment.num_creatives || 0),
+          0
+        );
+
+        if (totalAssigned > totalCreativesRequested) {
+          return res.status(400).json({
+            success: false,
+            error: `Total creatives assigned (${totalAssigned}) exceeds requested (${totalCreativesRequested})`
+          });
+        }
+      }
+
       // Get current editor assignments to compare
       const currentEditorsResult = await query(
-        'SELECT editor_id FROM file_request_editors WHERE request_id = $1',
+        'SELECT editor_id, num_creatives_assigned FROM file_request_editors WHERE request_id = $1',
         [id]
       );
       const currentEditorIds = currentEditorsResult.rows.map(row => row.editor_id);
+      const newEditorIds = editorAssignments.map(a => a.editor_id);
 
-      const newlyAssignedEditors = effectiveNewEditorIds.filter(editorId => !currentEditorIds.includes(editorId));
+      // Find which editors are actually new
+      const newlyAssignedEditors = newEditorIds.filter(
+        editorId => !currentEditorIds.includes(editorId)
+      );
 
-      // Replace assignments
-      await query('DELETE FROM file_request_editors WHERE request_id = $1', [id]);
-      for (const editorId of effectiveNewEditorIds) {
+      // Remove old editor assignments
+      await query(
+        'DELETE FROM file_request_editors WHERE request_id = $1',
+        [id]
+      );
+
+      // Add new editor assignments with creative distribution
+      for (const assignment of editorAssignments) {
         await query(
-          `INSERT INTO file_request_editors (request_id, editor_id, status)
-           VALUES ($1, $2, 'pending')`,
-          [id, editorId]
+          `INSERT INTO file_request_editors (request_id, editor_id, status, num_creatives_assigned)
+           VALUES ($1, $2, 'pending', $3)`,
+          [id, assignment.editor_id, assignment.num_creatives || 0]
         );
       }
 
+      // Log reassignment in request_reassignments table if reason provided
+      if (reason && reason.trim()) {
+        for (const oldEditorId of currentEditorIds) {
+          for (const newEditorId of newEditorIds) {
+            if (oldEditorId !== newEditorId) {
+              await query(
+                `INSERT INTO request_reassignments (file_request_id, reassigned_from, reassigned_to, reassignment_note)
+                 VALUES ($1, (SELECT user_id FROM editors WHERE id = $2), (SELECT user_id FROM editors WHERE id = $3), $4)`,
+                [id, oldEditorId, newEditorId, reason]
+              );
+            }
+          }
+        }
+      }
+
+      // Increment reassignment count
+      await query(
+        'UPDATE file_requests SET reassignment_count = COALESCE(reassignment_count, 0) + 1 WHERE id = $1',
+        [id]
+      );
+
+      // Log activity
       await logActivity({
         req,
         actionType: 'file_request_reassigned',
@@ -2082,19 +2261,29 @@ class FileRequestController {
         resourceName: requestResult.rows[0].title,
         details: {
           mode: 'admin_replace',
-          new_editor_ids: effectiveNewEditorIds,
+          new_editor_assignments: editorAssignments,
           newly_assigned_editor_ids: newlyAssignedEditors,
           previous_editor_ids: currentEditorIds,
-          reason
+          reason,
+          creative_distribution_used: !!editor_distribution
         },
         status: 'success'
+      });
+
+      logger.info('File request reassigned with creative distribution', {
+        requestId: id,
+        newEditorAssignments: editorAssignments,
+        newlyAssignedEditors: newlyAssignedEditors,
+        userId,
+        reason
       });
 
       res.json({
         success: true,
         message: 'Request reassigned successfully (admin)',
-        assigned_count: effectiveNewEditorIds.length,
-        newly_assigned_count: newlyAssignedEditors.length
+        assigned_count: editorAssignments.length,
+        newly_assigned_count: newlyAssignedEditors.length,
+        total_creatives_distributed: editorAssignments.reduce((sum, a) => sum + (a.num_creatives || 0), 0)
       });
     } catch (error) {
       logger.error('Admin reassign request error', { error: error.message });
