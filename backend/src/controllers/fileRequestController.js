@@ -674,7 +674,7 @@ class FileRequestController {
             buyer.name as buyer_name,
             buyer.email as buyer_email,
             creator.name as created_by_name,
-            STRING_AGG(DISTINCT e.display_name, ', ' ORDER BY e.display_name) as assigned_editors,
+            ARRAY_TO_STRING(ARRAY_AGG(DISTINCT e.display_name ORDER BY e.display_name), ', ') as assigned_editors,
             ${platformVerticalQuery}
           FROM file_request_editors fre
           JOIN file_requests fr ON fre.request_id = fr.id
@@ -763,7 +763,7 @@ class FileRequestController {
             buyer.name as buyer_name,
             buyer.email as buyer_email,
             creator.name as created_by_name,
-            STRING_AGG(DISTINCT e.display_name, ', ') as assigned_editors,
+            ARRAY_TO_STRING(ARRAY_AGG(DISTINCT e.display_name ORDER BY e.display_name), ', ') as assigned_editors,
             COUNT(DISTINCT fre.editor_id) as total_editors_count,
             COUNT(DISTINCT fre.editor_id) FILTER (WHERE fre.status = 'completed') as completed_editors_count,
             ${platformVerticalQuery2}
