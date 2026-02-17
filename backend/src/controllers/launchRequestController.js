@@ -703,6 +703,22 @@ class LaunchRequestController {
         [id]
       );
 
+      // Increment creatives_completed for the uploading editor (if they are assigned)
+      await pool.query(
+        `UPDATE launch_request_editors lre
+         SET creatives_completed = LEAST(creatives_completed + 1, COALESCE(num_creatives_assigned, creatives_completed + 1)),
+             status = CASE
+               WHEN LEAST(creatives_completed + 1, COALESCE(num_creatives_assigned, creatives_completed + 1)) >= COALESCE(num_creatives_assigned, 1)
+               THEN 'completed'
+               ELSE 'in_progress'
+             END
+         FROM editors e
+         WHERE lre.editor_id = e.id
+           AND lre.launch_request_id = $1
+           AND e.user_id = $2`,
+        [id, userId]
+      );
+
       return res.json({ success: true, data: result.rows[0] });
 
     } catch (err) {

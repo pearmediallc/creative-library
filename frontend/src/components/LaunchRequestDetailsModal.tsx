@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   X, Upload, CheckCircle, RefreshCw, UserPlus, FileText,
-  ChevronDown, ChevronUp, Paperclip
+  ChevronDown, ChevronUp, Paperclip, FolderOpen, Users
 } from 'lucide-react';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
@@ -108,11 +108,18 @@ export function LaunchRequestDetailsModal({ request: initialRequest, onClose, on
   // ── canvas state ──────────────────────────────────────────────────────────
   const [showCanvas, setShowCanvas] = useState(false);
 
-  // ── upload state ──────────────────────────────────────────────────────────
-  const [showUpload, setShowUpload] = useState(false);
-  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  // ── upload state (drag/drop, multiple files, folder) ─────────────────────
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [uploadComment, setUploadComment] = useState('');
   const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState('');
+  const [uploadSuccess, setUploadSuccess] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+
+  // ── assign editors state ──────────────────────────────────────────────────
+  const [showAssignEditors, setShowAssignEditors] = useState(false);
+  const [availableEditors, setAvailableEditors] = useState<any[]>([]);
+  const [editorDistribution, setEditorDistribution] = useState<Array<{ editor_id: string; num_creatives: number }>>([]);
 
   // ── data ──────────────────────────────────────────────────────────────────
   const [availableBuyers, setAvailableBuyers] = useState<any[]>([]);
@@ -139,14 +146,16 @@ export function LaunchRequestDetailsModal({ request: initialRequest, onClose, on
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [fullReqRes, buyersRes, creativeRes] = await Promise.all([
+        const [fullReqRes, buyersRes, creativeRes, editorsRes] = await Promise.all([
           launchRequestApi.getOne(initialRequest.id),
           authApi.getBuyers(),
-          authApi.getUsersByRole('creative')
+          authApi.getUsersByRole('creative'),
+          editorApi.getAll()
         ]);
         setRequest(fullReqRes.data.data);
         setAvailableBuyers(buyersRes.data.data || buyersRes.data || []);
         setAvailableCreativeUsers(creativeRes.data.data || creativeRes.data || []);
+        setAvailableEditors(editorsRes.data.data || editorsRes.data || []);
       } catch (err) {
         console.error('Failed to load modal data:', err);
       } finally {
@@ -224,22 +233,44 @@ export function LaunchRequestDetailsModal({ request: initialRequest, onClose, on
     setShowBuyerCommit(false);
   };
 
-  const handleUpload = async () => {
-    if (!uploadFile) return;
+  const handleUpload = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (selectedFiles.length === 0) return;
     setUploading(true);
-    setError('');
+    setUploadError('');
+    setUploadSuccess(false);
     try {
-      await launchRequestApi.upload(request.id, uploadFile, uploadComment);
-      setUploadFile(null);
+      for (const file of selectedFiles) {
+        await launchRequestApi.upload(request.id, file, uploadComment);
+      }
+      setSelectedFiles([]);
       setUploadComment('');
-      setShowUpload(false);
+      setUploadSuccess(true);
       await refresh();
       onUpdate();
+      setTimeout(() => setUploadSuccess(false), 3000);
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Upload failed');
+      setUploadError(err.response?.data?.error || 'Upload failed');
     } finally {
       setUploading(false);
     }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); setIsDragging(true); };
+  const handleDragLeave = (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); setIsDragging(false); };
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault(); e.stopPropagation(); setIsDragging(false);
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length > 0) setSelectedFiles(prev => [...prev, ...files]);
+  };
+
+  const handleAssignEditors = async () => {
+    if (editorDistribution.length === 0) return;
+    await doAction('assign-editors', () =>
+      launchRequestApi.assignEditors(request.id, { editor_distribution: editorDistribution })
+    );
+    setShowAssignEditors(false);
+    setEditorDistribution([]);
   };
 
   // init buyer assignments when opening commit panel
@@ -363,13 +394,7 @@ export function LaunchRequestDetailsModal({ request: initialRequest, onClose, on
               </Button>
             )}
 
-            {/* Creative role: upload deliverables (same as FileRequestDetailsModal — role-based, not assignment-based) */}
-            {user?.role !== 'buyer' && request.status === 'in_production' && (
-              <Button size="sm" variant="outline" onClick={() => setShowUpload(v => !v)}>
-                <Upload className="w-4 h-4 mr-1.5" />
-                Upload Creative
-              </Button>
-            )}
+            {/* Upload Creative panel is shown inline below the action bar (always visible for non-buyers during in_production) */}
 
             {/* Creative head (or admin): mark ready to launch — only admin/creative role, never buyer */}
             {(isCreativeHead || isAdmin) && user?.role !== 'buyer' && request.status === 'in_production' && (
@@ -408,6 +433,14 @@ export function LaunchRequestDetailsModal({ request: initialRequest, onClose, on
               </Button>
             )}
 
+            {/* Creative head: assign/reassign editors */}
+            {(isCreativeHead || isAdmin) && user?.role !== 'buyer' && !['closed', 'launched'].includes(request.status) && (
+              <Button size="sm" variant="outline" onClick={() => setShowAssignEditors(v => !v)}>
+                <Users className="w-4 h-4 mr-1.5" />
+                {showAssignEditors ? 'Hide Editor Assignment' : 'Assign Editors'}
+              </Button>
+            )}
+
             {/* Reassign creative head — only admin/creative role */}
             {(isCreativeHead || isAdmin) && user?.role !== 'buyer' && !['closed'].includes(request.status) && (
               <Button size="sm" variant="outline" onClick={() => setShowReassignCreative(v => !v)}>
@@ -423,25 +456,146 @@ export function LaunchRequestDetailsModal({ request: initialRequest, onClose, on
             )}
           </div>
 
-          {/* ─── Upload Panel ────────────────────────────────────────────── */}
-          {showUpload && (
+          {/* ─── Upload Panel (always visible for non-buyers in_production) ── */}
+          {user?.role !== 'buyer' && request.status === 'in_production' && (
+            <div className="mx-6 mt-4">
+              <form onSubmit={handleUpload} className="p-4 border rounded-lg space-y-3 bg-muted/30">
+                <h4 className="text-sm font-semibold">Upload Creative Files</h4>
+
+                {/* Drag & Drop Zone */}
+                <div
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                  className={`relative p-4 border-2 border-dashed rounded-lg transition-colors ${
+                    isDragging ? 'border-primary bg-primary/5' : 'border-border'
+                  }`}
+                >
+                  {isDragging && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-primary/5 rounded-lg pointer-events-none z-10">
+                      <div className="text-center">
+                        <Upload className="w-10 h-10 mx-auto mb-1 text-primary" />
+                        <p className="text-sm font-medium text-primary">Drop files here</p>
+                      </div>
+                    </div>
+                  )}
+                  <div className="space-y-2">
+                    {/* File input */}
+                    <input
+                      type="file"
+                      multiple
+                      onChange={e => setSelectedFiles(prev => [...prev, ...Array.from(e.target.files || [])])}
+                      className="w-full text-sm text-muted-foreground file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:bg-primary/10 file:text-primary file:text-sm hover:file:bg-primary/20"
+                      disabled={uploading}
+                    />
+                    {/* Folder input */}
+                    <div className="flex items-center gap-2">
+                      <FolderOpen className="w-4 h-4 text-muted-foreground shrink-0" />
+                      <span className="text-xs text-muted-foreground">Or select entire folder:</span>
+                      <input
+                        type="file"
+                        // @ts-ignore
+                        webkitdirectory="true"
+                        directory="true"
+                        multiple
+                        onChange={e => setSelectedFiles(prev => [...prev, ...Array.from(e.target.files || [])])}
+                        className="text-sm text-muted-foreground file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:bg-green-100 file:text-green-700 file:text-sm hover:file:bg-green-200"
+                        disabled={uploading}
+                      />
+                    </div>
+                    {!isDragging && selectedFiles.length === 0 && (
+                      <p className="text-xs text-center text-muted-foreground py-2">
+                        Or drag and drop files / folders here
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Selected file list */}
+                {selectedFiles.length > 0 && (
+                  <div className="space-y-1">
+                    <p className="text-xs font-medium text-muted-foreground">{selectedFiles.length} file(s) selected:</p>
+                    <div className="max-h-28 overflow-y-auto space-y-1">
+                      {selectedFiles.map((f, i) => (
+                        <div key={i} className="flex items-center justify-between text-xs bg-muted px-2 py-1 rounded">
+                          <span className="truncate">{f.name}</span>
+                          <div className="flex items-center gap-2 shrink-0 ml-2">
+                            <span className="text-muted-foreground">{(f.size / 1024 / 1024).toFixed(2)} MB</span>
+                            <button type="button" className="text-destructive hover:underline" onClick={() => setSelectedFiles(prev => prev.filter((_, j) => j !== i))}>✕</button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Comments */}
+                <textarea
+                  value={uploadComment}
+                  onChange={e => setUploadComment(e.target.value)}
+                  placeholder="Comments / remarks (optional)"
+                  rows={2}
+                  className="w-full px-3 py-2 border border-input rounded-md bg-background text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring"
+                  disabled={uploading}
+                />
+
+                {uploadError && (
+                  <div className="p-2 bg-destructive/10 text-destructive text-xs rounded">{uploadError}</div>
+                )}
+                {uploadSuccess && (
+                  <div className="flex items-center gap-2 p-2 bg-green-50 text-green-700 text-xs rounded">
+                    <CheckCircle className="w-4 h-4" /> Files uploaded successfully!
+                  </div>
+                )}
+
+                <div className="flex gap-2">
+                  <Button type="submit" size="sm" disabled={selectedFiles.length === 0 || uploading}>
+                    {uploading ? 'Uploading...' : `Upload ${selectedFiles.length > 0 ? `(${selectedFiles.length})` : ''}`}
+                  </Button>
+                  {selectedFiles.length > 0 && (
+                    <Button type="button" size="sm" variant="outline" onClick={() => setSelectedFiles([])}>Clear</Button>
+                  )}
+                </div>
+              </form>
+            </div>
+          )}
+
+          {/* ─── Assign Editors Panel ─────────────────────────────────────── */}
+          {showAssignEditors && (
             <div className="mx-6 mt-4 p-4 border rounded-lg space-y-3">
-              <h4 className="text-sm font-semibold">Upload Creative File</h4>
-              <input
-                type="file"
-                className="block w-full text-sm text-muted-foreground file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:bg-muted file:text-sm"
-                onChange={e => setUploadFile(e.target.files?.[0] || null)}
-              />
-              <Input
-                placeholder="Comments (optional)"
-                value={uploadComment}
-                onChange={e => setUploadComment(e.target.value)}
-              />
-              <div className="flex gap-2">
-                <Button size="sm" onClick={handleUpload} disabled={!uploadFile || uploading}>
-                  {uploading ? 'Uploading...' : 'Upload'}
+              <h4 className="text-sm font-semibold">Assign Editors & Distribute Creatives</h4>
+              <p className="text-xs text-muted-foreground">Total creatives: {request.num_creatives || 0}</p>
+              <div className="space-y-2">
+                {editorDistribution.map((dist, idx) => (
+                  <div key={idx} className="flex items-center gap-2">
+                    <select
+                      className="flex-1 rounded-md border border-input bg-background px-2 py-1.5 text-sm"
+                      value={dist.editor_id}
+                      onChange={e => setEditorDistribution(prev => prev.map((d, i) => i === idx ? { ...d, editor_id: e.target.value } : d))}
+                    >
+                      <option value="">— Select editor —</option>
+                      {availableEditors.map(e => (
+                        <option key={e.id} value={e.id}>{e.display_name || e.name}</option>
+                      ))}
+                    </select>
+                    <Input
+                      type="number" min={1} placeholder="# creatives"
+                      className="w-28"
+                      value={dist.num_creatives || ''}
+                      onChange={e => setEditorDistribution(prev => prev.map((d, i) => i === idx ? { ...d, num_creatives: Number(e.target.value) } : d))}
+                    />
+                    <button type="button" className="text-xs text-destructive hover:underline" onClick={() => setEditorDistribution(prev => prev.filter((_, i) => i !== idx))}>Remove</button>
+                  </div>
+                ))}
+              </div>
+              <Button size="sm" variant="outline" onClick={() => setEditorDistribution(prev => [...prev, { editor_id: '', num_creatives: 1 }])}>
+                + Add Editor
+              </Button>
+              <div className="flex gap-2 pt-1">
+                <Button size="sm" onClick={handleAssignEditors} disabled={editorDistribution.length === 0 || editorDistribution.some(d => !d.editor_id) || !!actionLoading}>
+                  {actionLoading === 'assign-editors' ? 'Saving...' : 'Save Editor Assignment'}
                 </Button>
-                <Button size="sm" variant="outline" onClick={() => setShowUpload(false)}>Cancel</Button>
+                <Button size="sm" variant="outline" onClick={() => setShowAssignEditors(false)}>Cancel</Button>
               </div>
             </div>
           )}
@@ -706,27 +860,56 @@ export function LaunchRequestDetailsModal({ request: initialRequest, onClose, on
                   {(request.buyers || []).length > 0 && (
                     <div>
                       <p className="text-muted-foreground mb-1.5">Assigned Buyers:</p>
-                      <div className="space-y-1.5">
-                        {(request.buyers || []).map((b, i) => (
-                          <div key={i} className="bg-muted/50 rounded-lg px-3 py-2 space-y-1">
-                            <div className="flex items-center justify-between">
-                              <span className="font-medium">{b.buyer_name}</span>
-                              <span className={`text-xs px-2 py-0.5 rounded-full ${
-                                b.status === 'launched' ? 'bg-green-100 text-green-700'
-                                : 'bg-indigo-100 text-indigo-700'
-                              }`}>
-                                {b.status || 'assigned'}
-                              </span>
-                            </div>
-                            <div className="flex gap-4 text-xs text-muted-foreground">
-                              {b.run_qty && <span>Run qty: {b.run_qty}</span>}
-                              {b.test_deadline && <span>By: {formatDate(b.test_deadline)}</span>}
-                              {b.assigned_file_ids && b.assigned_file_ids.length > 0 && (
-                                <span>{b.assigned_file_ids.length} file{b.assigned_file_ids.length !== 1 ? 's' : ''} assigned</span>
+                      <div className="space-y-2">
+                        {(request.buyers || []).map((b, i) => {
+                          // Find the actual file objects for this buyer's assigned file IDs
+                          const assignedFiles = (request.uploads || []).filter(u =>
+                            (b.assigned_file_ids || []).map(String).includes(String(u.id))
+                          );
+                          return (
+                            <div key={i} className="bg-muted/50 rounded-lg px-3 py-2 space-y-2">
+                              <div className="flex items-center justify-between">
+                                <span className="font-medium">{b.buyer_name}</span>
+                                <span className={`text-xs px-2 py-0.5 rounded-full ${
+                                  b.status === 'launched' ? 'bg-green-100 text-green-700'
+                                  : 'bg-indigo-100 text-indigo-700'
+                                }`}>
+                                  {b.status || 'assigned'}
+                                </span>
+                              </div>
+                              <div className="flex gap-4 text-xs text-muted-foreground">
+                                {b.run_qty && <span>Run qty: {b.run_qty}</span>}
+                                {b.test_deadline && <span>Test by: {formatDate(b.test_deadline)}</span>}
+                              </div>
+                              {/* Files assigned to this buyer */}
+                              {assignedFiles.length > 0 && (
+                                <div className="space-y-1 border-t pt-2 mt-1">
+                                  <p className="text-xs font-medium text-muted-foreground">
+                                    Assigned files ({assignedFiles.length}):
+                                  </p>
+                                  {assignedFiles.map(f => (
+                                    <div key={f.id} className="flex items-center gap-2 text-xs bg-background rounded px-2 py-1.5 border">
+                                      <Paperclip className="w-3 h-3 text-muted-foreground shrink-0" />
+                                      <span className="flex-1 truncate">{f.original_filename}</span>
+                                      {f.file_size && (
+                                        <span className="text-muted-foreground shrink-0">{(f.file_size / 1024 / 1024).toFixed(2)} MB</span>
+                                      )}
+                                      {f.s3_url && (
+                                        <a href={f.s3_url} target="_blank" rel="noopener noreferrer"
+                                          className="text-blue-600 hover:underline font-medium shrink-0">
+                                          Download
+                                        </a>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                              {(b.assigned_file_ids || []).length > 0 && assignedFiles.length === 0 && (
+                                <p className="text-xs text-muted-foreground italic">{b.assigned_file_ids!.length} file(s) assigned</p>
                               )}
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   )}
@@ -754,8 +937,9 @@ export function LaunchRequestDetailsModal({ request: initialRequest, onClose, on
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium truncate">{upload.original_filename}</p>
                           <p className="text-xs text-muted-foreground">
-                            {upload.uploader_name} · {formatDateTime(upload.created_at)}
-                            {upload.comments && ` · ${upload.comments}`}
+                            By {upload.uploader_name} · {formatDateTime(upload.created_at)}
+                            {upload.file_size ? ` · ${(upload.file_size / 1024 / 1024).toFixed(2)} MB` : ''}
+                            {upload.comments ? ` · ${upload.comments}` : ''}
                           </p>
                         </div>
                         {upload.s3_url && (
@@ -763,7 +947,7 @@ export function LaunchRequestDetailsModal({ request: initialRequest, onClose, on
                             href={upload.s3_url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-xs text-blue-600 hover:underline shrink-0"
+                            className="text-xs text-blue-600 hover:underline shrink-0 font-medium"
                           >
                             Download
                           </a>
