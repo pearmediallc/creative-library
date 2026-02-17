@@ -134,23 +134,11 @@ export function LaunchRequestDetailsModal({ request: initialRequest, onClose, on
     }
   };
 
-  // Show a brief spinner while the full request loads on mount
-  if (loading) {
-    return (
-      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-        <div className="bg-background rounded-xl p-8 flex items-center gap-3">
-          <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-          <span className="text-sm text-muted-foreground">Loading...</span>
-        </div>
-      </div>
-    );
-  }
-
+  // Load full request + supporting data on mount
+  // (list query returns summary only — editors array with editor_user_id requires getOne)
   useEffect(() => {
     const loadData = async () => {
       try {
-        // Always fetch the full request (getOne) on mount to get editors with editor_user_id
-        // (the list query only returns summary data without the editors array)
         const [fullReqRes, buyersRes, creativeRes] = await Promise.all([
           launchRequestApi.getOne(initialRequest.id),
           authApi.getBuyers(),
@@ -297,6 +285,18 @@ export function LaunchRequestDetailsModal({ request: initialRequest, onClose, on
       {showSection[sectionKey] ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
     </button>
   );
+
+  // Loading spinner shown while getOne resolves
+  if (loading) {
+    return (
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div className="bg-background rounded-xl p-8 flex items-center gap-3">
+          <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          <span className="text-sm text-muted-foreground">Loading...</span>
+        </div>
+      </div>
+    );
+  }
 
   // Canvas brief overlay — renders on top of everything
   if (showCanvas) {
