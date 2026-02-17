@@ -1,11 +1,11 @@
 // Platforms
 export const PLATFORMS = [
-  'Google',
-  'Facebook',
-  'Tiktok',
-  'Newsbreak',
   'Bigo',
-  'Snapchat'
+  'Facebook',
+  'Google',
+  'Newsbreak',
+  'Snapchat',
+  'Tiktok',
 ] as const;
 
 export type Platform = typeof PLATFORMS[number];

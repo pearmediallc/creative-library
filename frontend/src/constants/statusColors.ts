@@ -127,6 +127,13 @@ export const VERTICAL_COLORS = {
     darkText: 'dark:text-red-200',
     full: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
   },
+  'Refinance': {
+    bg: 'bg-indigo-100',
+    text: 'text-indigo-800',
+    darkBg: 'dark:bg-indigo-900',
+    darkText: 'dark:text-indigo-200',
+    full: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200'
+  },
   'Refi': {
     bg: 'bg-indigo-100',
     text: 'text-indigo-800',

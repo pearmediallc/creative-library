@@ -12,7 +12,7 @@ import { ReassignFileRequestModal } from '../components/ReassignFileRequestModal
 import { useAuth } from '../contexts/AuthContext';
 import { VERTICALS } from '../constants/verticals';
 import { PLATFORMS } from '../constants/platforms';
-import { getVerticalBadgeClasses } from '../constants/statusColors';
+import { getVerticalBadgeClasses, getStatusBadgeClasses } from '../constants/statusColors';
 
 interface FileRequest {
   id: string;
@@ -488,18 +488,33 @@ export function FileRequestsPage() {
                         )}
                       </td>
                       <td className="p-4 text-sm">
-                        {user?.role === 'creative'
-                          ? (
-                            <span title="Uploaded / Assigned">
-                              {Number(request.my_uploaded_files_count ?? 0)}
-                              {request.my_creatives_assigned && request.my_creatives_assigned > 0
-                                ? ` / ${request.my_creatives_assigned}`
-                                : request.num_creatives
-                                  ? ` / ${request.num_creatives}`
-                                  : ''}
-                            </span>
-                          )
-                          : (request.num_creatives || '-')}
+                        {(() => {
+                          const total = user?.role === 'creative'
+                            ? (request.my_creatives_assigned && request.my_creatives_assigned > 0
+                                ? request.my_creatives_assigned
+                                : request.num_creatives)
+                            : request.num_creatives;
+                          const uploaded = user?.role === 'creative'
+                            ? Number(request.my_uploaded_files_count ?? 0)
+                            : (request.upload_count ?? 0);
+                          if (!total) return <span className="text-muted-foreground">-</span>;
+                          const pct = Math.min(100, Math.round((uploaded / total) * 100));
+                          const barColor = pct >= 100 ? 'bg-green-500' : pct >= 60 ? 'bg-yellow-400' : 'bg-blue-500';
+                          return (
+                            <div className="min-w-[80px]" title={`${uploaded} / ${total} uploaded`}>
+                              <div className="flex items-center justify-between text-xs mb-0.5">
+                                <span>{uploaded}/{total}</span>
+                                <span className="font-medium">{pct}%</span>
+                              </div>
+                              <div className="w-full bg-muted rounded-full h-1.5">
+                                <div
+                                  className={`${barColor} h-1.5 rounded-full transition-all`}
+                                  style={{ width: `${pct}%` }}
+                                />
+                              </div>
+                            </div>
+                          );
+                        })()}
                       </td>
                       <td className="p-4">
                         {(request.verticals && request.verticals.length > 0) || request.vertical ? (
@@ -521,8 +536,8 @@ export function FileRequestsPage() {
                         {request.assigned_editors || '-'}
                       </td>
                       <td className="p-4">
-                        <span className="text-sm">
-                          {request.status || (request.is_active ? 'open' : 'closed')}
+                        <span className={getStatusBadgeClasses(request.status || (request.is_active ? 'open' : 'closed'))}>
+                          {(request.status || (request.is_active ? 'open' : 'closed')).replace('_', ' ')}
                         </span>
                       </td>
                       <td className="p-4">
@@ -586,22 +601,32 @@ export function FileRequestsPage() {
                   <div className="space-y-4">
                     {/* Status Badge */}
                     <div className="flex items-center justify-between">
-                      {request.is_active ? (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
-                          <CheckCircle className="w-3 h-3 mr-1" />
-                          Active
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200">
-                          <XCircle className="w-3 h-3 mr-1" />
-                          Closed
-                        </span>
-                      )}
-                      <span className="text-sm text-muted-foreground">
-                        {typeof request.completed_editors_count === 'number' && typeof request.total_editors_count === 'number'
-                          ? `Progress: ${request.completed_editors_count}/${request.total_editors_count}`
-                          : `${request.upload_count} ${request.upload_count === 1 ? 'file' : 'files'}`}
+                      <span className={getStatusBadgeClasses(request.status || (request.is_active ? 'open' : 'closed'))}>
+                        {(request.status || (request.is_active ? 'open' : 'closed')).replace('_', ' ')}
                       </span>
+                      {/* Creatives progress */}
+                      {(() => {
+                        const total = request.num_creatives;
+                        const uploaded = request.upload_count ?? 0;
+                        if (!total) return (
+                          <span className="text-sm text-muted-foreground">
+                            {uploaded} {uploaded === 1 ? 'file' : 'files'}
+                          </span>
+                        );
+                        const pct = Math.min(100, Math.round((uploaded / total) * 100));
+                        const barColor = pct >= 100 ? 'bg-green-500' : pct >= 60 ? 'bg-yellow-400' : 'bg-blue-500';
+                        return (
+                          <div className="w-24" title={`${uploaded} / ${total} uploaded`}>
+                            <div className="flex items-center justify-between text-xs mb-0.5">
+                              <span className="text-muted-foreground">{uploaded}/{total}</span>
+                              <span className="font-medium">{pct}%</span>
+                            </div>
+                            <div className="w-full bg-muted rounded-full h-1.5">
+                              <div className={`${barColor} h-1.5 rounded-full transition-all`} style={{ width: `${pct}%` }} />
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
 
                     {/* Title & Description */}
