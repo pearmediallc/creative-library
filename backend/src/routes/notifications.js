@@ -12,6 +12,9 @@ router.get('/', NotificationController.getNotifications);
 // Get unread count
 router.get('/unread-count', NotificationController.getUnreadCount);
 
+// Get pending action counts for sidebar badges
+router.get('/pending-counts', NotificationController.getPendingCounts);
+
 // Mark notification as read
 router.patch('/:id/read', NotificationController.markAsRead);
 

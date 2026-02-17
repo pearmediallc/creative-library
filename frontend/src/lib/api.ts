@@ -781,6 +781,17 @@ export const launchRequestApi = {
   deleteTemplate: (templateId: string) => api.delete(`/launch-requests/templates/${templateId}`),
 };
 
+// Notification endpoints
+export const notificationApi = {
+  getAll: (params?: { limit?: number; offset?: number; unread_only?: boolean }) =>
+    api.get('/notifications', { params }),
+  getUnreadCount: () => api.get('/notifications/unread-count'),
+  getPendingCounts: () => api.get('/notifications/pending-counts'),
+  markAsRead: (id: string) => api.patch(`/notifications/${id}/read`, {}),
+  markAllAsRead: () => api.post('/notifications/mark-all-read', {}),
+  delete: (id: string) => api.delete(`/notifications/${id}`),
+};
+
 // Slack Integration endpoints
 export const slackApi = {
   // Initiate OAuth flow

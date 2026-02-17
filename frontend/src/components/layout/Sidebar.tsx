@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { LayoutDashboard, Image, Star, Clock, Trash2, TrendingUp, Users, Settings, LogOut, FileText, Tags, Share2, UserCheck, Layers, ChevronRight, Inbox, User, Download, BarChart3, Shield, Key, Rocket } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { cn } from '../../lib/utils';
-import { savedSearchApi } from '../../lib/api';
+import { savedSearchApi, notificationApi } from '../../lib/api';
 
 // Base navigation available to all users
 const baseNavigation = [
@@ -50,6 +50,7 @@ export function Sidebar() {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const [favoriteCollections, setFavoriteCollections] = useState<any[]>([]);
+  const [pendingCounts, setPendingCounts] = useState({ fileRequests: 0, launchRequests: 0 });
 
   // Build navigation based on user role
   const navigation = (() => {
@@ -89,6 +90,26 @@ export function Sidebar() {
     }
   }, [user]);
 
+  // Poll pending counts for sidebar badges
+  useEffect(() => {
+    if (!user) return;
+
+    const fetchPendingCounts = async () => {
+      try {
+        const response = await notificationApi.getPendingCounts();
+        if (response.data?.data) {
+          setPendingCounts(response.data.data);
+        }
+      } catch (error) {
+        // Silently fail - badge counts are non-critical
+      }
+    };
+
+    fetchPendingCounts();
+    const interval = setInterval(fetchPendingCounts, 60000); // refresh every 60s
+    return () => clearInterval(interval);
+  }, [user]);
+
   const handleCollectionClick = (collection: any) => {
     const filters = collection.filters;
     const params = new URLSearchParams();
@@ -114,6 +135,12 @@ export function Sidebar() {
       <nav className="flex-1 space-y-1 px-3 py-4">
         {navigation.map((item) => {
           const Icon = item.icon;
+          // Determine badge count for this nav item
+          const badgeCount =
+            item.href === '/file-requests' ? pendingCounts.fileRequests :
+            item.href === '/launch-requests' ? pendingCounts.launchRequests :
+            0;
+
           return (
             <Link
               key={item.name}
@@ -126,7 +153,12 @@ export function Sidebar() {
               )}
             >
               <Icon size={18} />
-              {item.name}
+              <span className="flex-1">{item.name}</span>
+              {badgeCount > 0 && (
+                <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 text-xs font-bold text-white bg-red-500 rounded-full">
+                  {badgeCount > 99 ? '99+' : badgeCount}
+                </span>
+              )}
             </Link>
           );
         })}

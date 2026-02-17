@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { DashboardLayout } from '../components/layout/DashboardLayout';
 import { Button } from '../components/ui/Button';
 import { launchRequestApi } from '../lib/api';
@@ -51,6 +52,7 @@ interface LaunchRequest {
 
 export function LaunchRequestsPage() {
   const { user } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [requests, setRequests] = useState<LaunchRequest[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -77,7 +79,24 @@ export function LaunchRequestsPage() {
       if (search) params.search = search;
 
       const res = await launchRequestApi.getAll(params);
-      setRequests(res.data.data || []);
+      const data = res.data.data || [];
+      setRequests(data);
+
+      // Auto-open request from URL param (e.g. from notification click)
+      const openId = searchParams.get('openRequestId');
+      if (openId) {
+        const target = data.find((r: LaunchRequest) => r.id === openId);
+        if (target) {
+          setSelectedRequest(target);
+          setShowDetailsModal(true);
+        }
+        // Clear param from URL so it doesn't re-open on every refresh
+        setSearchParams(prev => {
+          const next = new URLSearchParams(prev);
+          next.delete('openRequestId');
+          return next;
+        }, { replace: true });
+      }
     } catch (err) {
       console.error('Failed to load launch requests:', err);
     } finally {

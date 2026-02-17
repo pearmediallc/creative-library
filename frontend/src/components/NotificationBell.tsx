@@ -12,6 +12,7 @@ interface Notification {
   reference_id?: string;
   metadata?: {
     fileRequestId?: string;
+    launchRequestId?: string;
     mentionedBy?: string;
     mentionedByName?: string;
   };
@@ -130,6 +131,31 @@ export const NotificationBell: React.FC = () => {
     // File request notifications
     if (notification.reference_type === 'file_request' && notification.reference_id) {
       navigate(`/file-requests?openRequestId=${notification.reference_id}`);
+      setShowDropdown(false);
+      return;
+    }
+
+    // Launch request notifications
+    if (notification.reference_type === 'launch_request' && notification.reference_id) {
+      navigate(`/launch-requests?openRequestId=${notification.reference_id}`);
+      setShowDropdown(false);
+      return;
+    }
+
+    // Launch request type-based routing
+    if (notification.type === 'launch_request_submitted' ||
+        notification.type === 'launch_request_accepted' ||
+        notification.type === 'launch_request_ready' ||
+        notification.type === 'launch_request_assigned' ||
+        notification.type === 'launch_request_launched' ||
+        notification.type === 'launch_request_closed' ||
+        notification.type === 'launch_request_updated') {
+      const id = notification.reference_id || notification.metadata?.launchRequestId;
+      if (id) {
+        navigate(`/launch-requests?openRequestId=${id}`);
+      } else {
+        navigate('/launch-requests');
+      }
       setShowDropdown(false);
       return;
     }

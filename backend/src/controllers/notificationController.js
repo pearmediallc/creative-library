@@ -1,4 +1,5 @@
 const Notification = require('../models/Notification');
+const { query } = require('../config/database');
 const logger = require('../utils/logger');
 
 class NotificationController {
@@ -113,6 +114,121 @@ class NotificationController {
       res.status(500).json({
         success: false,
         error: 'Failed to mark all as read'
+      });
+    }
+  }
+
+  /**
+   * Get pending action counts for sidebar badges
+   * GET /api/notifications/pending-counts
+   * Returns: { fileRequests: number, launchRequests: number }
+   * Role-aware: what this user needs to act on
+   */
+  static async getPendingCounts(req, res) {
+    try {
+      const userId = req.user.id;
+      const userRole = req.user.role;
+
+      let fileRequestCount = 0;
+      let launchRequestCount = 0;
+
+      if (userRole === 'creative') {
+        // Creatives: file requests assigned to them that are not completed
+        const editorResult = await query(
+          `SELECT id FROM editors WHERE user_id = $1 AND is_active = TRUE LIMIT 1`,
+          [userId]
+        );
+        if (editorResult.rows.length > 0) {
+          const editorId = editorResult.rows[0].id;
+
+          const frResult = await query(
+            `SELECT COUNT(DISTINCT fre.request_id) as cnt
+             FROM file_request_editors fre
+             JOIN file_requests fr ON fr.id = fre.request_id
+             WHERE fre.editor_id = $1
+               AND fre.status != 'completed'
+               AND fr.is_active = TRUE`,
+            [editorId]
+          );
+          fileRequestCount = parseInt(frResult.rows[0]?.cnt || '0', 10);
+        }
+
+        // Launch requests: assigned as editor and status is in_production
+        // (check if launch_request_editors table exists first)
+        try {
+          const lrResult = await query(
+            `SELECT COUNT(DISTINCT lre.launch_request_id) as cnt
+             FROM launch_request_editors lre
+             JOIN launch_requests lr ON lr.id = lre.launch_request_id
+             WHERE lre.user_id = $1
+               AND lr.status = 'in_production'`,
+            [userId]
+          );
+          launchRequestCount = parseInt(lrResult.rows[0]?.cnt || '0', 10);
+        } catch (_e) {
+          // launch_requests table may not exist yet
+          launchRequestCount = 0;
+        }
+
+      } else if (userRole === 'buyer') {
+        // Buyers: file requests assigned to them that are active
+        const frResult = await query(
+          `SELECT COUNT(*) as cnt FROM file_requests
+           WHERE assigned_buyer_id = $1 AND is_active = TRUE`,
+          [userId]
+        );
+        fileRequestCount = parseInt(frResult.rows[0]?.cnt || '0', 10);
+
+        // Launch requests: assigned as buyer with status buyer_assigned
+        try {
+          const lrResult = await query(
+            `SELECT COUNT(DISTINCT lrb.launch_request_id) as cnt
+             FROM launch_request_buyers lrb
+             JOIN launch_requests lr ON lr.id = lrb.launch_request_id
+             WHERE lrb.buyer_id = $1
+               AND lr.status IN ('buyer_assigned', 'ready_to_launch')`,
+            [userId]
+          );
+          launchRequestCount = parseInt(lrResult.rows[0]?.cnt || '0', 10);
+        } catch (_e) {
+          launchRequestCount = 0;
+        }
+
+      } else if (userRole === 'admin') {
+        // Admins: file requests that are open (not yet assigned / started)
+        const frResult = await query(
+          `SELECT COUNT(*) as cnt FROM file_requests WHERE is_active = TRUE`,
+          []
+        );
+        fileRequestCount = parseInt(frResult.rows[0]?.cnt || '0', 10);
+
+        // Launch requests: pending review for creative head, or in any active state
+        try {
+          const lrResult = await query(
+            `SELECT COUNT(*) as cnt FROM launch_requests
+             WHERE status NOT IN ('closed', 'launched', 'draft')`,
+            []
+          );
+          launchRequestCount = parseInt(lrResult.rows[0]?.cnt || '0', 10);
+        } catch (_e) {
+          launchRequestCount = 0;
+        }
+      }
+
+      res.json({
+        success: true,
+        data: {
+          fileRequests: fileRequestCount,
+          launchRequests: launchRequestCount
+        }
+      });
+
+    } catch (error) {
+      logger.error('Failed to get pending counts', { error: error.message, userId: req.user?.id });
+      // Return zeros on error so badge doesn't break the sidebar
+      res.json({
+        success: true,
+        data: { fileRequests: 0, launchRequests: 0 }
       });
     }
   }
