@@ -67,6 +67,89 @@ export function getFileRequestStatusColor(status: string | undefined) {
 }
 
 // ============================================================================
+// LAUNCH REQUEST STATUS COLORS
+// ============================================================================
+
+export const LAUNCH_REQUEST_STATUS_COLORS = {
+  draft: {
+    label: 'Draft',
+    bg: 'bg-gray-100',
+    text: 'text-gray-600',
+    darkBg: 'dark:bg-gray-700',
+    darkText: 'dark:text-gray-300',
+    full: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'
+  },
+  pending_review: {
+    label: 'Pending Review',
+    bg: 'bg-blue-100',
+    text: 'text-blue-800',
+    darkBg: 'dark:bg-blue-900/30',
+    darkText: 'dark:text-blue-300',
+    full: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300'
+  },
+  in_production: {
+    label: 'In Production',
+    bg: 'bg-yellow-100',
+    text: 'text-yellow-800',
+    darkBg: 'dark:bg-yellow-900/30',
+    darkText: 'dark:text-yellow-300',
+    full: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300'
+  },
+  ready_to_launch: {
+    label: 'Ready to Launch',
+    bg: 'bg-purple-100',
+    text: 'text-purple-800',
+    darkBg: 'dark:bg-purple-900/30',
+    darkText: 'dark:text-purple-300',
+    full: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300'
+  },
+  buyer_assigned: {
+    label: 'Buyer Assigned',
+    bg: 'bg-indigo-100',
+    text: 'text-indigo-800',
+    darkBg: 'dark:bg-indigo-900/30',
+    darkText: 'dark:text-indigo-300',
+    full: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300'
+  },
+  launched: {
+    label: 'Launched',
+    bg: 'bg-green-100',
+    text: 'text-green-800',
+    darkBg: 'dark:bg-green-900/30',
+    darkText: 'dark:text-green-300',
+    full: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+  },
+  closed: {
+    label: 'Closed',
+    bg: 'bg-gray-100',
+    text: 'text-gray-800',
+    darkBg: 'dark:bg-gray-700',
+    darkText: 'dark:text-gray-300',
+    full: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+  },
+  reopened: {
+    label: 'Reopened',
+    bg: 'bg-orange-100',
+    text: 'text-orange-800',
+    darkBg: 'dark:bg-orange-900/30',
+    darkText: 'dark:text-orange-300',
+    full: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300'
+  }
+} as const;
+
+export type LaunchRequestStatus = keyof typeof LAUNCH_REQUEST_STATUS_COLORS;
+
+export function getLaunchRequestStatusColor(status: string | undefined) {
+  const statusKey = (status || 'draft') as LaunchRequestStatus;
+  return LAUNCH_REQUEST_STATUS_COLORS[statusKey] || LAUNCH_REQUEST_STATUS_COLORS.draft;
+}
+
+export function getLaunchRequestStatusBadgeClasses(status: string | undefined) {
+  const color = getLaunchRequestStatusColor(status);
+  return `inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${color.full}`;
+}
+
+// ============================================================================
 // VERTICAL COLORS
 // ============================================================================
 

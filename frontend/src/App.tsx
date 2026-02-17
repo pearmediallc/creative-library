@@ -27,6 +27,7 @@ import { UserSettingsPage } from './pages/UserSettings';
 import { ActivityLogExportPage } from './pages/ActivityLogExport';
 import { WorkloadDashboardPage } from './pages/WorkloadDashboardPage';
 import { AccessRequestsPage } from './pages/AccessRequestsPage';
+import { LaunchRequestsPage } from './pages/LaunchRequestsPage';
 import { UploadStatusSidebar } from './components/UploadStatusSidebar';
 import { UploadNotifications } from './components/UploadNotifications';
 
@@ -261,6 +262,14 @@ function AppRoutes() {
         element={
           <PrivateRoute>
             <AccessRequestsPage />
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/launch-requests"
+        element={
+          <PrivateRoute>
+            <LaunchRequestsPage />
           </PrivateRoute>
         }
       />

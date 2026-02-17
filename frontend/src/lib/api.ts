@@ -674,6 +674,112 @@ export const fileRequestApi = {
   },
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Launch Request API
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const launchRequestApi = {
+  // Create new launch request
+  create: (data: {
+    request_type?: string;
+    concept_notes?: string;
+    num_creatives?: number;
+    suggested_run_qty?: number;
+    notes_to_creative?: string;
+    notes_to_buyer?: string;
+    platforms?: string[];
+    verticals?: string[];
+    delivery_deadline?: string;
+    test_deadline?: string;
+    folder_id?: string;
+    creative_head_id?: string;
+    buyer_head_id?: string;
+    editor_ids?: string[];
+    editor_distribution?: Array<{ editor_id: string; num_creatives: number }>;
+    buyer_ids?: string[];
+    save_as_template?: boolean;
+    template_name?: string;
+    status?: 'draft' | 'pending_review';
+  }) => api.post('/launch-requests', data),
+
+  // Get all (role-filtered)
+  getAll: (params?: {
+    status?: string;
+    vertical?: string;
+    platform?: string;
+    search?: string;
+    date_from?: string;
+    date_to?: string;
+  }) => api.get('/launch-requests', { params }),
+
+  // Get single
+  getOne: (id: string) => api.get(`/launch-requests/${id}`),
+
+  // Update fields
+  update: (id: string, data: {
+    concept_notes?: string;
+    delivery_deadline?: string;
+    test_deadline?: string;
+    committed_run_qty?: number;
+    committed_test_deadline?: string;
+    notes_to_creative?: string;
+    notes_to_buyer?: string;
+  }) => api.patch(`/launch-requests/${id}`, data),
+
+  // Delete
+  delete: (id: string) => api.delete(`/launch-requests/${id}`),
+
+  // ── Status transitions ──────────────────────────────────────────────────
+  submit: (id: string) => api.post(`/launch-requests/${id}/submit`),
+  acceptByCreativeHead: (id: string) => api.post(`/launch-requests/${id}/accept`),
+  markReadyToLaunch: (id: string) => api.post(`/launch-requests/${id}/mark-ready`),
+  assignBuyers: (id: string, data: {
+    buyer_assignments: Array<{ buyer_id: string; file_ids?: string[]; run_qty?: number; test_deadline?: string }>;
+    committed_run_qty?: number;
+    committed_test_deadline?: string;
+  }) => api.post(`/launch-requests/${id}/assign-buyers`, data),
+  launch: (id: string) => api.post(`/launch-requests/${id}/launch`),
+  close: (id: string) => api.post(`/launch-requests/${id}/close`),
+  reopen: (id: string) => api.post(`/launch-requests/${id}/reopen`),
+
+  // ── Reassignment ────────────────────────────────────────────────────────
+  reassignCreativeHead: (id: string, data: { new_creative_head_id: string; reason?: string }) =>
+    api.post(`/launch-requests/${id}/reassign-creative-head`, data),
+  reassignBuyerHead: (id: string, data: { new_buyer_head_id: string; reason?: string }) =>
+    api.post(`/launch-requests/${id}/reassign-buyer-head`, data),
+
+  // ── Editor assignment ───────────────────────────────────────────────────
+  assignEditors: (id: string, data: {
+    editor_distribution?: Array<{ editor_id: string; num_creatives: number }>;
+    editor_ids?: string[];
+  }) => api.post(`/launch-requests/${id}/assign-editors`, data),
+
+  // ── Upload ──────────────────────────────────────────────────────────────
+  upload: (id: string, file: File, comments?: string) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (comments) formData.append('comments', comments);
+    return api.post(`/launch-requests/${id}/upload`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+
+  // ── Templates ───────────────────────────────────────────────────────────
+  getTemplates: () => api.get('/launch-requests/templates/list'),
+  saveTemplate: (data: {
+    name: string;
+    default_request_type?: string;
+    default_platforms?: string[];
+    default_verticals?: string[];
+    default_num_creatives?: number;
+    default_suggested_run_qty?: number;
+    default_concept_notes?: string;
+    default_notes_to_creative?: string;
+    default_notes_to_buyer?: string;
+  }) => api.post('/launch-requests/templates', data),
+  deleteTemplate: (templateId: string) => api.delete(`/launch-requests/templates/${templateId}`),
+};
+
 // Slack Integration endpoints
 export const slackApi = {
   // Initiate OAuth flow
