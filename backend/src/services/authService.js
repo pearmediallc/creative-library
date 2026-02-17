@@ -185,6 +185,18 @@ class AuthService {
     );
     return result.rows || result;
   }
+
+  async getUsersByRole(role) {
+    const { query } = require('../config/database');
+    const result = await query(
+      `SELECT id, name, email, role
+       FROM users
+       WHERE is_active = TRUE AND role = $1
+       ORDER BY name ASC`,
+      [role]
+    );
+    return result.rows || result;
+  }
 }
 
 module.exports = new AuthService();

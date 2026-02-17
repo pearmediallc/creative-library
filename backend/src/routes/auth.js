@@ -42,4 +42,10 @@ router.get('/buyers',
   authController.getBuyers.bind(authController)
 );
 
+// Get users by role (e.g. /auth/users-by-role?role=creative)
+router.get('/users-by-role',
+  authenticateToken,
+  authController.getUsersByRole.bind(authController)
+);
+
 module.exports = router;

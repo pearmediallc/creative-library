@@ -146,6 +146,21 @@ class AuthController {
       next(error);
     }
   }
+
+  async getUsersByRole(req, res, next) {
+    try {
+      const { role } = req.query;
+      const allowedRoles = ['admin', 'buyer', 'creative'];
+      if (!role || !allowedRoles.includes(role)) {
+        return res.status(400).json({ success: false, error: 'Valid role required (admin, buyer, creative)' });
+      }
+      const result = await authService.getUsersByRole(role);
+      res.json({ success: true, data: result });
+    } catch (error) {
+      logger.error('Get users by role error', { error: error.message });
+      next(error);
+    }
+  }
 }
 
 module.exports = new AuthController();

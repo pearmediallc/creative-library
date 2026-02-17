@@ -70,8 +70,8 @@ export function CreateLaunchRequestModal({ onClose, onSuccess }: Props) {
 
   // ── data ──────────────────────────────────────────────────────────────────
   const [editors, setEditors] = useState<Editor[]>([]);
-  const [buyers, setBuyers] = useState<Buyer[]>([]);
-  const [adminsBuyers, setAdminsBuyers] = useState<Buyer[]>([]);
+  const [buyers, setBuyers] = useState<Buyer[]>([]);           // for Assign Buyer Head dropdown
+  const [creativeUsers, setCreativeUsers] = useState<Buyer[]>([]); // for Assign Creative Head dropdown
 
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState('');
@@ -81,9 +81,10 @@ export function CreateLaunchRequestModal({ onClose, onSuccess }: Props) {
   useEffect(() => {
     const load = async () => {
       try {
-        const [editorsRes, buyersRes, templatesRes] = await Promise.all([
+        const [editorsRes, buyersRes, creativeUsersRes, templatesRes] = await Promise.all([
           editorApi.getAll(),
           authApi.getBuyers(),
+          authApi.getUsersByRole('creative'),
           launchRequestApi.getTemplates().catch(() => ({ data: { data: [] } }))
         ]);
 
@@ -94,9 +95,14 @@ export function CreateLaunchRequestModal({ onClose, onSuccess }: Props) {
           display_name: e.display_name
         })));
 
+        // Buyer Head: buyers + admins (who manage the buyer side)
         const buyersData = buyersRes.data.data || buyersRes.data || [];
         setBuyers(buyersData);
-        setAdminsBuyers(buyersData);
+
+        // Creative Head: users with creative role
+        const creativeData = creativeUsersRes.data.data || creativeUsersRes.data || [];
+        setCreativeUsers(creativeData);
+
         setTemplates(templatesRes.data.data || []);
       } catch (err) {
         console.error('Failed to load form data:', err);
@@ -389,8 +395,8 @@ export function CreateLaunchRequestModal({ onClose, onSuccess }: Props) {
                 onChange={e => setCreativeHeadId(e.target.value)}
               >
                 <option value="">— Select creative head —</option>
-                {adminsBuyers.filter(b => b).map(b => (
-                  <option key={b.id} value={b.id}>{b.name}</option>
+                {creativeUsers.map(u => (
+                  <option key={u.id} value={u.id}>{u.name}</option>
                 ))}
               </select>
             </div>

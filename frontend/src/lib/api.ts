@@ -43,6 +43,7 @@ export const authApi = {
   me: () => api.get('/auth/me'),
   getBuyers: () => api.get('/auth/buyers'),
   getUsers: () => api.get('/auth/users'), // For sharing - accessible by all authenticated users
+  getUsersByRole: (role: 'admin' | 'buyer' | 'creative') => api.get('/auth/users-by-role', { params: { role } }),
 };
 
 // Editor endpoints

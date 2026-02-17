@@ -24,7 +24,8 @@
     "migrate:phase5": "node scripts/run-comments-migration.js",
     "migrate:rbac-enhancements": "node scripts/run-rbac-enhancements.js",
     "migrate:teams": "node scripts/run-teams-migration.js",
-    "migrate:phase8": "node scripts/run-teams-migration.js"
+    "migrate:phase8": "node scripts/run-teams-migration.js",
+    "migrate:launch-requests": "node scripts/run-launch-requests-migration.js"
   },
   "keywords": [
     "creative",

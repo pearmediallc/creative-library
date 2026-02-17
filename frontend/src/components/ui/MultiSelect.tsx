@@ -127,27 +127,24 @@ export function MultiSelect({
               filteredOptions.map(option => {
                 const isSelected = selectedIds.includes(option.id);
                 return (
-                  <div
+                  <label
                     key={option.id}
-                    onClick={() => handleToggle(option.id)}
                     className={`
-                      px-3 py-2 cursor-pointer text-sm
+                      flex items-center gap-2 px-3 py-2 cursor-pointer text-sm select-none
                       ${isSelected
                         ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-900 dark:text-blue-100'
                         : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-900 dark:text-white'
                       }
                     `}
                   >
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={isSelected}
-                        onChange={() => {}}
-                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                      />
-                      {option.label}
-                    </label>
-                  </div>
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => handleToggle(option.id)}
+                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    />
+                    {option.label}
+                  </label>
                 );
               })
             )}
