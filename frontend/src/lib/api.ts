@@ -779,6 +779,22 @@ export const launchRequestApi = {
     default_notes_to_buyer?: string;
   }) => api.post('/launch-requests/templates', data),
   deleteTemplate: (templateId: string) => api.delete(`/launch-requests/templates/${templateId}`),
+
+  // ── Canvas Brief ────────────────────────────────────────────────────────
+  canvas: {
+    get: (launchRequestId: string) => api.get(`/launch-requests/${launchRequestId}/canvas`),
+    upsert: (launchRequestId: string, content: any, attachments?: any[]) =>
+      api.post(`/launch-requests/${launchRequestId}/canvas`, { content, attachments }),
+    uploadAttachment: (launchRequestId: string, file: File) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      return api.post(`/launch-requests/${launchRequestId}/canvas/attach`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+    },
+    removeAttachment: (launchRequestId: string, fileId: string) =>
+      api.delete(`/launch-requests/${launchRequestId}/canvas/attachments/${fileId}`),
+  },
 };
 
 // Notification endpoints

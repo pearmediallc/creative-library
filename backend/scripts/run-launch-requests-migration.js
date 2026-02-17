@@ -30,7 +30,8 @@ async function runMigration() {
       'launch_request_buyers',
       'launch_request_uploads',
       'launch_request_reassignments',
-      'launch_request_templates'
+      'launch_request_templates',
+      'launch_request_canvas'
     ];
 
     for (const table of tables) {

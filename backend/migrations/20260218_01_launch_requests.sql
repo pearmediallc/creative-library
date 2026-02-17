@@ -151,6 +151,17 @@ CREATE TABLE IF NOT EXISTS launch_request_templates (
   updated_at                TIMESTAMP DEFAULT NOW()
 );
 
+-- Canvas Brief for launch requests (same pattern as file_request_canvas)
+CREATE TABLE IF NOT EXISTS launch_request_canvas (
+  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  launch_request_id UUID NOT NULL REFERENCES launch_requests(id) ON DELETE CASCADE,
+  content           JSONB NOT NULL DEFAULT '[]',
+  attachments       JSONB NOT NULL DEFAULT '[]',
+  created_at        TIMESTAMP DEFAULT NOW(),
+  updated_at        TIMESTAMP DEFAULT NOW(),
+  UNIQUE (launch_request_id)
+);
+
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_launch_requests_created_by ON launch_requests(created_by);
 CREATE INDEX IF NOT EXISTS idx_launch_requests_status ON launch_requests(status);

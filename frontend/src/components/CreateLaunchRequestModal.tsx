@@ -212,6 +212,7 @@ export function CreateLaunchRequestModal({ onClose, onSuccess }: Props) {
     return (
       <CanvasEditor
         requestId={createdRequestId}
+        canvasApiOverride={launchRequestApi.canvas}
         onClose={() => {
           setShowCanvas(false);
           onSuccess();

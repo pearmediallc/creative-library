@@ -67,6 +67,20 @@ router.post('/:id/assign-editors', authenticateToken, (req, res) => launchReques
 // Upload a creative file (authenticated — editors/creative head)
 router.post('/:id/upload', authenticateToken, upload.single('file'), (req, res) => launchRequestController.upload(req, res));
 
+// ─── CANVAS BRIEF ───────────────────────────────────────────────────────────
+
+// Get canvas for launch request
+router.get('/:id/canvas', authenticateToken, (req, res) => launchRequestController.getCanvas(req, res));
+
+// Create or update canvas
+router.post('/:id/canvas', authenticateToken, (req, res) => launchRequestController.upsertCanvas(req, res));
+
+// Upload attachment to canvas
+router.post('/:id/canvas/attach', authenticateToken, upload.single('file'), (req, res) => launchRequestController.uploadCanvasAttachment(req, res));
+
+// Remove attachment from canvas
+router.delete('/:id/canvas/attachments/:fileId', authenticateToken, (req, res) => launchRequestController.removeCanvasAttachment(req, res));
+
 // ─── TEMPLATES ──────────────────────────────────────────────────────────────
 
 // Get user's saved launch request templates

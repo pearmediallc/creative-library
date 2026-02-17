@@ -13,6 +13,7 @@ import { useAuth } from '../contexts/AuthContext';
 
 interface Editor {
   id: string;
+  editor_user_id?: string;  // user_id from editors table (from getOne query)
   editor_name?: string;
   display_name?: string;
   num_creatives_assigned?: number;
@@ -111,7 +112,7 @@ export function LaunchRequestDetailsModal({ request: initialRequest, onClose, on
 
   // ── data ──────────────────────────────────────────────────────────────────
   const [availableBuyers, setAvailableBuyers] = useState<any[]>([]);
-  const [availableAdmins, setAvailableAdmins] = useState<any[]>([]);
+  const [availableCreativeUsers, setAvailableCreativeUsers] = useState<any[]>([]);
   const [showSection, setShowSection] = useState<Record<string, boolean>>({
     summary: true, creative: true, buyer: false, uploads: false, history: false
   });
@@ -132,12 +133,12 @@ export function LaunchRequestDetailsModal({ request: initialRequest, onClose, on
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [buyersRes] = await Promise.all([
-          authApi.getBuyers()
+        const [buyersRes, creativeRes] = await Promise.all([
+          authApi.getBuyers(),
+          authApi.getUsersByRole('creative')
         ]);
-        const buyersData = buyersRes.data.data || buyersRes.data || [];
-        setAvailableBuyers(buyersData);
-        setAvailableAdmins(buyersData);
+        setAvailableBuyers(buyersRes.data.data || buyersRes.data || []);
+        setAvailableCreativeUsers(creativeRes.data.data || creativeRes.data || []);
       } catch (err) {
         console.error('Failed to load users:', err);
       }
@@ -150,6 +151,8 @@ export function LaunchRequestDetailsModal({ request: initialRequest, onClose, on
   const isBuyerHead = user?.id === request.buyer_head_id;
   const isStrategist = user?.id === request.created_by || isAdmin;
   const isBuyer = user?.role === 'buyer';
+  // isAssignedEditor: current user is one of the editors assigned to this launch request
+  const isAssignedEditor = (request.editors || []).some(e => e.editor_user_id === user?.id);
 
   // ── action handlers ───────────────────────────────────────────────────────
 
@@ -327,17 +330,19 @@ export function LaunchRequestDetailsModal({ request: initialRequest, onClose, on
               </Button>
             )}
 
-            {/* Creative head: upload + mark ready */}
+            {/* Assigned editors: upload their deliverables */}
+            {(isAssignedEditor) && request.status === 'in_production' && (
+              <Button size="sm" variant="outline" onClick={() => setShowUpload(v => !v)}>
+                <Upload className="w-4 h-4 mr-1.5" />
+                Upload Creative
+              </Button>
+            )}
+
+            {/* Creative head (or admin): mark ready to launch */}
             {(isCreativeHead || isAdmin) && request.status === 'in_production' && (
-              <>
-                <Button size="sm" variant="outline" onClick={() => setShowUpload(v => !v)}>
-                  <Upload className="w-4 h-4 mr-1.5" />
-                  Upload Creative
-                </Button>
-                <Button size="sm" className="bg-purple-600 hover:bg-purple-700 text-white" onClick={handleMarkReady} disabled={!!actionLoading}>
-                  {actionLoading === 'mark-ready' ? 'Saving...' : 'Mark Ready to Launch'}
-                </Button>
-              </>
+              <Button size="sm" className="bg-purple-600 hover:bg-purple-700 text-white" onClick={handleMarkReady} disabled={!!actionLoading}>
+                {actionLoading === 'mark-ready' ? 'Saving...' : 'Mark Ready to Launch'}
+              </Button>
             )}
 
             {/* Buyer head: assign files to buyers */}
@@ -533,7 +538,7 @@ export function LaunchRequestDetailsModal({ request: initialRequest, onClose, on
                 onChange={e => setNewCreativeHeadId(e.target.value)}
               >
                 <option value="">— Select new creative head —</option>
-                {availableAdmins.map(a => (
+                {availableCreativeUsers.map(a => (
                   <option key={a.id} value={a.id}>{a.name}</option>
                 ))}
               </select>

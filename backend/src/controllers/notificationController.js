@@ -153,14 +153,14 @@ class NotificationController {
           fileRequestCount = parseInt(frResult.rows[0]?.cnt || '0', 10);
         }
 
-        // Launch requests: assigned as editor and status is in_production
-        // (check if launch_request_editors table exists first)
+        // Launch requests: assigned as editor (via editors table join) and status is in_production
         try {
           const lrResult = await query(
             `SELECT COUNT(DISTINCT lre.launch_request_id) as cnt
              FROM launch_request_editors lre
+             JOIN editors e ON e.id = lre.editor_id
              JOIN launch_requests lr ON lr.id = lre.launch_request_id
-             WHERE lre.user_id = $1
+             WHERE e.user_id = $1
                AND lr.status = 'in_production'`,
             [userId]
           );

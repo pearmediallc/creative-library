@@ -332,7 +332,7 @@ class LaunchRequestController {
         pool.query(`SELECT platform FROM launch_request_platforms WHERE launch_request_id = $1 ORDER BY created_at`, [id]),
         pool.query(`SELECT vertical, is_primary FROM launch_request_verticals WHERE launch_request_id = $1 ORDER BY is_primary DESC, created_at`, [id]),
         pool.query(`
-          SELECT lre.*, e.name AS editor_name, e.display_name,
+          SELECT lre.*, e.name AS editor_name, e.display_name, e.user_id AS editor_user_id,
                  lre.num_creatives_assigned, lre.creatives_completed, lre.status AS editor_status
           FROM launch_request_editors lre
           JOIN editors e ON lre.editor_id = e.id
@@ -770,6 +770,110 @@ class LaunchRequestController {
       return res.json({ success: true });
     } catch (err) {
       logger.error('Delete launch template error:', err);
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  }
+
+  // ─────────────────────────────────────────────
+  // CANVAS BRIEF (for launch requests)
+  // ─────────────────────────────────────────────
+
+  async getCanvas(req, res) {
+    try {
+      const { id } = req.params;
+      const result = await pool.query(
+        `SELECT * FROM launch_request_canvas WHERE launch_request_id = $1`,
+        [id]
+      );
+      const canvas = result.rows[0] || null;
+      return res.json({ success: true, canvas });
+    } catch (err) {
+      logger.error('Get launch canvas error:', err);
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  }
+
+  async upsertCanvas(req, res) {
+    try {
+      const { id } = req.params;
+      const { content, attachments = [] } = req.body;
+
+      const result = await pool.query(
+        `INSERT INTO launch_request_canvas (launch_request_id, content, attachments)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (launch_request_id)
+         DO UPDATE SET content = $2, attachments = $3, updated_at = NOW()
+         RETURNING *`,
+        [id, JSON.stringify(content), JSON.stringify(attachments)]
+      );
+      return res.json({ success: true, canvas: result.rows[0] });
+    } catch (err) {
+      logger.error('Upsert launch canvas error:', err);
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  }
+
+  async uploadCanvasAttachment(req, res) {
+    try {
+      const { id } = req.params;
+      if (!req.file) return res.status(400).json({ success: false, error: 'No file provided' });
+
+      const { originalname, mimetype, size, location, key } = req.file;
+      const crypto = require('crypto');
+
+      // Ensure canvas row exists
+      await pool.query(
+        `INSERT INTO launch_request_canvas (launch_request_id, content, attachments)
+         VALUES ($1, '[]', '[]')
+         ON CONFLICT (launch_request_id) DO NOTHING`,
+        [id]
+      );
+
+      const attachment = {
+        id: crypto.randomUUID(),
+        filename: originalname,
+        mime_type: mimetype,
+        size: size || 0,
+        url: location || '',
+        s3_key: key || '',
+        created_at: new Date().toISOString()
+      };
+
+      const result = await pool.query(
+        `UPDATE launch_request_canvas
+         SET attachments = attachments || $1::jsonb, updated_at = NOW()
+         WHERE launch_request_id = $2
+         RETURNING *`,
+        [JSON.stringify(attachment), id]
+      );
+
+      return res.json({ success: true, canvas: result.rows[0], attachment });
+    } catch (err) {
+      logger.error('Upload launch canvas attachment error:', err);
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  }
+
+  async removeCanvasAttachment(req, res) {
+    try {
+      const { id, fileId } = req.params;
+
+      const result = await pool.query(
+        `UPDATE launch_request_canvas
+         SET attachments = (
+           SELECT COALESCE(jsonb_agg(a), '[]'::jsonb)
+           FROM jsonb_array_elements(attachments) a
+           WHERE a->>'id' != $1
+         ),
+         updated_at = NOW()
+         WHERE launch_request_id = $2
+         RETURNING *`,
+        [fileId, id]
+      );
+
+      return res.json({ success: true, canvas: result.rows[0] });
+    } catch (err) {
+      logger.error('Remove launch canvas attachment error:', err);
       return res.status(500).json({ success: false, error: err.message });
     }
   }

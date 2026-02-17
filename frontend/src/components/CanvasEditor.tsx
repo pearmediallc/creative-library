@@ -5,13 +5,23 @@ import type { Canvas, CanvasContent, CanvasAttachment } from '../lib/canvasTempl
 import { PRODUCT_BRIEF_TEMPLATE } from '../lib/canvasTemplates';
 import { MentionInput } from './MentionInput';
 
+interface CanvasApiOverride {
+  get: (id: string) => Promise<any>;
+  upsert: (id: string, content: any, attachments?: any[]) => Promise<any>;
+  uploadAttachment: (id: string, file: File) => Promise<any>;
+  removeAttachment: (id: string, fileId: string) => Promise<any>;
+}
+
 interface CanvasEditorProps {
   requestId: string;
   onClose: () => void;
   onSave?: (canvas: Canvas) => void;
+  /** Pass launchRequestApi.canvas to use launch-request canvas endpoints instead of file-request ones */
+  canvasApiOverride?: CanvasApiOverride;
 }
 
-export function CanvasEditor({ requestId, onClose, onSave }: CanvasEditorProps) {
+export function CanvasEditor({ requestId, onClose, onSave, canvasApiOverride }: CanvasEditorProps) {
+  const canvasApi = canvasApiOverride || fileRequestApi.canvas;
   const [content, setContent] = useState<CanvasContent>(PRODUCT_BRIEF_TEMPLATE);
   const [attachments, setAttachments] = useState<CanvasAttachment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -29,7 +39,7 @@ export function CanvasEditor({ requestId, onClose, onSave }: CanvasEditorProps) 
   const loadCanvas = async () => {
     try {
       setLoading(true);
-      const response = await fileRequestApi.canvas.get(requestId);
+      const response = await canvasApi.get(requestId);
       const canvasData = response.data.canvas;
 
       if (canvasData && canvasData.content) {
@@ -66,7 +76,7 @@ export function CanvasEditor({ requestId, onClose, onSave }: CanvasEditorProps) 
       setSaveStatus('saving');
       setSaving(true);
 
-      const response = await fileRequestApi.canvas.upsert(requestId, contentToSave);
+      const response = await canvasApi.upsert(requestId, contentToSave);
 
       setSaveStatus('saved');
       if (onSave) {
@@ -138,7 +148,7 @@ export function CanvasEditor({ requestId, onClose, onSave }: CanvasEditorProps) 
       setUploading(true);
       setError(null);
 
-      const response = await fileRequestApi.canvas.uploadAttachment(requestId, file);
+      const response = await canvasApi.uploadAttachment(requestId, file);
       const newAttachment = response.data.attachment;
 
       setAttachments([...attachments, newAttachment]);
@@ -154,7 +164,7 @@ export function CanvasEditor({ requestId, onClose, onSave }: CanvasEditorProps) 
   // Handle remove attachment
   const handleRemoveAttachment = async (fileId: string) => {
     try {
-      await fileRequestApi.canvas.removeAttachment(requestId, fileId);
+      await canvasApi.removeAttachment(requestId, fileId);
       setAttachments(attachments.filter(a => a.file_id !== fileId));
     } catch (err: any) {
       console.error('Failed to remove attachment:', err);
