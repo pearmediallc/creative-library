@@ -356,23 +356,23 @@ export function LaunchRequestDetailsModal({ request: initialRequest, onClose, on
               </Button>
             )}
 
-            {/* Creative head: accept */}
-            {(isCreativeHead || isAdmin) && request.status === 'pending_review' && (
+            {/* Creative head: accept — only admin/creative role, never buyer */}
+            {(isCreativeHead || isAdmin) && user?.role !== 'buyer' && request.status === 'pending_review' && (
               <Button size="sm" className="bg-yellow-500 hover:bg-yellow-600 text-white" onClick={handleAccept} disabled={!!actionLoading}>
                 {actionLoading === 'accept' ? 'Accepting...' : 'Accept (Start Production)'}
               </Button>
             )}
 
-            {/* Assigned editors: upload their deliverables */}
-            {(isAssignedEditor) && request.status === 'in_production' && (
+            {/* Creative role: upload deliverables (same as FileRequestDetailsModal — role-based, not assignment-based) */}
+            {user?.role !== 'buyer' && request.status === 'in_production' && (
               <Button size="sm" variant="outline" onClick={() => setShowUpload(v => !v)}>
                 <Upload className="w-4 h-4 mr-1.5" />
                 Upload Creative
               </Button>
             )}
 
-            {/* Creative head (or admin): mark ready to launch */}
-            {(isCreativeHead || isAdmin) && request.status === 'in_production' && (
+            {/* Creative head (or admin): mark ready to launch — only admin/creative role, never buyer */}
+            {(isCreativeHead || isAdmin) && user?.role !== 'buyer' && request.status === 'in_production' && (
               <Button size="sm" className="bg-purple-600 hover:bg-purple-700 text-white" onClick={handleMarkReady} disabled={!!actionLoading}>
                 {actionLoading === 'mark-ready' ? 'Saving...' : 'Mark Ready to Launch'}
               </Button>
@@ -408,16 +408,8 @@ export function LaunchRequestDetailsModal({ request: initialRequest, onClose, on
               </Button>
             )}
 
-            {/* Canvas Brief — always visible to creative team and admins */}
-            {(isAdmin || isCreativeHead || isAssignedEditor || isStrategist) && (
-              <Button size="sm" variant="outline" onClick={() => setShowCanvas(true)}>
-                <FileText className="w-4 h-4 mr-1.5" />
-                Canvas Brief
-              </Button>
-            )}
-
-            {/* Reassign creative head */}
-            {(isCreativeHead || isAdmin) && !['closed'].includes(request.status) && (
+            {/* Reassign creative head — only admin/creative role */}
+            {(isCreativeHead || isAdmin) && user?.role !== 'buyer' && !['closed'].includes(request.status) && (
               <Button size="sm" variant="outline" onClick={() => setShowReassignCreative(v => !v)}>
                 Reassign Creative Head
               </Button>
@@ -688,6 +680,18 @@ export function LaunchRequestDetailsModal({ request: initialRequest, onClose, on
                   )}
                 </div>
               )}
+            </div>
+
+            {/* Canvas Brief — always visible in body (same as FileRequestDetailsModal) */}
+            <div className="py-4">
+              <div className="flex items-center justify-between py-2">
+                <span className="text-sm font-semibold">Canvas Brief</span>
+                <Button size="sm" variant="outline" onClick={() => setShowCanvas(true)}>
+                  <FileText className="w-4 h-4 mr-1.5" />
+                  {showCanvas ? 'Close Canvas' : 'View / Edit Canvas'}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">Creative brief, references, and production notes for this request.</p>
             </div>
 
             {/* Buyer Side */}

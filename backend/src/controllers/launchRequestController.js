@@ -830,11 +830,11 @@ class LaunchRequestController {
       );
 
       const attachment = {
-        id: crypto.randomUUID(),
-        filename: originalname,
+        file_id: crypto.randomUUID(),
+        file_name: originalname,
         mime_type: mimetype,
-        size: size || 0,
-        url: location || '',
+        file_size: size || 0,
+        thumbnail_url: location || '',
         s3_key: key || '',
         created_at: new Date().toISOString()
       };
@@ -863,7 +863,7 @@ class LaunchRequestController {
          SET attachments = (
            SELECT COALESCE(jsonb_agg(a), '[]'::jsonb)
            FROM jsonb_array_elements(attachments) a
-           WHERE a->>'id' != $1
+           WHERE a->>'file_id' != $1
          ),
          updated_at = NOW()
          WHERE launch_request_id = $2
