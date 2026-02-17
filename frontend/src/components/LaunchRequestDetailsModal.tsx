@@ -10,6 +10,7 @@ import { formatDateTime, formatDate } from '../lib/utils';
 import { getLaunchRequestStatusBadgeClasses } from '../constants/statusColors';
 import { getVerticalBadgeClasses } from '../constants/statusColors';
 import { useAuth } from '../contexts/AuthContext';
+import { CanvasEditor } from './CanvasEditor';
 
 interface Editor {
   id: string;
@@ -83,7 +84,7 @@ interface Props {
 export function LaunchRequestDetailsModal({ request: initialRequest, onClose, onUpdate }: Props) {
   const { user } = useAuth();
   const [request, setRequest] = useState<LaunchRequest>(initialRequest);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true); // true until getOne resolves
   const [actionLoading, setActionLoading] = useState('');
   const [error, setError] = useState('');
 
@@ -103,6 +104,9 @@ export function LaunchRequestDetailsModal({ request: initialRequest, onClose, on
   const [buyerAssignments, setBuyerAssignments] = useState<Array<{
     buyer_id: string; buyer_name: string; run_qty: string; test_deadline: string; selected_files: string[];
   }>>([]);
+
+  // ── canvas state ──────────────────────────────────────────────────────────
+  const [showCanvas, setShowCanvas] = useState(false);
 
   // ── upload state ──────────────────────────────────────────────────────────
   const [showUpload, setShowUpload] = useState(false);
@@ -130,21 +134,39 @@ export function LaunchRequestDetailsModal({ request: initialRequest, onClose, on
     }
   };
 
+  // Show a brief spinner while the full request loads on mount
+  if (loading) {
+    return (
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div className="bg-background rounded-xl p-8 flex items-center gap-3">
+          <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          <span className="text-sm text-muted-foreground">Loading...</span>
+        </div>
+      </div>
+    );
+  }
+
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [buyersRes, creativeRes] = await Promise.all([
+        // Always fetch the full request (getOne) on mount to get editors with editor_user_id
+        // (the list query only returns summary data without the editors array)
+        const [fullReqRes, buyersRes, creativeRes] = await Promise.all([
+          launchRequestApi.getOne(initialRequest.id),
           authApi.getBuyers(),
           authApi.getUsersByRole('creative')
         ]);
+        setRequest(fullReqRes.data.data);
         setAvailableBuyers(buyersRes.data.data || buyersRes.data || []);
         setAvailableCreativeUsers(creativeRes.data.data || creativeRes.data || []);
       } catch (err) {
-        console.error('Failed to load users:', err);
+        console.error('Failed to load modal data:', err);
+      } finally {
+        setLoading(false);
       }
     };
     loadData();
-  }, []);
+  }, [initialRequest.id]);
 
   const isAdmin = user?.role === 'admin';
   const isCreativeHead = user?.id === request.creative_head_id;
@@ -276,6 +298,17 @@ export function LaunchRequestDetailsModal({ request: initialRequest, onClose, on
     </button>
   );
 
+  // Canvas brief overlay — renders on top of everything
+  if (showCanvas) {
+    return (
+      <CanvasEditor
+        requestId={request.id}
+        canvasApiOverride={launchRequestApi.canvas}
+        onClose={() => setShowCanvas(false)}
+      />
+    );
+  }
+
   return (
     <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
       <div className="bg-background rounded-t-xl sm:rounded-xl shadow-xl w-full sm:max-w-3xl max-h-[90vh] flex flex-col">
@@ -372,6 +405,14 @@ export function LaunchRequestDetailsModal({ request: initialRequest, onClose, on
               <Button size="sm" className="bg-orange-500 hover:bg-orange-600 text-white" onClick={handleReopen} disabled={!!actionLoading}>
                 <RefreshCw className="w-4 h-4 mr-1.5" />
                 {actionLoading === 'reopen' ? 'Reopening...' : 'Reopen'}
+              </Button>
+            )}
+
+            {/* Canvas Brief — always visible to creative team and admins */}
+            {(isAdmin || isCreativeHead || isAssignedEditor || isStrategist) && (
+              <Button size="sm" variant="outline" onClick={() => setShowCanvas(true)}>
+                <FileText className="w-4 h-4 mr-1.5" />
+                Canvas Brief
               </Button>
             )}
 
