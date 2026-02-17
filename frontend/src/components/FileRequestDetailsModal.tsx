@@ -7,7 +7,7 @@ import { CanvasEditor } from './CanvasEditor';
 import { CanvasRenderer } from './CanvasRenderer';
 import { UploadedFileCard } from './UploadedFileCard';
 import { UploadHistoryTimeline } from './UploadHistoryTimeline';
-import { ReassignmentModal } from './ReassignmentModal';
+import { ReassignFileRequestModal } from './ReassignFileRequestModal';
 import type { Canvas } from '../lib/canvasTemplates';
 import { useAuth } from '../contexts/AuthContext';
 import { getFileRequestStatusColor, getVerticalBadgeClasses } from '../constants/statusColors';
@@ -561,15 +561,11 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
     }
   };
 
-  const handleReassign = async (reassignTo: string, note: string) => {
-    try {
-      await fileRequestApi.reassign(requestId, { reassign_to: reassignTo, note });
-      await fetchRequestDetails();
-      await fetchReassignments();
-      onUpdate();
-    } catch (error: any) {
-      throw error; // Let ReassignmentModal handle the error
-    }
+  const handleReassignSuccess = async () => {
+    setShowReassignModal(false);
+    await fetchRequestDetails();
+    await fetchReassignments();
+    onUpdate();
   };
 
   // Determine if user can reassign
@@ -1345,13 +1341,19 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
         )
       )}
 
-      {/* Reassignment Modal */}
+      {/* Reassignment Modal - multi-editor with creative distribution */}
       {showReassignModal && request && (
-        <ReassignmentModal
+        <ReassignFileRequestModal
           requestId={requestId}
           requestTitle={request.title}
+          currentEditors={
+            request.assigned_editors
+              ? request.assigned_editors.map(e => ({ id: e.id, name: e.display_name || e.name }))
+              : []
+          }
+          numCreatives={request.num_creatives_requested || 0}
           onClose={() => setShowReassignModal(false)}
-          onReassign={handleReassign}
+          onSuccess={handleReassignSuccess}
         />
       )}
     </div>
