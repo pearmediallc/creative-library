@@ -39,6 +39,8 @@ interface FileRequest {
   total_editors_count?: number;
   uploaded_files_count?: number;
   my_uploaded_files_count?: number;
+  my_creatives_assigned?: number;
+  my_creatives_completed?: number;
   // 🆕 Multi-platform/vertical support
   platforms?: string[];
   verticals?: string[];
@@ -487,9 +489,16 @@ export function FileRequestsPage() {
                       </td>
                       <td className="p-4 text-sm">
                         {user?.role === 'creative'
-                          ? (request.my_uploaded_files_count !== undefined && request.my_uploaded_files_count !== null
-                              ? Number(request.my_uploaded_files_count)
-                              : 'N/A')
+                          ? (
+                            <span title="Uploaded / Assigned">
+                              {Number(request.my_uploaded_files_count ?? 0)}
+                              {request.my_creatives_assigned && request.my_creatives_assigned > 0
+                                ? ` / ${request.my_creatives_assigned}`
+                                : request.num_creatives
+                                  ? ` / ${request.num_creatives}`
+                                  : ''}
+                            </span>
+                          )
                           : (request.num_creatives || '-')}
                       </td>
                       <td className="p-4">
@@ -753,7 +762,12 @@ export function FileRequestsPage() {
         <ReassignFileRequestModal
           requestId={requestToReassign.id}
           requestTitle={requestToReassign.title}
-          currentEditors={[]}
+          currentEditors={
+            requestToReassign.assigned_editors
+              ? requestToReassign.assigned_editors.split(', ').map((name, idx) => ({ id: `editor-${idx}`, name }))
+              : []
+          }
+          numCreatives={requestToReassign.num_creatives || 0}
           onClose={() => {
             setShowReassignModal(false);
             setRequestToReassign(null);

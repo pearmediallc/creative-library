@@ -670,6 +670,8 @@ class FileRequestController {
             COUNT(mf.id) FILTER (WHERE COALESCE(fru.is_deleted, FALSE) = FALSE AND mf.is_deleted = FALSE) as uploaded_files_count,
             COUNT(mf.id) FILTER (WHERE COALESCE(fru.is_deleted, FALSE) = FALSE AND mf.is_deleted = FALSE AND fru.uploaded_by = $2) as my_uploaded_files_count,
             fre.status as my_assignment_status,
+            fre.num_creatives_assigned as my_creatives_assigned,
+            fre.creatives_completed as my_creatives_completed,
             fre.created_at as assigned_at,
             buyer.name as buyer_name,
             buyer.email as buyer_email,
@@ -686,7 +688,7 @@ class FileRequestController {
           LEFT JOIN file_request_editors fre_all ON fr.id = fre_all.request_id
           LEFT JOIN editors e ON fre_all.editor_id = e.id
           ${whereClause}
-          GROUP BY fr.id, f.name, fre.status, fre.created_at, buyer.name, buyer.email, creator.name
+          GROUP BY fr.id, f.name, fre.status, fre.num_creatives_assigned, fre.creatives_completed, fre.created_at, buyer.name, buyer.email, creator.name
           ORDER BY fre.created_at DESC`,
           params
         );
@@ -3383,21 +3385,34 @@ class FileRequestController {
         [id]
       );
 
-      // Ensure target editor assignments exist (set to pending) + optional quota
+      // Ensure target editor assignments exist (set to pending) + optional quota + creative distribution
+      const { editor_distribution } = req.body;
+      // Build a map of editor_id -> num_creatives from editor_distribution if provided
+      const creativesMap = {};
+      if (editor_distribution && Array.isArray(editor_distribution)) {
+        for (const dist of editor_distribution) {
+          if (dist.editor_id && dist.num_creatives >= 0) {
+            creativesMap[dist.editor_id] = dist.num_creatives;
+          }
+        }
+      }
+
       for (const editorId of targetEditorIds) {
         const quota = editor_quotas && typeof editor_quotas === 'object'
           ? Number(editor_quotas[editorId])
           : null;
         const safeQuota = quota && !Number.isNaN(quota) && quota > 0 ? Math.floor(quota) : null;
+        const numCreativesAssigned = creativesMap[editorId] !== undefined ? creativesMap[editorId] : 0;
 
         await query(
-          `INSERT INTO file_request_editors (request_id, editor_id, status, deliverables_quota)
-           VALUES ($1, $2, 'pending', $3)
+          `INSERT INTO file_request_editors (request_id, editor_id, status, deliverables_quota, num_creatives_assigned)
+           VALUES ($1, $2, 'pending', $3, $4)
            ON CONFLICT (request_id, editor_id) DO UPDATE
            SET status = 'pending',
                deliverables_quota = COALESCE($3, file_request_editors.deliverables_quota),
+               num_creatives_assigned = CASE WHEN $4 > 0 THEN $4 ELSE file_request_editors.num_creatives_assigned END,
                updated_at = CURRENT_TIMESTAMP`,
-          [id, editorId, safeQuota]
+          [id, editorId, safeQuota, numCreativesAssigned]
         );
       }
 
