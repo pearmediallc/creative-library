@@ -153,15 +153,20 @@ class NotificationController {
           fileRequestCount = parseInt(frResult.rows[0]?.cnt || '0', 10);
         }
 
-        // Launch requests: assigned as editor (via editors table join) and status is in_production
+        // Launch requests: user is creative head OR assigned as editor, and status is actionable
         try {
           const lrResult = await query(
-            `SELECT COUNT(DISTINCT lre.launch_request_id) as cnt
-             FROM launch_request_editors lre
-             JOIN editors e ON e.id = lre.editor_id
-             JOIN launch_requests lr ON lr.id = lre.launch_request_id
-             WHERE e.user_id = $1
-               AND lr.status = 'in_production'`,
+            `SELECT COUNT(DISTINCT lr.id) as cnt
+             FROM launch_requests lr
+             WHERE lr.status IN ('pending_review', 'in_production')
+               AND (
+                 lr.creative_head_id = $1
+                 OR EXISTS (
+                   SELECT 1 FROM launch_request_editors lre
+                   JOIN editors e ON e.id = lre.editor_id
+                   WHERE lre.launch_request_id = lr.id AND e.user_id = $1
+                 )
+               )`,
             [userId]
           );
           launchRequestCount = parseInt(lrResult.rows[0]?.cnt || '0', 10);
@@ -179,14 +184,19 @@ class NotificationController {
         );
         fileRequestCount = parseInt(frResult.rows[0]?.cnt || '0', 10);
 
-        // Launch requests: assigned as buyer with status buyer_assigned
+        // Launch requests: user is buyer head OR assigned as buyer, with actionable status
         try {
           const lrResult = await query(
-            `SELECT COUNT(DISTINCT lrb.launch_request_id) as cnt
-             FROM launch_request_buyers lrb
-             JOIN launch_requests lr ON lr.id = lrb.launch_request_id
-             WHERE lrb.buyer_id = $1
-               AND lr.status IN ('buyer_assigned', 'ready_to_launch')`,
+            `SELECT COUNT(DISTINCT lr.id) as cnt
+             FROM launch_requests lr
+             WHERE lr.status IN ('ready_to_launch', 'buyer_assigned')
+               AND (
+                 lr.buyer_head_id = $1
+                 OR EXISTS (
+                   SELECT 1 FROM launch_request_buyers lrb
+                   WHERE lrb.launch_request_id = lr.id AND lrb.buyer_id = $1
+                 )
+               )`,
             [userId]
           );
           launchRequestCount = parseInt(lrResult.rows[0]?.cnt || '0', 10);
