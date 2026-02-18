@@ -688,7 +688,7 @@ class FileRequestController {
           LEFT JOIN file_request_editors fre_all ON fr.id = fre_all.request_id
           LEFT JOIN editors e ON fre_all.editor_id = e.id
           ${whereClause}
-          GROUP BY fr.id, f.name, fre.status, fre.num_creatives_assigned, fre.creatives_completed, fre.created_at, buyer.name, buyer.email, creator.name
+          GROUP BY fr.id, f.id, f.name, fre.status, fre.num_creatives_assigned, fre.creatives_completed, fre.created_at, buyer.id, buyer.name, buyer.email, creator.id, creator.name
           ORDER BY fre.created_at DESC`,
           params
         );
@@ -842,7 +842,7 @@ class FileRequestController {
           LEFT JOIN file_request_uploads fru ON fr.id = fru.file_request_id
           LEFT JOIN users u ON fr.created_by = u.id
           WHERE fr.id = $1 AND fre.editor_id = $2
-          GROUP BY fr.id, f.name, u.name, u.email`,
+          GROUP BY fr.id, f.id, f.name, u.id, u.name, u.email`,
           [id, editorId]
         );
       } else {
@@ -864,7 +864,7 @@ class FileRequestController {
             LEFT JOIN file_request_uploads fru ON fr.id = fru.file_request_id
             LEFT JOIN users u ON fr.created_by = u.id
             WHERE fr.id = $1
-            GROUP BY fr.id, f.name, u.name, u.email`,
+            GROUP BY fr.id, f.id, f.name, u.id, u.name, u.email`,
             [id]
           );
         } else if (userRole === 'buyer') {
@@ -882,7 +882,7 @@ class FileRequestController {
             LEFT JOIN file_request_uploads fru ON fr.id = fru.file_request_id
             LEFT JOIN users u ON fr.created_by = u.id
             WHERE fr.id = $1 AND (fr.created_by = $2 OR fr.assigned_buyer_id = $2)
-            GROUP BY fr.id, f.name, u.name, u.email`,
+            GROUP BY fr.id, f.id, f.name, u.id, u.name, u.email`,
             [id, userId]
           );
         } else {
@@ -905,7 +905,7 @@ class FileRequestController {
             LEFT JOIN file_request_uploads fru ON fr.id = fru.file_request_id
             LEFT JOIN users u ON fr.created_by = u.id
             WHERE fr.id = $1 AND fr.created_by = $2
-            GROUP BY fr.id, f.name, u.name, u.email`,
+            GROUP BY fr.id, f.id, f.name, u.id, u.name, u.email`,
             [id, userId]
           );
         }
