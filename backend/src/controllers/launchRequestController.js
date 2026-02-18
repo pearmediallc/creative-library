@@ -5,6 +5,8 @@
 
 const { pool } = require('../config/database');
 const logger = require('../utils/logger');
+const Folder = require('../models/Folder');
+const mediaService = require('../services/mediaService');
 
 class LaunchRequestController {
 
@@ -474,6 +476,7 @@ class LaunchRequestController {
       await client.query('BEGIN');
 
       const { id } = req.params;
+      const assignerId = req.user.id;
       const { buyer_assignments = [], committed_run_qty, committed_test_deadline } = req.body;
       // buyer_assignments: [{ buyer_id, file_ids, run_qty, test_deadline }]
 
@@ -502,6 +505,13 @@ class LaunchRequestController {
 
       await client.query('COMMIT');
 
+      // After commit: create media library folders + copy files for each buyer (non-blocking)
+      this._provisionBuyerMediaFolders(id, assignerId, buyer_assignments).catch(err => {
+        logger.error('Failed to provision buyer media folders for launch request', {
+          launchRequestId: id, error: err.message
+        });
+      });
+
       return res.json({ success: true });
 
     } catch (err) {
@@ -510,6 +520,216 @@ class LaunchRequestController {
       return res.status(500).json({ success: false, error: err.message });
     } finally {
       client.release();
+    }
+  }
+
+  /**
+   * After assignBuyers: for each buyer+files, create media library folder structure
+   * and copy the launch_request_uploads records into media_files so buyers can
+   * see the assigned files in their Media Library.
+   *
+   * Folder structure (owned by buyer, visible in their Media Library):
+   *   {BuyerName}-{YYYY-MM-DD}          ← root dated folder
+   *     └─ {AssignerName}-{RequestTitle} ← one subfolder per request assignment
+   *          └─ file1.mp4, file2.mp4 ...
+   */
+  async _provisionBuyerMediaFolders(launchRequestId, assignerId, buyerAssignments) {
+    try {
+      const FilePermission = require('../models/FilePermission');
+
+      // Load launch request info + assigner name
+      const lrResult = await pool.query(
+        `SELECT lr.title, lr.request_type, u.name AS assigner_name
+         FROM launch_requests lr
+         JOIN users u ON u.id = $2
+         WHERE lr.id = $1`,
+        [launchRequestId, assignerId]
+      );
+      if (lrResult.rowCount === 0) return;
+      const lr = lrResult.rows[0];
+
+      const sanitize = str => (str || '').replace(/[^a-zA-Z0-9\s\-_]/g, '').trim().replace(/\s+/g, '-');
+      const requestLabel = sanitize(lr.title || lr.request_type || 'Launch-Request').slice(0, 50);
+      const assignerLabel = sanitize(lr.assigner_name || 'Admin').slice(0, 30);
+      const subfolderName = `${assignerLabel}-${requestLabel}`;
+
+      const today = new Date();
+      const dateStr = today.toISOString().split('T')[0]; // YYYY-MM-DD
+
+      for (const assignment of buyerAssignments) {
+        const fileIds = assignment.file_ids || [];
+        if (!assignment.buyer_id || fileIds.length === 0) continue;
+
+        // Get buyer info
+        const buyerResult = await pool.query(
+          `SELECT id, name, email FROM users WHERE id = $1`,
+          [assignment.buyer_id]
+        );
+        if (buyerResult.rowCount === 0) continue;
+        const buyer = buyerResult.rows[0];
+        const buyerLabel = sanitize(buyer.name || buyer.email.split('@')[0]).slice(0, 40);
+        const datedFolderName = `${buyerLabel}-${dateStr}`;
+
+        // Get or create dated root folder owned by buyer
+        const existingDated = await pool.query(
+          `SELECT * FROM folders
+           WHERE name = $1 AND owner_id = $2 AND parent_folder_id IS NULL AND is_deleted = FALSE
+           LIMIT 1`,
+          [datedFolderName, buyer.id]
+        );
+        let datedFolder;
+        if (existingDated.rowCount > 0) {
+          datedFolder = existingDated.rows[0];
+        } else {
+          datedFolder = await Folder.create({
+            name: datedFolderName,
+            owner_id: buyer.id,
+            parent_folder_id: null,
+            description: `Launch requests assigned to ${buyer.name || 'buyer'} on ${dateStr}`,
+            color: '#6366F1',
+            is_auto_created: true,
+            folder_type: 'launch_request'
+          });
+        }
+
+        // Get or create request-specific subfolder
+        const existingReq = await pool.query(
+          `SELECT * FROM folders
+           WHERE name = $1 AND owner_id = $2 AND parent_folder_id = $3 AND is_deleted = FALSE
+           LIMIT 1`,
+          [subfolderName, buyer.id, datedFolder.id]
+        );
+        let reqFolder;
+        if (existingReq.rowCount > 0) {
+          reqFolder = existingReq.rows[0];
+        } else {
+          reqFolder = await Folder.create({
+            name: subfolderName,
+            owner_id: buyer.id,
+            parent_folder_id: datedFolder.id,
+            description: `Files from ${assignerLabel} for ${requestLabel}`,
+            color: '#8B5CF6',
+            is_auto_created: true,
+            folder_type: 'launch_request_assigned'
+          });
+        }
+
+        // Grant buyer view+download on both folders
+        for (const folderId of [datedFolder.id, reqFolder.id]) {
+          for (const permType of ['view', 'download']) {
+            await FilePermission.grantPermission({
+              resource_type: 'folder',
+              resource_id: folderId,
+              grantee_type: 'user',
+              grantee_id: buyer.id,
+              permission_type: permType,
+              granted_by: assignerId,
+              expires_at: null
+            });
+          }
+        }
+
+        // Load upload records for the assigned file IDs
+        const uploadsResult = await pool.query(
+          `SELECT * FROM launch_request_uploads
+           WHERE id = ANY($1::uuid[]) AND launch_request_id = $2`,
+          [fileIds, launchRequestId]
+        );
+
+        for (const upload of uploadsResult.rows) {
+          // Check if already copied into this folder
+          let existing = null;
+          try {
+            const chk = await pool.query(
+              `SELECT id FROM media_files WHERE launch_request_upload_id = $1 AND folder_id = $2 AND is_deleted = FALSE LIMIT 1`,
+              [upload.id, reqFolder.id]
+            );
+            existing = chk.rowCount > 0;
+          } catch (_) {
+            // launch_request_upload_id column may not exist yet — fall through and try to insert
+            existing = false;
+          }
+          if (existing) continue;
+
+          const fileType = (upload.mime_type || '').startsWith('video') ? 'video'
+            : (upload.mime_type || '').startsWith('image') ? 'image'
+            : 'document';
+
+          let mfId = null;
+          try {
+            const mfResult = await pool.query(
+              `INSERT INTO media_files
+                 (filename, original_filename, file_type, mime_type, file_size, s3_key, s3_url,
+                  uploaded_by, folder_id, is_deleted, launch_request_upload_id, tags)
+               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,FALSE,$10,$11)
+               RETURNING id`,
+              [
+                upload.original_filename,
+                upload.original_filename,
+                fileType,
+                upload.mime_type || 'application/octet-stream',
+                upload.file_size || 0,
+                upload.s3_key || '',
+                upload.s3_url || '',
+                assignerId,
+                reqFolder.id,
+                upload.id,
+                ['launch-request-upload']
+              ]
+            );
+            mfId = mfResult.rows[0]?.id;
+          } catch (insertErr) {
+            // If launch_request_upload_id column doesn't exist, insert without it
+            if (insertErr.message && insertErr.message.includes('launch_request_upload_id')) {
+              const mfResult = await pool.query(
+                `INSERT INTO media_files
+                   (filename, original_filename, file_type, mime_type, file_size, s3_key, s3_url,
+                    uploaded_by, folder_id, is_deleted, tags)
+                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,FALSE,$10)
+                 RETURNING id`,
+                [
+                  upload.original_filename,
+                  upload.original_filename,
+                  fileType,
+                  upload.mime_type || 'application/octet-stream',
+                  upload.file_size || 0,
+                  upload.s3_key || '',
+                  upload.s3_url || '',
+                  assignerId,
+                  reqFolder.id,
+                  ['launch-request-upload']
+                ]
+              );
+              mfId = mfResult.rows[0]?.id;
+            } else {
+              throw insertErr;
+            }
+          }
+
+          if (mfId) {
+            for (const permType of ['view', 'download']) {
+              await FilePermission.grantPermission({
+                resource_type: 'file',
+                resource_id: mfId,
+                grantee_type: 'user',
+                grantee_id: buyer.id,
+                permission_type: permType,
+                granted_by: assignerId,
+                expires_at: null
+              });
+            }
+          }
+        }
+
+        logger.info('Provisioned media library folder for launch request buyer', {
+          buyerId: buyer.id, buyerName: buyer.name,
+          launchRequestId, datedFolder: datedFolderName,
+          subfolder: subfolderName, fileCount: uploadsResult.rowCount
+        });
+      }
+    } catch (err) {
+      logger.error('_provisionBuyerMediaFolders failed', { error: err.message, launchRequestId });
+      throw err;
     }
   }
 
@@ -703,8 +923,10 @@ class LaunchRequestController {
         [id]
       );
 
-      // Increment creatives_completed for the uploading editor (if they are assigned)
-      await pool.query(
+      // Increment creatives_completed for the uploading editor (if they are assigned).
+      // If the uploader is not themselves an editor (e.g. admin / creative head uploading on behalf),
+      // AND there is exactly one editor assigned, credit that single editor instead.
+      const editorUpdateResult = await pool.query(
         `UPDATE launch_request_editors lre
          SET creatives_completed = LEAST(creatives_completed + 1, COALESCE(num_creatives_assigned, creatives_completed + 1)),
              status = CASE
@@ -718,6 +940,29 @@ class LaunchRequestController {
            AND e.user_id = $2`,
         [id, userId]
       );
+
+      // Fallback: if uploader was not matched as an editor (e.g. admin/creative-head upload)
+      // credit the sole assigned editor so the progress bar advances
+      if (editorUpdateResult.rowCount === 0) {
+        const singleEditorCheck = await pool.query(
+          `SELECT lre.id FROM launch_request_editors lre
+           WHERE lre.launch_request_id = $1`,
+          [id]
+        );
+        if (singleEditorCheck.rowCount === 1) {
+          await pool.query(
+            `UPDATE launch_request_editors
+             SET creatives_completed = LEAST(creatives_completed + 1, COALESCE(num_creatives_assigned, creatives_completed + 1)),
+                 status = CASE
+                   WHEN LEAST(creatives_completed + 1, COALESCE(num_creatives_assigned, creatives_completed + 1)) >= COALESCE(num_creatives_assigned, 1)
+                   THEN 'completed'
+                   ELSE 'in_progress'
+                 END
+             WHERE id = $1`,
+            [singleEditorCheck.rows[0].id]
+          );
+        }
+      }
 
       return res.json({ success: true, data: result.rows[0] });
 

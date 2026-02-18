@@ -297,11 +297,13 @@ class Folder extends BaseModel {
     const { page = 1, limit = 50, file_type = null } = options;
 
     try {
-      // Get subfolders
+      // Get subfolders with file_count (direct children only)
       const foldersResult = await query(
-        `SELECT * FROM folders
-         WHERE parent_folder_id = $1 AND is_deleted = FALSE
-         ORDER BY name`,
+        `SELECT f.*,
+                (SELECT COUNT(*) FROM media_files mf WHERE mf.folder_id = f.id AND mf.is_deleted = FALSE)::int AS file_count
+         FROM folders f
+         WHERE f.parent_folder_id = $1 AND f.is_deleted = FALSE
+         ORDER BY f.name`,
         [folderId]
       );
 
