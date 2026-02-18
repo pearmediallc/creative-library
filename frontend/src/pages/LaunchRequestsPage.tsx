@@ -67,7 +67,7 @@ export function LaunchRequestsPage() {
   const [platformFilter, setPlatformFilter] = useState('');
   const [showFilters, setShowFilters] = useState(false);
 
-  const canCreate = user?.role === 'admin' || user?.role === 'buyer';
+  const canCreate = user?.role === 'admin';
 
   const fetchRequests = async () => {
     setLoading(true);
