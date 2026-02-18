@@ -508,7 +508,7 @@ class LaunchRequestController {
       // After commit: create media library folders + copy files for each buyer (non-blocking)
       this._provisionBuyerMediaFolders(id, assignerId, buyer_assignments).catch(err => {
         logger.error('Failed to provision buyer media folders for launch request', {
-          launchRequestId: id, error: err.message
+          launchRequestId: id, error: err.message, stack: err.stack
         });
       });
 
@@ -629,10 +629,12 @@ class LaunchRequestController {
           }
         }
 
-        // Load upload records for the assigned file IDs
+        // Load upload records for the assigned file IDs (join uploader name for editor_name field)
         const uploadsResult = await pool.query(
-          `SELECT * FROM launch_request_uploads
-           WHERE id = ANY($1::uuid[]) AND launch_request_id = $2`,
+          `SELECT lru.*, u.name AS uploader_name
+           FROM launch_request_uploads lru
+           LEFT JOIN users u ON u.id = lru.uploaded_by
+           WHERE lru.id = ANY($1::uuid[]) AND lru.launch_request_id = $2`,
           [fileIds, launchRequestId]
         );
 
@@ -657,11 +659,14 @@ class LaunchRequestController {
 
           let mfId = null;
           try {
+            // Derive uploader name for the required editor_name column
+            const uploaderName = upload.uploader_name || lr.assigner_name || 'Launch Request';
+
             const mfResult = await pool.query(
               `INSERT INTO media_files
                  (filename, original_filename, file_type, mime_type, file_size, s3_key, s3_url,
-                  uploaded_by, folder_id, is_deleted, launch_request_upload_id, tags)
-               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,FALSE,$10,$11)
+                  uploaded_by, editor_name, folder_id, is_deleted, launch_request_upload_id, tags)
+               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,FALSE,$11,$12)
                RETURNING id`,
               [
                 upload.original_filename,
@@ -672,6 +677,7 @@ class LaunchRequestController {
                 upload.s3_key || '',
                 upload.s3_url || '',
                 assignerId,
+                uploaderName,
                 reqFolder.id,
                 upload.id,
                 ['launch-request-upload']
@@ -681,11 +687,12 @@ class LaunchRequestController {
           } catch (insertErr) {
             // If launch_request_upload_id column doesn't exist, insert without it
             if (insertErr.message && insertErr.message.includes('launch_request_upload_id')) {
+              const uploaderName = upload.uploader_name || lr.assigner_name || 'Launch Request';
               const mfResult = await pool.query(
                 `INSERT INTO media_files
                    (filename, original_filename, file_type, mime_type, file_size, s3_key, s3_url,
-                    uploaded_by, folder_id, is_deleted, tags)
-                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,FALSE,$10)
+                    uploaded_by, editor_name, folder_id, is_deleted, tags)
+                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,FALSE,$11)
                  RETURNING id`,
                 [
                   upload.original_filename,
@@ -696,6 +703,7 @@ class LaunchRequestController {
                   upload.s3_key || '',
                   upload.s3_url || '',
                   assignerId,
+                  uploaderName,
                   reqFolder.id,
                   ['launch-request-upload']
                 ]
@@ -728,7 +736,7 @@ class LaunchRequestController {
         });
       }
     } catch (err) {
-      logger.error('_provisionBuyerMediaFolders failed', { error: err.message, launchRequestId });
+      logger.error('_provisionBuyerMediaFolders failed', { error: err.message, stack: err.stack, launchRequestId });
       throw err;
     }
   }
