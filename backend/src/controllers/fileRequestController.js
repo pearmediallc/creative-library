@@ -3289,8 +3289,14 @@ class FileRequestController {
   async reassignRequest(req, res, next) {
     try {
       const { id } = req.params;
-      const { reassign_to, editor_ids, note } = req.body;
+      const { reassign_to, note } = req.body;
       const userId = req.user.id;
+
+      // Support editor_ids directly, or derive from editor_distribution
+      let editor_ids = req.body.editor_ids;
+      if ((!editor_ids || editor_ids.length === 0) && Array.isArray(req.body.editor_distribution) && req.body.editor_distribution.length > 0) {
+        editor_ids = req.body.editor_distribution.map(d => d.editor_id).filter(Boolean);
+      }
 
       const hasMultiple = Array.isArray(editor_ids) && editor_ids.length > 0;
       if (!hasMultiple && !reassign_to) {
@@ -3332,7 +3338,17 @@ class FileRequestController {
         logger.warn('Reassign RBAC check failed (default deny)', { requestId: id, userId, error: rbacErr.message });
       }
 
-      const canReassign = req.user.role === 'admin' || fileRequest.auto_assigned_head === userId || isAssignedEditor;
+      // Also allow vertical heads (users who appear in vertical_heads table)
+      let isVerticalHead = false;
+      try {
+        const vhCheck = await query(
+          `SELECT 1 FROM vertical_heads WHERE head_editor_id = $1 LIMIT 1`,
+          [userId]
+        );
+        isVerticalHead = vhCheck.rows.length > 0;
+      } catch (_) { /* vertical_heads table may not exist */ }
+
+      const canReassign = req.user.role === 'admin' || fileRequest.auto_assigned_head === userId || isAssignedEditor || isVerticalHead;
 
       if (!canReassign) {
         return res.status(403).json({

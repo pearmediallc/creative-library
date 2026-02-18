@@ -631,6 +631,29 @@ class Folder extends BaseModel {
    * @param {string} parentFolderId - Optional parent folder ID (defaults to root)
    * @returns {Promise<Object>} Folder object
    */
+  /**
+   * Get or create a top-level category root folder for a user.
+   * e.g. "File Requests" or "Launch Requests" at the root of their media library.
+   */
+  async getOrCreateCategoryRootFolder(userId, categoryName, color = '#3B82F6', folderType = 'category_root') {
+    const existing = await query(
+      `SELECT * FROM folders
+       WHERE name = $1 AND owner_id = $2 AND parent_folder_id IS NULL AND is_deleted = FALSE
+       LIMIT 1`,
+      [categoryName, userId]
+    );
+    if (existing.rows && existing.rows.length > 0) return existing.rows[0];
+    return await this.create({
+      name: categoryName,
+      owner_id: userId,
+      parent_folder_id: null,
+      description: categoryName,
+      color,
+      is_auto_created: true,
+      folder_type: folderType
+    });
+  }
+
   async getOrCreateRequestFolder(userId, userName, parentFolderId = null, requestType = null, vertical = null) {
     try {
       // Fetch user name from database if not provided
@@ -646,7 +669,15 @@ class Folder extends BaseModel {
         }
       }
 
-      // STEP 1: Get or create DATED PARENT FOLDER (UserName-YYYY-MM-DD)
+      // STEP 0: Ensure "File Requests" root folder exists (top-level category)
+      if (!parentFolderId) {
+        const categoryRoot = await this.getOrCreateCategoryRootFolder(
+          userId, 'File Requests', '#3B82F6', 'file_requests_root'
+        );
+        parentFolderId = categoryRoot.id;
+      }
+
+      // STEP 1: Get or create DATED PARENT FOLDER (UserName-YYYY-MM-DD) inside category root
       const today = new Date();
       const dateStr = today.toISOString().split('T')[0]; // YYYY-MM-DD
       const sanitizedName = userName.trim().replace(/\s+/g, '-');
@@ -657,10 +688,10 @@ class Folder extends BaseModel {
         `SELECT * FROM folders
          WHERE name = $1
            AND owner_id = $2
-           AND parent_folder_id ${parentFolderId ? '= $3' : 'IS NULL'}
+           AND parent_folder_id = $3
            AND is_deleted = FALSE
          LIMIT 1`,
-        parentFolderId ? [datedFolderName, userId, parentFolderId] : [datedFolderName, userId]
+        [datedFolderName, userId, parentFolderId]
       );
 
       let datedFolder;
@@ -672,7 +703,7 @@ class Folder extends BaseModel {
           userId
         });
       } else {
-        // Create new dated folder
+        // Create new dated folder inside category root
         datedFolder = await this.create({
           name: datedFolderName,
           owner_id: userId,

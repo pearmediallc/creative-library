@@ -601,19 +601,24 @@ class LaunchRequestController {
     const datedFolderName = `${buyerLabel}-${dateStr}`;
     const subfolderName   = `${provLabel}-${requestLabel}`;
 
-    // ── dated root folder ──────────────────────────────────────────────────
+    // ── "Launch Requests" category root ────────────────────────────────────
+    const categoryRoot = await Folder.getOrCreateCategoryRootFolder(
+      buyer.id, 'Launch Requests', '#6366F1', 'launch_requests_root'
+    );
+
+    // ── dated folder inside category root ──────────────────────────────────
     const existingDated = await pool.query(
       `SELECT * FROM folders
-       WHERE name = $1 AND owner_id = $2 AND parent_folder_id IS NULL AND is_deleted = FALSE
+       WHERE name = $1 AND owner_id = $2 AND parent_folder_id = $3 AND is_deleted = FALSE
        LIMIT 1`,
-      [datedFolderName, buyer.id]
+      [datedFolderName, buyer.id, categoryRoot.id]
     );
     const datedFolder = existingDated.rowCount > 0
       ? existingDated.rows[0]
       : await Folder.create({
           name: datedFolderName,
           owner_id: buyer.id,
-          parent_folder_id: null,
+          parent_folder_id: categoryRoot.id,
           description: `Launch requests for ${buyer.name || 'buyer'} on ${dateStr}`,
           color: '#6366F1',
           is_auto_created: true,
@@ -664,8 +669,8 @@ class LaunchRequestController {
       [launchRequestId, buyerId, reqFolder.id]
     );
 
-    // ── grant permissions on both folders ──────────────────────────────────
-    for (const folderId of [datedFolder.id, reqFolder.id]) {
+    // ── grant permissions on all three folders (category root → dated → request subfolder) ─
+    for (const folderId of [categoryRoot.id, datedFolder.id, reqFolder.id]) {
       for (const permType of ['view', 'download']) {
         await FilePermission.grantPermission({
           resource_type: 'folder',

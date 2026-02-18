@@ -265,16 +265,6 @@ export function ReassignFileRequestModal({
                           </div>
                           <div className="flex flex-col items-end gap-1">
                             <span className="text-xs text-gray-500 dark:text-gray-400">Editor</span>
-                            {selectedEditorIds.includes(editor.id) && (
-                              <input
-                                type="number"
-                                min={0}
-                                placeholder="Quota (optional)"
-                                value={editorQuotas[editor.id] || ''}
-                                onChange={(e) => setEditorQuotas(prev => ({ ...prev, [editor.id]: e.target.value }))}
-                                className="w-28 px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700"
-                              />
-                            )}
                           </div>
                         </div>
                       );
@@ -314,21 +304,21 @@ export function ReassignFileRequestModal({
               </div>
             )}
 
-            {/* Reassignment Reason */}
+            {/* Reassignment Notes */}
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Reason for Reassignment <span className="text-red-500">*</span>
+                Reassignment Notes <span className="text-red-500">*</span>
               </label>
               <textarea
                 value={reassignReason}
                 onChange={(e) => setReassignReason(e.target.value)}
-                placeholder="Explain why this request is being reassigned..."
+                placeholder="Add notes for the reassigned editors..."
                 rows={4}
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
                 required
               />
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                This reason will be logged for audit purposes
+                These notes will be visible to all reassigned editors
               </p>
             </div>
 
