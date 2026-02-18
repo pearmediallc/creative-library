@@ -345,6 +345,17 @@ export function LaunchRequestDetailsModal({ request: initialRequest, onClose, on
     }
   };
 
+  const handleRevokeAccess = async (buyerId: string, buyerName: string) => {
+    if (!window.confirm(`Revoke ${buyerName}'s access? This will hide all assigned files from their Media Library.`)) return;
+    try {
+      await launchRequestApi.revokeAccess(request.id, buyerId);
+      await refresh();
+      onUpdate();
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to revoke access');
+    }
+  };
+
   const handleAssignEditors = async () => {
     if (editorDistribution.length === 0) return;
     await doAction('assign-editors', () =>
@@ -951,12 +962,23 @@ export function LaunchRequestDetailsModal({ request: initialRequest, onClose, on
                             <div key={i} className="bg-muted/50 rounded-lg px-3 py-2 space-y-2">
                               <div className="flex items-center justify-between">
                                 <span className="font-medium">{b.buyer_name}</span>
-                                <span className={`text-xs px-2 py-0.5 rounded-full ${
-                                  b.status === 'launched' ? 'bg-green-100 text-green-700'
-                                  : 'bg-indigo-100 text-indigo-700'
-                                }`}>
-                                  {b.status || 'assigned'}
-                                </span>
+                                <div className="flex items-center gap-2">
+                                  <span className={`text-xs px-2 py-0.5 rounded-full ${
+                                    b.status === 'launched' ? 'bg-green-100 text-green-700'
+                                    : 'bg-indigo-100 text-indigo-700'
+                                  }`}>
+                                    {b.status || 'assigned'}
+                                  </span>
+                                  {(isBuyerHead || isAdmin) && b.buyer_id && (
+                                    <button
+                                      onClick={() => handleRevokeAccess(b.buyer_id!, b.buyer_name || 'this buyer')}
+                                      className="text-xs text-red-500 hover:text-red-700 hover:underline font-medium"
+                                      title="Revoke access — hides files from buyer's Media Library"
+                                    >
+                                      Revoke
+                                    </button>
+                                  )}
+                                </div>
                               </div>
                               <div className="flex gap-4 text-xs text-muted-foreground">
                                 {b.run_qty && <span>Run qty: {b.run_qty}</span>}

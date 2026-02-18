@@ -62,6 +62,11 @@ router.post('/:id/reassign-buyer-head', authenticateToken, (req, res) => launchR
 // Assign / reassign editors with optional creative distribution
 router.post('/:id/assign-editors', authenticateToken, (req, res) => launchRequestController.assignEditors(req, res));
 
+// ─── BUYER ACCESS MANAGEMENT ────────────────────────────────────────────────
+
+// Revoke a buyer's access to this launch request's media (hides files + folder)
+router.delete('/:id/buyers/:buyerId/access', authenticateToken, (req, res) => launchRequestController.revokeAccess(req, res));
+
 // ─── UPLOADS ────────────────────────────────────────────────────────────────
 
 // Upload a creative file (authenticated — editors/creative head)

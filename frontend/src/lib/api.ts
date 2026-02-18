@@ -755,6 +755,11 @@ export const launchRequestApi = {
     editor_ids?: string[];
   }) => api.post(`/launch-requests/${id}/assign-editors`, data),
 
+  // ── Buyer access management ─────────────────────────────────────────────
+  /** Revoke a buyer's access — soft-deletes their media library folder + files */
+  revokeAccess: (id: string, buyerId: string) =>
+    api.delete(`/launch-requests/${id}/buyers/${buyerId}/access`),
+
   // ── Upload ──────────────────────────────────────────────────────────────
   upload: (id: string, file: File, comments?: string) => {
     const formData = new FormData();
