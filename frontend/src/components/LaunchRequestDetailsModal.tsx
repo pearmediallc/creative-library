@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import {
   X, Upload, CheckCircle, RefreshCw, UserPlus, FileText,
-  ChevronDown, ChevronUp, Paperclip, FolderOpen, Users
+  ChevronDown, ChevronUp, Paperclip, FolderOpen, Users,
+  Loader2, AlertCircle
 } from 'lucide-react';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
@@ -33,7 +34,7 @@ interface BuyerAssignment {
   assigned_file_ids?: string[];
 }
 
-interface Upload {
+interface UploadFile {
   id: string;
   original_filename?: string;
   s3_url?: string;
@@ -70,7 +71,7 @@ interface LaunchRequest {
   status: string;
   editors?: Editor[];
   buyers?: BuyerAssignment[];
-  uploads?: Upload[];
+  uploads?: UploadFile[];
   reassignments?: any[];
   upload_count?: number;
 }
@@ -115,6 +116,17 @@ export function LaunchRequestDetailsModal({ request: initialRequest, onClose, on
   const [uploadError, setUploadError] = useState('');
   const [uploadSuccess, setUploadSuccess] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+
+  // ── upload queue (progress sidebar) ──────────────────────────────────────
+  const [uploadQueue, setUploadQueue] = useState<Array<{ name: string; status: 'pending' | 'uploading' | 'done' | 'error'; error?: string }>>([]);
+  const [showUploadQueue, setShowUploadQueue] = useState(false);
+
+  // ── buyer file access / testing assignment ────────────────────────────────
+  const [selectedUploadIds, setSelectedUploadIds] = useState<string[]>([]);
+  const [showTestingAssign, setShowTestingAssign] = useState(false);
+  const [testingBuyerId, setTestingBuyerId] = useState('');
+  const [testingDueDate, setTestingDueDate] = useState('');
+  const [testingAssigning, setTestingAssigning] = useState(false);
 
   // ── assign editors state ──────────────────────────────────────────────────
   const [showAssignEditors, setShowAssignEditors] = useState(false);
@@ -170,8 +182,6 @@ export function LaunchRequestDetailsModal({ request: initialRequest, onClose, on
   const isBuyerHead = user?.id === request.buyer_head_id;
   const isStrategist = user?.id === request.created_by || isAdmin;
   const isBuyer = user?.role === 'buyer';
-  // isAssignedEditor: current user is one of the editors assigned to this launch request
-  const isAssignedEditor = (request.editors || []).some(e => e.editor_user_id === user?.id);
 
   // ── action handlers ───────────────────────────────────────────────────────
 
@@ -239,20 +249,47 @@ export function LaunchRequestDetailsModal({ request: initialRequest, onClose, on
     setUploading(true);
     setUploadError('');
     setUploadSuccess(false);
-    try {
-      for (const file of selectedFiles) {
+
+    // Initialize queue
+    const queue = selectedFiles.map(f => ({ name: f.name, status: 'pending' as const }));
+    setUploadQueue(queue);
+    setShowUploadQueue(true);
+
+    let anyError = false;
+    for (let i = 0; i < selectedFiles.length; i++) {
+      const file = selectedFiles[i];
+      // Mark current file as uploading
+      setUploadQueue(prev => prev.map((item, idx) =>
+        idx === i ? { ...item, status: 'uploading' } : item
+      ));
+      try {
         await launchRequestApi.upload(request.id, file, uploadComment);
+        setUploadQueue(prev => prev.map((item, idx) =>
+          idx === i ? { ...item, status: 'done' } : item
+        ));
+      } catch (err: any) {
+        const errMsg = err.response?.data?.error || 'Upload failed';
+        setUploadQueue(prev => prev.map((item, idx) =>
+          idx === i ? { ...item, status: 'error', error: errMsg } : item
+        ));
+        anyError = true;
       }
-      setSelectedFiles([]);
-      setUploadComment('');
+    }
+
+    setSelectedFiles([]);
+    setUploadComment('');
+    if (!anyError) {
       setUploadSuccess(true);
-      await refresh();
-      onUpdate();
       setTimeout(() => setUploadSuccess(false), 3000);
-    } catch (err: any) {
-      setUploadError(err.response?.data?.error || 'Upload failed');
-    } finally {
-      setUploading(false);
+    } else {
+      setUploadError('Some files failed to upload. Check the queue for details.');
+    }
+    await refresh();
+    onUpdate();
+    setUploading(false);
+    // Auto-hide queue after 5s if all done
+    if (!anyError) {
+      setTimeout(() => setShowUploadQueue(false), 5000);
     }
   };
 
@@ -262,6 +299,50 @@ export function LaunchRequestDetailsModal({ request: initialRequest, onClose, on
     e.preventDefault(); e.stopPropagation(); setIsDragging(false);
     const files = Array.from(e.dataTransfer.files);
     if (files.length > 0) setSelectedFiles(prev => [...prev, ...files]);
+  };
+
+  // Assign selected files to a buyer for testing (uses existing assignBuyers endpoint)
+  const handleTestingAssign = async () => {
+    if (!testingBuyerId || selectedUploadIds.length === 0) return;
+    setTestingAssigning(true);
+    try {
+      // Merge with existing buyer assignments — add/update this buyer's files
+      const existingBuyers = (request.buyers || []).map(b => ({
+        buyer_id: b.buyer_id,
+        file_ids: (b.assigned_file_ids || []).map(String),
+        run_qty: b.run_qty,
+        test_deadline: b.test_deadline || undefined
+      }));
+      // Find if buyer already exists in assignments
+      const existingIdx = existingBuyers.findIndex(b => b.buyer_id === testingBuyerId);
+      if (existingIdx >= 0) {
+        // Merge file IDs (deduplicate)
+        const merged = Array.from(new Set([...existingBuyers[existingIdx].file_ids, ...selectedUploadIds]));
+        existingBuyers[existingIdx] = {
+          ...existingBuyers[existingIdx],
+          file_ids: merged,
+          test_deadline: testingDueDate || existingBuyers[existingIdx].test_deadline
+        };
+      } else {
+        existingBuyers.push({
+          buyer_id: testingBuyerId,
+          file_ids: selectedUploadIds,
+          run_qty: undefined,
+          test_deadline: testingDueDate || undefined
+        });
+      }
+      await launchRequestApi.assignBuyers(request.id, { buyer_assignments: existingBuyers });
+      await refresh();
+      onUpdate();
+      setSelectedUploadIds([]);
+      setShowTestingAssign(false);
+      setTestingBuyerId('');
+      setTestingDueDate('');
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to assign files');
+    } finally {
+      setTestingAssigning(false);
+    }
   };
 
   const handleAssignEditors = async () => {
@@ -931,29 +1012,128 @@ export function LaunchRequestDetailsModal({ request: initialRequest, onClose, on
                   {(request.uploads || []).length === 0 ? (
                     <p className="text-sm text-muted-foreground">No files uploaded yet.</p>
                   ) : (
-                    (request.uploads || []).map(upload => (
-                      <div key={upload.id} className="flex items-center gap-3 p-2.5 border rounded-lg hover:bg-muted/50 transition-colors">
-                        <Paperclip className="w-4 h-4 text-muted-foreground shrink-0" />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium truncate">{upload.original_filename}</p>
-                          <p className="text-xs text-muted-foreground">
-                            By {upload.uploader_name} · {formatDateTime(upload.created_at)}
-                            {upload.file_size ? ` · ${(upload.file_size / 1024 / 1024).toFixed(2)} MB` : ''}
-                            {upload.comments ? ` · ${upload.comments}` : ''}
-                          </p>
+                    <>
+                      {/* Select All / Give Access for Testing toolbar — visible to buyer head/admin */}
+                      {(isBuyerHead || isAdmin) && (
+                        <div className="flex items-center gap-3 pb-2">
+                          <label className="flex items-center gap-2 text-xs cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              className="rounded border-border w-4 h-4"
+                              checked={selectedUploadIds.length === (request.uploads || []).length && (request.uploads || []).length > 0}
+                              onChange={e => {
+                                if (e.target.checked) setSelectedUploadIds((request.uploads || []).map(u => u.id));
+                                else setSelectedUploadIds([]);
+                              }}
+                            />
+                            <span>Select All</span>
+                          </label>
+                          {selectedUploadIds.length > 0 && (
+                            <Button
+                              size="sm"
+                              className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs h-7 px-3"
+                              onClick={() => setShowTestingAssign(v => !v)}
+                            >
+                              <UserPlus className="w-3.5 h-3.5 mr-1.5" />
+                              Give Access for Testing ({selectedUploadIds.length})
+                            </Button>
+                          )}
+                          {selectedUploadIds.length > 0 && (
+                            <button
+                              className="text-xs text-muted-foreground hover:text-foreground"
+                              onClick={() => setSelectedUploadIds([])}
+                            >
+                              Clear
+                            </button>
+                          )}
                         </div>
-                        {upload.s3_url && (
-                          <a
-                            href={upload.s3_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-xs text-blue-600 hover:underline shrink-0 font-medium"
-                          >
-                            Download
-                          </a>
-                        )}
-                      </div>
-                    ))
+                      )}
+
+                      {/* Testing assignment panel */}
+                      {showTestingAssign && (
+                        <div className="p-3 border border-indigo-200 bg-indigo-50 dark:bg-indigo-950/30 dark:border-indigo-800 rounded-lg space-y-3 mb-2">
+                          <p className="text-xs font-semibold text-indigo-700 dark:text-indigo-300">
+                            Assign {selectedUploadIds.length} file(s) to a buyer for testing
+                          </p>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="block text-xs font-medium mb-1">Buyer</label>
+                              <select
+                                className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm"
+                                value={testingBuyerId}
+                                onChange={e => setTestingBuyerId(e.target.value)}
+                              >
+                                <option value="">— Select buyer —</option>
+                                {availableBuyers.map(b => (
+                                  <option key={b.id} value={b.id}>{b.name}</option>
+                                ))}
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium mb-1">Test by (due date)</label>
+                              <input
+                                type="datetime-local"
+                                className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm"
+                                value={testingDueDate}
+                                onChange={e => setTestingDueDate(e.target.value)}
+                              />
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              onClick={handleTestingAssign}
+                              disabled={!testingBuyerId || testingAssigning}
+                              className="bg-indigo-600 hover:bg-indigo-700 text-white"
+                            >
+                              {testingAssigning ? 'Assigning...' : 'Confirm'}
+                            </Button>
+                            <Button size="sm" variant="outline" onClick={() => { setShowTestingAssign(false); setTestingBuyerId(''); setTestingDueDate(''); }}>
+                              Cancel
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* File list with checkboxes */}
+                      {(request.uploads || []).map(upload => (
+                        <div key={upload.id} className={`flex items-center gap-3 p-2.5 border rounded-lg transition-colors ${
+                          selectedUploadIds.includes(upload.id) ? 'border-indigo-300 bg-indigo-50/50 dark:bg-indigo-950/20' : 'hover:bg-muted/50'
+                        }`}>
+                          {/* Checkbox (buyer head / admin only) */}
+                          {(isBuyerHead || isAdmin) && (
+                            <input
+                              type="checkbox"
+                              className="rounded border-border w-4 h-4 shrink-0"
+                              checked={selectedUploadIds.includes(upload.id)}
+                              onChange={e => {
+                                if (e.target.checked) setSelectedUploadIds(prev => [...prev, upload.id]);
+                                else setSelectedUploadIds(prev => prev.filter(id => id !== upload.id));
+                              }}
+                            />
+                          )}
+                          <Paperclip className="w-4 h-4 text-muted-foreground shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{upload.original_filename}</p>
+                            <p className="text-xs text-muted-foreground">
+                              By {upload.uploader_name} · {formatDateTime(upload.created_at)}
+                              {upload.file_size ? ` · ${(upload.file_size / 1024 / 1024).toFixed(2)} MB` : ''}
+                              {upload.comments ? ` · ${upload.comments}` : ''}
+                            </p>
+                          </div>
+                          {upload.s3_url && (
+                            <a
+                              href={upload.s3_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs text-blue-600 hover:underline shrink-0 font-medium"
+                            >
+                              Download
+                            </a>
+                          )}
+                        </div>
+                      ))}
+                    </>
                   )}
                 </div>
               )}
@@ -980,6 +1160,78 @@ export function LaunchRequestDetailsModal({ request: initialRequest, onClose, on
           </div>
         </div>
       </div>
+
+      {/* ── Upload Progress Queue Sidebar ─────────────────────────────────── */}
+      {showUploadQueue && uploadQueue.length > 0 && (
+        <div className="fixed bottom-6 right-6 z-[60] w-72 bg-background border border-border rounded-xl shadow-2xl overflow-hidden">
+          {/* Queue header */}
+          <div className="flex items-center justify-between px-4 py-3 bg-muted/50 border-b border-border">
+            <div className="flex items-center gap-2">
+              {uploading ? (
+                <Loader2 className="w-4 h-4 text-primary animate-spin" />
+              ) : uploadQueue.some(i => i.status === 'error') ? (
+                <AlertCircle className="w-4 h-4 text-destructive" />
+              ) : (
+                <CheckCircle className="w-4 h-4 text-green-600" />
+              )}
+              <span className="text-sm font-semibold">
+                {uploading
+                  ? `Uploading ${uploadQueue.filter(i => i.status === 'done' || i.status === 'uploading').length}/${uploadQueue.length}`
+                  : uploadQueue.some(i => i.status === 'error')
+                  ? 'Upload complete (with errors)'
+                  : 'Upload complete'}
+              </span>
+            </div>
+            <button
+              onClick={() => setShowUploadQueue(false)}
+              className="p-1 hover:bg-accent rounded transition-colors"
+            >
+              <X className="w-4 h-4 text-muted-foreground" />
+            </button>
+          </div>
+          {/* Progress bar */}
+          <div className="h-1 bg-muted">
+            <div
+              className={`h-1 transition-all duration-300 ${
+                uploadQueue.some(i => i.status === 'error') ? 'bg-destructive' : 'bg-primary'
+              }`}
+              style={{
+                width: `${uploadQueue.length > 0
+                  ? Math.round((uploadQueue.filter(i => i.status === 'done' || i.status === 'error').length / uploadQueue.length) * 100)
+                  : 0}%`
+              }}
+            />
+          </div>
+          {/* File list */}
+          <div className="max-h-52 overflow-y-auto divide-y divide-border">
+            {uploadQueue.map((item, idx) => (
+              <div key={idx} className="flex items-center gap-3 px-4 py-2.5">
+                <span className="shrink-0">
+                  {item.status === 'done' && <CheckCircle className="w-4 h-4 text-green-600" />}
+                  {item.status === 'uploading' && <Loader2 className="w-4 h-4 text-primary animate-spin" />}
+                  {item.status === 'pending' && <div className="w-4 h-4 rounded-full border-2 border-muted-foreground/30" />}
+                  {item.status === 'error' && <AlertCircle className="w-4 h-4 text-destructive" />}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium truncate">{item.name}</p>
+                  {item.status === 'error' && item.error && (
+                    <p className="text-xs text-destructive truncate">{item.error}</p>
+                  )}
+                  {item.status === 'uploading' && (
+                    <p className="text-xs text-primary">Uploading...</p>
+                  )}
+                  {item.status === 'done' && (
+                    <p className="text-xs text-green-600">Done</p>
+                  )}
+                  {item.status === 'pending' && (
+                    <p className="text-xs text-muted-foreground">Waiting...</p>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

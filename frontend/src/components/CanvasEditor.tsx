@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { FileText, X, Upload, Trash2, Save, AlertCircle } from 'lucide-react';
+import { FileText, X, Upload, Trash2, Save, AlertCircle, ChevronDown, ChevronRight } from 'lucide-react';
 import { fileRequestApi } from '../lib/api';
 import type { Canvas, CanvasContent, CanvasAttachment } from '../lib/canvasTemplates';
 import { PRODUCT_BRIEF_TEMPLATE } from '../lib/canvasTemplates';
@@ -20,6 +20,27 @@ interface CanvasEditorProps {
   canvasApiOverride?: CanvasApiOverride;
 }
 
+/** Groups flat blocks into sections: each heading starts a new section */
+function groupBlocksIntoSections(blocks: any[]): Array<{ headingIndex: number; heading: any; contentBlocks: Array<{ block: any; originalIndex: number }> }> {
+  const sections: Array<{ headingIndex: number; heading: any; contentBlocks: Array<{ block: any; originalIndex: number }> }> = [];
+  let currentSection: { headingIndex: number; heading: any; contentBlocks: Array<{ block: any; originalIndex: number }> } | null = null;
+
+  blocks.forEach((block, idx) => {
+    if (block.type === 'heading') {
+      if (currentSection) sections.push(currentSection);
+      currentSection = { headingIndex: idx, heading: block, contentBlocks: [] };
+    } else {
+      if (!currentSection) {
+        // blocks before the first heading — treat as a top-level section with no heading
+        currentSection = { headingIndex: -1, heading: null, contentBlocks: [] };
+      }
+      currentSection.contentBlocks.push({ block, originalIndex: idx });
+    }
+  });
+  if (currentSection) sections.push(currentSection);
+  return sections;
+}
+
 export function CanvasEditor({ requestId, onClose, onSave, canvasApiOverride }: CanvasEditorProps) {
   const canvasApi = canvasApiOverride || fileRequestApi.canvas;
   const [content, setContent] = useState<CanvasContent>(PRODUCT_BRIEF_TEMPLATE);
@@ -30,6 +51,8 @@ export function CanvasEditor({ requestId, onClose, onSave, canvasApiOverride }: 
   const [error, setError] = useState<string | null>(null);
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved');
   const [saveTimeout, setSaveTimeout] = useState<NodeJS.Timeout | null>(null);
+  // Track which sections are expanded (by heading block index); default: all expanded
+  const [expandedSections, setExpandedSections] = useState<Record<number, boolean>>({});
 
   // Load existing canvas
   useEffect(() => {
@@ -45,6 +68,16 @@ export function CanvasEditor({ requestId, onClose, onSave, canvasApiOverride }: 
       if (canvasData && canvasData.content) {
         setContent(canvasData.content);
         setAttachments(canvasData.attachments || []);
+        // Default all sections to expanded
+        const blocks: any[] = canvasData.content.blocks || [];
+        const initial: Record<number, boolean> = {};
+        blocks.forEach((b: any, i: number) => { if (b.type === 'heading') initial[i] = true; });
+        setExpandedSections(initial);
+      } else {
+        // Default template — expand all headings
+        const initial: Record<number, boolean> = {};
+        PRODUCT_BRIEF_TEMPLATE.blocks.forEach((b, i) => { if (b.type === 'heading') initial[i] = true; });
+        setExpandedSections(initial);
       }
     } catch (err: any) {
       console.error('Failed to load canvas:', err);
@@ -52,6 +85,22 @@ export function CanvasEditor({ requestId, onClose, onSave, canvasApiOverride }: 
     } finally {
       setLoading(false);
     }
+  };
+
+  const toggleSection = (headingIndex: number) => {
+    setExpandedSections(prev => ({ ...prev, [headingIndex]: !prev[headingIndex] }));
+  };
+
+  const collapseAll = () => {
+    const next: Record<number, boolean> = {};
+    content.blocks.forEach((b, i) => { if (b.type === 'heading') next[i] = false; });
+    setExpandedSections(next);
+  };
+
+  const expandAll = () => {
+    const next: Record<number, boolean> = {};
+    content.blocks.forEach((b, i) => { if (b.type === 'heading') next[i] = true; });
+    setExpandedSections(next);
   };
 
   // Auto-save with debounce
@@ -172,43 +221,31 @@ export function CanvasEditor({ requestId, onClose, onSave, canvasApiOverride }: 
     }
   };
 
-  // Render block editor
-  const renderBlockEditor = (block: any, index: number) => {
+  // Render individual block editor (no heading — headings are rendered as section toggles)
+  const renderContentBlock = (block: any, originalIndex: number) => {
     switch (block.type) {
-      case 'heading':
-        return (
-          <MentionInput
-            key={index}
-            value={block.content}
-            onChange={(value) => updateBlock(index, 'content', value)}
-            className={`w-full bg-transparent border-none outline-none font-semibold ${
-              block.level === 2 ? 'text-xl mt-6 mb-3' : 'text-lg mt-4 mb-2'
-            } focus:ring-2 focus:ring-ring rounded px-2 py-1`}
-          />
-        );
-
       case 'text':
         return (
           <MentionInput
-            key={index}
+            key={originalIndex}
             value={block.content}
-            onChange={(value) => updateBlock(index, 'content', value)}
+            onChange={(value) => updateBlock(originalIndex, 'content', value)}
             multiline={true}
-            rows={2}
-            className="w-full bg-transparent border-none outline-none text-sm text-muted-foreground mb-2 focus:ring-2 focus:ring-ring rounded px-2 py-1 resize-none"
+            rows={4}
+            className="w-full bg-transparent border border-border rounded-md outline-none text-sm text-foreground mb-3 focus:ring-2 focus:ring-ring px-3 py-2 resize-y min-h-[80px]"
           />
         );
 
       case 'list':
         return (
-          <div key={index} className="space-y-1 mb-4">
+          <div key={originalIndex} className="space-y-1.5 mb-4">
             {block.items?.map((item: string, i: number) => (
-              <div key={i} className="flex items-center gap-2">
-                <span className="text-sm">•</span>
+              <div key={i} className="flex items-start gap-2">
+                <span className="text-sm mt-1.5 text-muted-foreground shrink-0">•</span>
                 <MentionInput
                   value={item}
-                  onChange={(value) => updateListItem(index, i, value)}
-                  className="flex-1 bg-transparent border-none outline-none text-sm focus:ring-2 focus:ring-ring rounded px-2 py-1"
+                  onChange={(value) => updateListItem(originalIndex, i, value)}
+                  className="flex-1 bg-background border border-border rounded-md outline-none text-sm focus:ring-2 focus:ring-ring px-3 py-2"
                 />
               </div>
             ))}
@@ -217,19 +254,21 @@ export function CanvasEditor({ requestId, onClose, onSave, canvasApiOverride }: 
 
       case 'checklist':
         return (
-          <div key={index} className="space-y-2 mb-4">
+          <div key={originalIndex} className="space-y-2 mb-4">
             {block.items?.map((item: any, i: number) => (
-              <label key={i} className="flex items-center gap-2">
+              <label key={i} className="flex items-center gap-3 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={item.checked}
-                  onChange={(e) => updateChecklistItem(index, i, 'checked', e.target.checked)}
-                  className="rounded border-border"
+                  onChange={(e) => updateChecklistItem(originalIndex, i, 'checked', e.target.checked)}
+                  className="rounded border-border w-4 h-4 shrink-0"
                 />
                 <MentionInput
                   value={item.text}
-                  onChange={(value) => updateChecklistItem(index, i, 'text', value)}
-                  className="flex-1 bg-transparent border-none outline-none text-sm focus:ring-2 focus:ring-ring rounded px-2 py-1"
+                  onChange={(value) => updateChecklistItem(originalIndex, i, 'text', value)}
+                  className={`flex-1 bg-background border border-border rounded-md outline-none text-sm focus:ring-2 focus:ring-ring px-3 py-2 ${
+                    item.checked ? 'line-through text-muted-foreground' : ''
+                  }`}
                 />
               </label>
             ))}
@@ -238,7 +277,7 @@ export function CanvasEditor({ requestId, onClose, onSave, canvasApiOverride }: 
 
       case 'attachments':
         return (
-          <div key={index} className="mb-4">
+          <div key={originalIndex} className="mb-4">
             {/* File upload zone */}
             <label className="border-2 border-dashed border-border rounded-md p-6 text-center block cursor-pointer hover:bg-accent transition-colors">
               <input
@@ -264,18 +303,18 @@ export function CanvasEditor({ requestId, onClose, onSave, canvasApiOverride }: 
                     key={attachment.file_id}
                     className="flex items-center justify-between p-3 bg-muted rounded-md"
                   >
-                    <div className="flex items-center gap-3 flex-1">
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
                       {attachment.thumbnail_url ? (
                         <img
                           src={attachment.thumbnail_url}
                           alt={attachment.file_name}
-                          className="w-12 h-12 object-cover rounded"
+                          className="w-12 h-12 object-cover rounded shrink-0"
                         />
                       ) : (
-                        <FileText className="w-12 h-12 text-muted-foreground" />
+                        <FileText className="w-12 h-12 text-muted-foreground shrink-0" />
                       )}
-                      <div>
-                        <p className="text-sm font-medium">{attachment.file_name}</p>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate">{attachment.file_name}</p>
                         <p className="text-xs text-muted-foreground">
                           {formatFileSize(attachment.file_size)}
                         </p>
@@ -283,7 +322,7 @@ export function CanvasEditor({ requestId, onClose, onSave, canvasApiOverride }: 
                     </div>
                     <button
                       onClick={() => handleRemoveAttachment(attachment.file_id)}
-                      className="p-2 hover:bg-destructive/10 text-destructive rounded-md transition-colors"
+                      className="p-2 hover:bg-destructive/10 text-destructive rounded-md transition-colors shrink-0"
                       title="Remove"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -310,15 +349,19 @@ export function CanvasEditor({ requestId, onClose, onSave, canvasApiOverride }: 
     );
   }
 
+  const sections = groupBlocksIntoSections(content.blocks);
+  const allExpanded = content.blocks.every((b, i) => b.type !== 'heading' || expandedSections[i]);
+  const allCollapsed = content.blocks.every((b, i) => b.type !== 'heading' || !expandedSections[i]);
+
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-card rounded-lg shadow-lg max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-border">
-          <div className="flex items-center gap-3">
+        <div className="flex items-center justify-between p-4 border-b border-border shrink-0">
+          <div className="flex items-center gap-3 flex-wrap">
             <h2 className="text-lg font-semibold flex items-center gap-2">
               <FileText className="w-5 h-5" />
-              Canvas Editor
+              Canvas Brief
             </h2>
             {/* Save status indicator */}
             <span className={`text-xs px-2 py-1 rounded ${
@@ -334,6 +377,23 @@ export function CanvasEditor({ requestId, onClose, onSave, canvasApiOverride }: 
                 ? 'Saving...'
                 : 'Unsaved changes'}
             </span>
+            {/* Expand / Collapse all */}
+            <div className="flex gap-1 ml-2">
+              <button
+                onClick={expandAll}
+                disabled={allExpanded}
+                className="text-xs px-2 py-1 rounded border border-border hover:bg-accent disabled:opacity-40 transition-colors"
+              >
+                Expand All
+              </button>
+              <button
+                onClick={collapseAll}
+                disabled={allCollapsed}
+                className="text-xs px-2 py-1 rounded border border-border hover:bg-accent disabled:opacity-40 transition-colors"
+              >
+                Collapse All
+              </button>
+            </div>
           </div>
           <button
             onClick={onClose}
@@ -345,7 +405,7 @@ export function CanvasEditor({ requestId, onClose, onSave, canvasApiOverride }: 
 
         {/* Error message */}
         {error && (
-          <div className="mx-4 mt-4 p-3 bg-destructive/10 border border-destructive/20 rounded-md flex items-center gap-2">
+          <div className="mx-4 mt-4 p-3 bg-destructive/10 border border-destructive/20 rounded-md flex items-center gap-2 shrink-0">
             <AlertCircle className="w-4 h-4 text-destructive" />
             <p className="text-sm text-destructive">{error}</p>
             <button
@@ -357,16 +417,86 @@ export function CanvasEditor({ requestId, onClose, onSave, canvasApiOverride }: 
           </div>
         )}
 
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6">
-          <p className="text-xs text-muted-foreground mb-4">
-            Auto-saves every 2 seconds. Edit fields directly.
+        {/* Content — accordion sections */}
+        <div className="flex-1 overflow-y-auto">
+          <p className="text-xs text-muted-foreground px-6 pt-4 pb-2">
+            Auto-saves every 2 seconds. Click a section heading to expand/collapse it.
           </p>
-          {content.blocks.map((block, index) => renderBlockEditor(block, index))}
+          <div className="px-6 pb-6 divide-y divide-border">
+            {sections.map((section, sIdx) => {
+              const isExpanded = section.headingIndex === -1 || expandedSections[section.headingIndex];
+
+              if (section.headingIndex === -1) {
+                // Orphan blocks before first heading
+                return (
+                  <div key={`orphan-${sIdx}`} className="py-3">
+                    {section.contentBlocks.map(({ block, originalIndex }) =>
+                      renderContentBlock(block, originalIndex)
+                    )}
+                  </div>
+                );
+              }
+
+              return (
+                <div key={`section-${section.headingIndex}`} className="py-1">
+                  {/* Section toggle header */}
+                  <div
+                    className="flex items-center gap-2 w-full text-left py-3 group cursor-pointer"
+                    onClick={() => toggleSection(section.headingIndex)}
+                  >
+                    <span className="shrink-0 text-muted-foreground group-hover:text-foreground transition-colors">
+                      {isExpanded
+                        ? <ChevronDown className="w-4 h-4" />
+                        : <ChevronRight className="w-4 h-4" />
+                      }
+                    </span>
+                    {/* Clicking the heading text edits it; stop propagation so toggle doesn't fire */}
+                    <div className="flex-1" onClick={(e) => e.stopPropagation()}>
+                      <MentionInput
+                        value={section.heading.content}
+                        onChange={(value) => updateBlock(section.headingIndex, 'content', value)}
+                        className={`w-full bg-transparent border-none outline-none font-semibold ${
+                          section.heading.level === 2 ? 'text-base' : 'text-sm'
+                        } focus:ring-2 focus:ring-ring rounded px-1 py-0`}
+                      />
+                    </div>
+                    {/* Preview snippet when collapsed */}
+                    {!isExpanded && section.contentBlocks.length > 0 && (
+                      <span className="text-xs text-muted-foreground truncate max-w-[200px] shrink-0">
+                        {(() => {
+                          const firstContent = section.contentBlocks.find(cb => cb.block.content || cb.block.items);
+                          if (!firstContent) return `${section.contentBlocks.length} item(s)`;
+                          if (firstContent.block.content) return firstContent.block.content.slice(0, 60);
+                          if (Array.isArray(firstContent.block.items)) {
+                            const first = firstContent.block.items[0];
+                            return typeof first === 'string' ? first.slice(0, 60) : (first as any).text?.slice(0, 60);
+                          }
+                          return `${section.contentBlocks.length} item(s)`;
+                        })()}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Section content (expanded) */}
+                  {isExpanded && (
+                    <div className="pl-6 pt-1 pb-2">
+                      {section.contentBlocks.length === 0 ? (
+                        <p className="text-xs text-muted-foreground italic">No content in this section.</p>
+                      ) : (
+                        section.contentBlocks.map(({ block, originalIndex }) =>
+                          renderContentBlock(block, originalIndex)
+                        )
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
 
         {/* Footer */}
-        <div className="p-4 border-t border-border flex justify-between">
+        <div className="p-4 border-t border-border flex justify-between shrink-0">
           <button
             onClick={onClose}
             className="px-4 py-2 border border-border rounded-md hover:bg-accent transition-colors"
