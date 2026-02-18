@@ -87,12 +87,25 @@ app.use(cors({
 }));
 
 // Rate limiting
+// General API limit — generous enough for real-time polling + multi-tab usage
 const limiter = rateLimit({
   windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
-  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100,
+  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 1000,
+  standardHeaders: true,
+  legacyHeaders: false,
   message: 'Too many requests from this IP, please try again later.'
 });
 app.use('/api/', limiter);
+
+// Stricter limit on auth endpoints only (prevent brute-force)
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: 'Too many login attempts, please try again later.'
+});
+app.use('/api/auth/', authLimiter);
 
 // Body parsing
 app.use(express.json({ limit: '10mb' }));
