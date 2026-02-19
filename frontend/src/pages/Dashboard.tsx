@@ -27,7 +27,8 @@ export function DashboardPage() {
         // Check if user can see vertical dashboard (admin or vertical head)
         if (user?.role === 'admin') {
           setShowVerticalDashboard(true);
-        } else if (user?.role === 'creative') {
+        } else {
+          // For non-admin users, check if they are a vertical head
           try {
             const verticalDashRes = await analyticsApi.getVerticalDashboard();
             // If response has data, user is a vertical head

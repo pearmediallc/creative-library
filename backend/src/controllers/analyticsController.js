@@ -605,7 +605,7 @@ class AnalyticsController {
           lr.launched_at,
           lr.closed_at,
           u_creator.name as creator_name,
-          u_buyer.name as buyer_name,
+          u_buyer_head.name as buyer_name,
           STRING_AGG(DISTINCT e.display_name, ', ' ORDER BY e.display_name) as assigned_editors,
           COALESCE(SUM(lre.num_creatives_assigned), 0) as total_creatives,
           COALESCE(SUM(lre.creatives_completed), 0) as completed_creatives,
@@ -613,11 +613,11 @@ class AnalyticsController {
         FROM launch_request_verticals lrv
         JOIN launch_requests lr ON lr.id = lrv.launch_request_id
         LEFT JOIN users u_creator ON u_creator.id = lr.created_by
-        LEFT JOIN users u_buyer ON u_buyer.id = lr.assigned_buyer_id
+        LEFT JOIN users u_buyer_head ON u_buyer_head.id = lr.buyer_head_id
         LEFT JOIN launch_request_editors lre ON lre.launch_request_id = lr.id AND lre.status IN ('pending', 'in_progress')
         LEFT JOIN editors e ON e.id = lre.editor_id
         WHERE lrv.vertical = $1
-        GROUP BY lr.id, u_creator.name, u_buyer.name
+        GROUP BY lr.id, u_creator.name, u_buyer_head.name
         ORDER BY lr.created_at DESC
       `;
 
