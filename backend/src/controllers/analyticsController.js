@@ -573,8 +573,8 @@ class AnalyticsController {
           fr.updated_at,
           fr.launched_at,
           fr.closed_at,
-          u_creator.username as creator_name,
-          u_buyer.username as buyer_name,
+          u_creator.name as creator_name,
+          u_buyer.name as buyer_name,
           STRING_AGG(DISTINCT e.display_name, ', ' ORDER BY e.display_name) as assigned_editors,
           COALESCE(SUM(fre.num_creatives_assigned), 0) as total_creatives,
           COALESCE(SUM(fre.creatives_completed), 0) as completed_creatives,
@@ -587,7 +587,7 @@ class AnalyticsController {
         LEFT JOIN file_request_editors fre ON fre.request_id = fr.id AND fre.status IN ('pending', 'accepted', 'in_progress')
         LEFT JOIN editors e ON e.id = fre.editor_id
         WHERE frv.vertical = $1 AND fr.is_active = TRUE
-        GROUP BY fr.id, u_creator.username, u_buyer.username
+        GROUP BY fr.id, u_creator.name, u_buyer.name
         ORDER BY fr.created_at DESC
       `;
 
@@ -604,8 +604,8 @@ class AnalyticsController {
           lr.updated_at,
           lr.launched_at,
           lr.closed_at,
-          u_creator.username as creator_name,
-          u_buyer.username as buyer_name,
+          u_creator.name as creator_name,
+          u_buyer.name as buyer_name,
           STRING_AGG(DISTINCT e.display_name, ', ' ORDER BY e.display_name) as assigned_editors,
           COALESCE(SUM(lre.num_creatives_assigned), 0) as total_creatives,
           COALESCE(SUM(lre.creatives_completed), 0) as completed_creatives,
@@ -617,7 +617,7 @@ class AnalyticsController {
         LEFT JOIN launch_request_editors lre ON lre.launch_request_id = lr.id AND lre.status IN ('pending', 'in_progress')
         LEFT JOIN editors e ON e.id = lre.editor_id
         WHERE lrv.vertical = $1
-        GROUP BY lr.id, u_creator.username, u_buyer.username
+        GROUP BY lr.id, u_creator.name, u_buyer.name
         ORDER BY lr.created_at DESC
       `;
 
