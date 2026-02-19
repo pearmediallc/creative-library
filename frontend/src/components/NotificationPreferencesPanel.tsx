@@ -105,7 +105,7 @@ export function NotificationPreferencesPanel() {
 
       const token = localStorage.getItem('token');
       await axios.patch(
-        `${API_BASE_URL}/users/me/notification-preferences`,
+        `${API_BASE_URL}/auth/me/notification-preferences`,
         preferences,
         { headers: { Authorization: `Bearer ${token}` } }
       );
