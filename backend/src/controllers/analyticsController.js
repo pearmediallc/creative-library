@@ -396,11 +396,11 @@ class AnalyticsController {
         }
       }
 
-      // Build vertical filter condition
+      // Build vertical filter condition (case-insensitive)
       const verticalFilter = userRole === 'admin'
         ? ''
-        : `AND frv.vertical = ANY($1::text[])`;
-      const queryParams = userRole === 'admin' ? [] : [assignedVerticals];
+        : `AND LOWER(frv.vertical) = ANY(ARRAY[${assignedVerticals.map((_, i) => `LOWER($${i + 1})`).join(',')}]::text[])`;
+      const queryParams = userRole === 'admin' ? [] : assignedVerticals;
 
       // File Requests analytics by vertical
       const fileRequestsQuery = `

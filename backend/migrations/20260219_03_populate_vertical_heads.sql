@@ -18,29 +18,14 @@ BEGIN
   SELECT id INTO v_refi_user_id FROM users WHERE email = 'karan.singh@pearmediallc.com' LIMIT 1;
   SELECT id INTO v_medicare_user_id FROM users WHERE email = 'priya.mishra@pearmediallc.com' LIMIT 1;
 
-  -- Upsert Bizop vertical head
-  IF v_bizop_user_id IS NOT NULL THEN
-    INSERT INTO vertical_heads (vertical, head_editor_id)
-    VALUES ('bizop', v_bizop_user_id)
-    ON CONFLICT (vertical) DO UPDATE
-    SET head_editor_id = EXCLUDED.head_editor_id,
-        updated_at = NOW();
-    RAISE NOTICE 'Set Bizop vertical head to user: %', v_bizop_user_id;
-  ELSE
-    RAISE WARNING 'User with email aditya.nawal@pearmediall.com not found for Bizop vertical';
-  END IF;
+  -- Upsert Bizop vertical head (update when we have actual requests)
+  -- Currently no Bizop requests in database
+  -- Will be added when requests use this vertical
 
   -- Upsert Auto Insurance vertical head
   IF v_auto_user_id IS NOT NULL THEN
     INSERT INTO vertical_heads (vertical, head_editor_id)
-    VALUES ('auto insurance', v_auto_user_id)
-    ON CONFLICT (vertical) DO UPDATE
-    SET head_editor_id = EXCLUDED.head_editor_id,
-        updated_at = NOW();
-
-    -- Also add alternate names for Auto
-    INSERT INTO vertical_heads (vertical, head_editor_id)
-    VALUES ('auto', v_auto_user_id)
+    VALUES ('Auto Insurance', v_auto_user_id)
     ON CONFLICT (vertical) DO UPDATE
     SET head_editor_id = EXCLUDED.head_editor_id,
         updated_at = NOW();
@@ -50,17 +35,13 @@ BEGIN
     RAISE WARNING 'User with email priya.mishra@pearmediallc.com not found for Auto Insurance vertical';
   END IF;
 
+  -- Delete old lowercase/alternate entries
+  DELETE FROM vertical_heads WHERE vertical IN ('auto', 'auto insurance');
+
   -- Upsert Home Insurance vertical head
   IF v_home_user_id IS NOT NULL THEN
     INSERT INTO vertical_heads (vertical, head_editor_id)
-    VALUES ('home insurance', v_home_user_id)
-    ON CONFLICT (vertical) DO UPDATE
-    SET head_editor_id = EXCLUDED.head_editor_id,
-        updated_at = NOW();
-
-    -- Also add alternate names for Home
-    INSERT INTO vertical_heads (vertical, head_editor_id)
-    VALUES ('home', v_home_user_id)
+    VALUES ('Home Insurance', v_home_user_id)
     ON CONFLICT (vertical) DO UPDATE
     SET head_editor_id = EXCLUDED.head_editor_id,
         updated_at = NOW();
@@ -70,49 +51,23 @@ BEGIN
     RAISE WARNING 'User with email baljeet.singh@pearmediallc.com not found for Home Insurance vertical';
   END IF;
 
-  -- Upsert Guns vertical head
-  IF v_guns_user_id IS NOT NULL THEN
-    INSERT INTO vertical_heads (vertical, head_editor_id)
-    VALUES ('guns', v_guns_user_id)
-    ON CONFLICT (vertical) DO UPDATE
-    SET head_editor_id = EXCLUDED.head_editor_id,
-        updated_at = NOW();
-    RAISE NOTICE 'Set Guns vertical head to user: %', v_guns_user_id;
-  ELSE
-    RAISE WARNING 'User with email pankaj.jain@pearmediallc.com not found for Guns vertical';
-  END IF;
+  -- Delete old lowercase/alternate entries
+  DELETE FROM vertical_heads WHERE vertical IN ('home', 'home insurance');
 
-  -- Upsert Refinance vertical head
-  IF v_refi_user_id IS NOT NULL THEN
-    INSERT INTO vertical_heads (vertical, head_editor_id)
-    VALUES ('refinance', v_refi_user_id)
-    ON CONFLICT (vertical) DO UPDATE
-    SET head_editor_id = EXCLUDED.head_editor_id,
-        updated_at = NOW();
+  -- Upsert Guns vertical head (update when we have actual requests)
+  -- Currently no Guns requests in database
+  -- Will be added when requests use this vertical
 
-    -- Also add alternate names for Refi
-    INSERT INTO vertical_heads (vertical, head_editor_id)
-    VALUES ('refi', v_refi_user_id)
-    ON CONFLICT (vertical) DO UPDATE
-    SET head_editor_id = EXCLUDED.head_editor_id,
-        updated_at = NOW();
+  -- Upsert Refinance vertical head (update when we have actual requests)
+  -- Currently no Refinance requests in database
+  -- Will be added when requests use this vertical
 
-    RAISE NOTICE 'Set Refinance vertical head to user: %', v_refi_user_id;
-  ELSE
-    RAISE WARNING 'User with email karan.singh@pearmediallc.com not found for Refinance vertical';
-  END IF;
+  -- Upsert Medicare vertical head (update when we have actual requests)
+  -- Currently no Medicare requests in database
+  -- Will be added when requests use this vertical
 
-  -- Upsert Medicare vertical head
-  IF v_medicare_user_id IS NOT NULL THEN
-    INSERT INTO vertical_heads (vertical, head_editor_id)
-    VALUES ('medicare', v_medicare_user_id)
-    ON CONFLICT (vertical) DO UPDATE
-    SET head_editor_id = EXCLUDED.head_editor_id,
-        updated_at = NOW();
-    RAISE NOTICE 'Set Medicare vertical head to user: %', v_medicare_user_id;
-  ELSE
-    RAISE WARNING 'User with email priya.mishra@pearmediallc.com not found for Medicare vertical';
-  END IF;
+  -- Clean up any remaining duplicate/lowercase entries
+  DELETE FROM vertical_heads WHERE vertical IN ('bizop', 'guns', 'medicare', 'refi', 'refinance');
 
   RAISE NOTICE 'Vertical heads population complete';
 END$$;
