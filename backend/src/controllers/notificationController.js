@@ -20,11 +20,29 @@ class NotificationController {
 
       const unreadCount = await Notification.getUnreadCount(userId);
 
+      // Fetch user notification preferences
+      const userPrefsResult = await query(
+        `SELECT
+          browser_notifications_enabled,
+          notification_sound_enabled,
+          notification_type_preferences
+        FROM users
+        WHERE id = $1`,
+        [userId]
+      );
+
+      const userPreferences = userPrefsResult.rows.length > 0 ? userPrefsResult.rows[0] : {
+        browser_notifications_enabled: true,
+        notification_sound_enabled: true,
+        notification_type_preferences: {}
+      };
+
       res.json({
         success: true,
         notifications,
         unreadCount,
-        total: notifications.length
+        total: notifications.length,
+        userPreferences // Send preferences to frontend
       });
 
     } catch (error) {

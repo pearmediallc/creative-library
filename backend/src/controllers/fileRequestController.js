@@ -539,6 +539,30 @@ class FileRequestController {
                 assigned_by: req.user.name || req.user.email
               }
             });
+
+            // Send Slack notification with comprehensive details
+            const slackService = require('../services/slackService');
+            const frontendUrl = process.env.FRONTEND_URL || 'https://creative-library.onrender.com';
+            const requestUrl = `${frontendUrl}/file-requests?openRequestId=${fileRequest.id}`;
+
+            await slackService.notifyFileRequestCreated(editorUserId, {
+              requestTitle: fileRequest.title,
+              requestType: fileRequest.request_type,
+              vertical: vertical || verticalArray[0] || null,
+              platform: platform || platformArray[0] || null,
+              numCreatives: fileRequest.num_creatives,
+              deadline: fileRequest.deadline,
+              conceptNotes: fileRequest.concept_notes,
+              createdByName: req.user.name || req.user.email,
+              requestUrl
+            }).catch(err => {
+              // Non-blocking: log error but don't fail request creation
+              logger.error('Failed to send Slack notification for file request', {
+                error: err.message,
+                editorUserId,
+                requestId: fileRequest.id
+              });
+            });
           }
         }
       }
@@ -2215,7 +2239,14 @@ class FileRequestController {
         if (totalAssigned > totalCreativesRequested) {
           return res.status(400).json({
             success: false,
-            error: `Total creatives assigned (${totalAssigned}) exceeds requested (${totalCreativesRequested})`
+            error: `Cannot assign more creatives than requested. Total assigned (${totalAssigned}) exceeds requested (${totalCreativesRequested})`
+          });
+        }
+
+        if (totalAssigned < totalCreativesRequested) {
+          return res.status(400).json({
+            success: false,
+            error: `Cannot assign fewer creatives than requested. Total assigned (${totalAssigned}) is less than requested (${totalCreativesRequested}). You must assign exactly ${totalCreativesRequested} creatives.`
           });
         }
       }
@@ -2998,6 +3029,23 @@ class FileRequestController {
           success: false,
           error: 'Only request creator or assigned buyer can close'
         });
+      }
+
+      // Validate creative distribution before closing
+      const totalCreativesRequested = fileRequest.num_creatives || 0;
+      if (totalCreativesRequested > 0) {
+        const assignmentsResult = await query(
+          'SELECT SUM(num_creatives_assigned) as total_assigned FROM file_request_editors WHERE request_id = $1',
+          [id]
+        );
+        const totalAssigned = parseInt(assignmentsResult.rows[0]?.total_assigned || 0, 10);
+
+        if (totalAssigned !== totalCreativesRequested) {
+          return res.status(400).json({
+            success: false,
+            error: `Cannot close request. Total creatives assigned (${totalAssigned}) must equal requested (${totalCreativesRequested}). Please reassign editors to match the exact creative count.`
+          });
+        }
       }
 
       // Update status

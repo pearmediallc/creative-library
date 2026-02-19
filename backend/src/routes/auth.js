@@ -30,6 +30,12 @@ router.get('/me',
   authController.me.bind(authController)
 );
 
+// Update notification preferences
+router.patch('/me/notification-preferences',
+  authenticateToken,
+  authController.updateNotificationPreferences.bind(authController)
+);
+
 // Get all users (for mentions dropdown) - authenticated users only
 router.get('/users',
   authenticateToken,

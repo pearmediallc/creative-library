@@ -57,6 +57,7 @@ export function useNotifications(options: UseNotificationsOptions = {}) {
       });
 
       const data = response.data;
+      const userPreferences = data.userPreferences || {}; // Backend sends user preferences
       setNotifications(data.notifications || []);
 
       const newUnreadCount = data.unreadCount || 0;
@@ -64,29 +65,37 @@ export function useNotifications(options: UseNotificationsOptions = {}) {
 
       // If there are new unread notifications
       if (newUnreadCount > previousUnreadCount && previousUnreadCount > 0) {
-        // REMOVED: Notification sounds disabled per user request
-        // Sounds were interrupting workflow and not desired
-        // if (enableSound) {
-        //   const latestNotification = (data.notifications || [])[0];
-        //   const soundType = latestNotification?.type === 'mention' ? 'mention' :
-        //                    latestNotification?.type === 'file_request_assigned' ? 'request' :
-        //                    'default';
-        //   notificationSound.playNotificationSound(soundType);
-        // }
+        const latestNotification = (data.notifications || [])[0];
 
-        // REMOVED: Browser notifications disabled per user request
-        // Notifications were popping up and interrupting workflow
-        // Users can still see notifications in the notification bell/panel
-        // if (enableBrowserNotifications && 'Notification' in window && Notification.permission === 'granted') {
-        //   const latestNotification = (data.notifications || [])[0];
-        //   if (latestNotification && !latestNotification.is_read) {
-        //     new Notification(latestNotification.title, {
-        //       body: latestNotification.message,
-        //       icon: '/logo192.png',
-        //       tag: latestNotification.id
-        //     });
-        //   }
-        // }
+        if (latestNotification && !latestNotification.is_read) {
+          const notifType = latestNotification.type;
+          const typePrefs = userPreferences.notification_type_preferences?.[notifType] || {};
+
+          // Play notification sound if enabled
+          if (enableSound &&
+              userPreferences.notification_sound_enabled !== false &&
+              typePrefs.sound !== false) {
+            const soundType = notifType === 'comment_mentioned' ? 'mention' :
+                             notifType === 'file_request_assigned' || notifType === 'launch_request_assigned' ? 'request' :
+                             'default';
+            notificationSound.playNotificationSound(soundType);
+          }
+
+          // Show browser notification if enabled
+          if (enableBrowserNotifications &&
+              'Notification' in window &&
+              Notification.permission === 'granted' &&
+              userPreferences.browser_notifications_enabled !== false &&
+              typePrefs.browser !== false) {
+            new Notification(latestNotification.title, {
+              body: latestNotification.message,
+              icon: '/logo192.png',
+              tag: latestNotification.id,
+              requireInteraction: false, // Auto-dismiss after a few seconds
+              silent: false // Allow sound from OS
+            });
+          }
+        }
       }
 
       setUnreadCount(newUnreadCount);

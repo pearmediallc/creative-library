@@ -116,6 +116,7 @@ class LaunchRequestController {
       }
 
       // Assign editors (creative side)
+      const assignedEditorUserIds = []; // Track for notifications
       if (editor_distribution.length > 0) {
         for (const dist of editor_distribution) {
           await client.query(
@@ -124,6 +125,15 @@ class LaunchRequestController {
              ON CONFLICT (launch_request_id, editor_id) DO UPDATE SET num_creatives_assigned = $3`,
             [requestId, dist.editor_id, dist.num_creatives]
           );
+
+          // Get editor's user_id for notification
+          const editorUserResult = await client.query(
+            'SELECT user_id FROM editors WHERE id = $1',
+            [dist.editor_id]
+          );
+          if (editorUserResult.rows.length > 0) {
+            assignedEditorUserIds.push(editorUserResult.rows[0].user_id);
+          }
         }
       } else if (editor_ids.length > 0) {
         for (const editorId of editor_ids) {
@@ -133,6 +143,15 @@ class LaunchRequestController {
              ON CONFLICT DO NOTHING`,
             [requestId, editorId]
           );
+
+          // Get editor's user_id for notification
+          const editorUserResult = await client.query(
+            'SELECT user_id FROM editors WHERE id = $1',
+            [editorId]
+          );
+          if (editorUserResult.rows.length > 0) {
+            assignedEditorUserIds.push(editorUserResult.rows[0].user_id);
+          }
         }
       }
 
@@ -166,6 +185,51 @@ class LaunchRequestController {
       await client.query('COMMIT');
 
       logger.info(`Launch request created: ${requestId} by ${userId}`);
+
+      // After commit: Send Slack notifications to assigned editors (non-blocking)
+      if (assignedEditorUserIds.length > 0) {
+        const slackService = require('../services/slackService');
+        const Notification = require('../models/Notification');
+        const frontendUrl = process.env.FRONTEND_URL || 'https://creative-library.onrender.com';
+        const requestUrl = `${frontendUrl}/launch-requests?openRequestId=${requestId}`;
+
+        for (const editorUserId of assignedEditorUserIds) {
+          // Create in-app notification
+          Notification.create({
+            userId: editorUserId,
+            type: 'launch_request_assigned',
+            title: 'New Launch Request Assigned',
+            message: `You have been assigned to "${title}" by ${userName || req.user.email}`,
+            referenceType: 'launch_request',
+            referenceId: requestId,
+            metadata: {
+              request_title: title,
+              delivery_deadline: delivery_deadline,
+              assigned_by: userName || req.user.email
+            }
+          }).catch(err => logger.error('Failed to create notification', { error: err.message }));
+
+          // Send Slack notification with comprehensive details
+          slackService.notifyLaunchRequestCreated(editorUserId, {
+            requestTitle: title,
+            requestType: request_type,
+            vertical: primaryVertical,
+            platform: platforms[0] || null,
+            numCreatives: num_creatives,
+            deadline: delivery_deadline,
+            briefNotes: notes_to_creative || concept_notes,
+            createdByName: userName || req.user.email,
+            requestUrl
+          }).catch(err => {
+            // Non-blocking: log error but don't fail request creation
+            logger.error('Failed to send Slack notification for launch request', {
+              error: err.message,
+              editorUserId,
+              requestId
+            });
+          });
+        }
+      }
 
       // After commit: provision media library folders for buyer_head + any pre-assigned buyers (non-blocking)
       const buyersToProvision = [];
@@ -877,7 +941,42 @@ class LaunchRequestController {
 
   async close(req, res) {
     // launched → closed
-    return this._transition(req, res, 'closed', ['launched'], { closed_at: new Date() });
+    try {
+      const { id } = req.params;
+
+      // Validate creative distribution before closing
+      const requestResult = await pool.query(
+        'SELECT num_creatives FROM launch_requests WHERE id = $1',
+        [id]
+      );
+
+      if (requestResult.rows.length === 0) {
+        return res.status(404).json({ success: false, error: 'Launch request not found' });
+      }
+
+      const totalCreativesRequested = requestResult.rows[0].num_creatives || 0;
+      if (totalCreativesRequested > 0) {
+        const assignmentsResult = await pool.query(
+          'SELECT SUM(num_creatives_assigned) as total_assigned FROM launch_request_editors WHERE launch_request_id = $1',
+          [id]
+        );
+        const totalAssigned = parseInt(assignmentsResult.rows[0]?.total_assigned || 0, 10);
+
+        if (totalAssigned !== totalCreativesRequested) {
+          return res.status(400).json({
+            success: false,
+            error: `Cannot close request. Total creatives assigned (${totalAssigned}) must equal requested (${totalCreativesRequested}). Please reassign editors to match the exact creative count.`
+          });
+        }
+      }
+
+      // Proceed with transition if validation passes
+      return this._transition(req, res, 'closed', ['launched'], { closed_at: new Date() });
+
+    } catch (err) {
+      logger.error('Close launch request error:', err);
+      return res.status(500).json({ success: false, error: err.message });
+    }
   }
 
   async reopen(req, res) {
@@ -996,6 +1095,43 @@ class LaunchRequestController {
 
       const { id } = req.params;
       const { editor_distribution = [], editor_ids = [] } = req.body;
+
+      // Validate creative distribution before assignment
+      if (editor_distribution.length > 0) {
+        const requestResult = await client.query(
+          'SELECT num_creatives FROM launch_requests WHERE id = $1',
+          [id]
+        );
+
+        if (requestResult.rows.length === 0) {
+          await client.query('ROLLBACK');
+          return res.status(404).json({ success: false, error: 'Launch request not found' });
+        }
+
+        const totalCreativesRequested = requestResult.rows[0].num_creatives || 0;
+        if (totalCreativesRequested > 0) {
+          const totalAssigned = editor_distribution.reduce(
+            (sum, dist) => sum + (dist.num_creatives || 0),
+            0
+          );
+
+          if (totalAssigned > totalCreativesRequested) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({
+              success: false,
+              error: `Cannot assign more creatives than requested. Total assigned (${totalAssigned}) exceeds requested (${totalCreativesRequested})`
+            });
+          }
+
+          if (totalAssigned < totalCreativesRequested) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({
+              success: false,
+              error: `Cannot assign fewer creatives than requested. Total assigned (${totalAssigned}) is less than requested (${totalCreativesRequested}). You must assign exactly ${totalCreativesRequested} creatives.`
+            });
+          }
+        }
+      }
 
       if (editor_distribution.length > 0) {
         // Mark existing editors not in the new distribution as 'reassigned' (preserve history)

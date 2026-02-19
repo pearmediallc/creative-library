@@ -2,6 +2,7 @@ import React from 'react';
 import { DashboardLayout } from '../components/layout/DashboardLayout';
 import { SlackSettingsPanel } from '../components/SlackSettingsPanel';
 import { NotificationSoundSettings } from '../components/NotificationSoundSettings';
+import { NotificationPreferencesPanel } from '../components/NotificationPreferencesPanel';
 import { User } from 'lucide-react';
 
 export function UserSettingsPage() {
@@ -17,8 +18,8 @@ export function UserSettingsPage() {
           Manage your personal preferences and integrations
         </p>
 
-        {/* Notification sounds */}
-        <NotificationSoundSettings />
+        {/* Notification Preferences - Browser, Sound, Slack */}
+        <NotificationPreferencesPanel />
 
         {/* Slack Integration */}
         <SlackSettingsPanel />

@@ -114,6 +114,43 @@ class AuthController {
   }
 
   /**
+   * PATCH /api/auth/me/notification-preferences
+   * Update user notification preferences
+   */
+  async updateNotificationPreferences(req, res, next) {
+    try {
+      const userId = req.user.id;
+      const {
+        browser_notifications_enabled,
+        notification_sound_enabled,
+        slack_notifications_enabled,
+        notification_type_preferences
+      } = req.body;
+
+      const result = await authService.updateNotificationPreferences(userId, {
+        browser_notifications_enabled,
+        notification_sound_enabled,
+        slack_notifications_enabled,
+        notification_type_preferences
+      });
+
+      logger.info('Notification preferences updated', { userId });
+
+      res.json({
+        success: true,
+        message: 'Notification preferences updated successfully',
+        data: result
+      });
+    } catch (error) {
+      logger.error('Update notification preferences error', {
+        error: error.message,
+        userId: req.user?.id
+      });
+      next(error);
+    }
+  }
+
+  /**
    * GET /api/auth/users
    * Get all active users (for mentions dropdown)
    */

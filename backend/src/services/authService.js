@@ -197,6 +197,41 @@ class AuthService {
     );
     return result.rows || result;
   }
+
+  /**
+   * Update user notification preferences
+   */
+  async updateNotificationPreferences(userId, preferences) {
+    const { query } = require('../config/database');
+
+    const {
+      browser_notifications_enabled,
+      notification_sound_enabled,
+      slack_notifications_enabled,
+      notification_type_preferences
+    } = preferences;
+
+    const result = await query(
+      `UPDATE users
+       SET browser_notifications_enabled = COALESCE($1, browser_notifications_enabled),
+           notification_sound_enabled = COALESCE($2, notification_sound_enabled),
+           slack_notifications_enabled = COALESCE($3, slack_notifications_enabled),
+           notification_type_preferences = COALESCE($4, notification_type_preferences),
+           updated_at = NOW()
+       WHERE id = $5
+       RETURNING id, browser_notifications_enabled, notification_sound_enabled,
+                 slack_notifications_enabled, notification_type_preferences`,
+      [
+        browser_notifications_enabled,
+        notification_sound_enabled,
+        slack_notifications_enabled,
+        notification_type_preferences ? JSON.stringify(notification_type_preferences) : null,
+        userId
+      ]
+    );
+
+    return result.rows ? result.rows[0] : result[0];
+  }
 }
 
 module.exports = new AuthService();

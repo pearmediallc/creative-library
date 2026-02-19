@@ -233,8 +233,9 @@ async function notifyFileShared(userId, fileName, sharedByName, fileUrl) {
 
 /**
  * Notify editor when a new file request is created
+ * Enhanced with vertical, platform, creative count, and deadline details
  */
-async function notifyFileRequestCreated(editorUserId, requestTitle, requestType, conceptNotes, createdByName, requestUrl) {
+async function notifyFileRequestCreated(editorUserId, requestData) {
   try {
     const notificationType = 'file_request_created';
 
@@ -247,15 +248,66 @@ async function notifyFileRequestCreated(editorUserId, requestTitle, requestType,
       return { success: false, reason: 'no_slack_connection' };
     }
 
-    const message = `🎬 New file request from ${createdByName}: ${requestType}`;
+    const {
+      requestTitle,
+      requestType,
+      vertical,
+      platform,
+      numCreatives,
+      deadline,
+      conceptNotes,
+      createdByName,
+      requestUrl
+    } = requestData;
 
+    // Build comprehensive message
+    const message = `🎬 New ${requestType || 'File Request'} assigned to you from ${createdByName}`;
+
+    // Build detailed blocks
     const blocks = [
+      {
+        type: 'header',
+        text: {
+          type: 'plain_text',
+          text: `🎬 New File Request Assigned to You`,
+          emoji: true
+        }
+      },
       {
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: `🎬 *New File Request*\n\n*Type:* ${requestType}\n*From:* ${createdByName}`
+          text: `*Request Title:* ${requestTitle || requestType}`
         }
+      },
+      {
+        type: 'section',
+        fields: [
+          {
+            type: 'mrkdwn',
+            text: `*Type:*\n${requestType || 'File Request'}`
+          },
+          {
+            type: 'mrkdwn',
+            text: `*Created By:*\n${createdByName}`
+          },
+          {
+            type: 'mrkdwn',
+            text: `*Vertical:*\n${vertical || 'Not specified'}`
+          },
+          {
+            type: 'mrkdwn',
+            text: `*Platform:*\n${platform || 'Not specified'}`
+          },
+          {
+            type: 'mrkdwn',
+            text: `*Creatives Requested:*\n${numCreatives || 1}`
+          },
+          {
+            type: 'mrkdwn',
+            text: `*Deadline:*\n${deadline ? new Date(deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'No deadline set'}`
+          }
+        ]
       }
     ];
 
@@ -264,10 +316,22 @@ async function notifyFileRequestCreated(editorUserId, requestTitle, requestType,
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: `*Concept Notes:*\n${conceptNotes.substring(0, 300)}${conceptNotes.length > 300 ? '...' : ''}`
+          text: `*Concept Notes:*\n${conceptNotes.substring(0, 500)}${conceptNotes.length > 500 ? '...' : ''}`
         }
       });
     }
+
+    blocks.push({
+      type: 'divider'
+    });
+
+    blocks.push({
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: `📊 *Summary:* You've been assigned to create *${numCreatives || 1} creative${numCreatives > 1 ? 's' : ''}* for the *${vertical || 'unspecified'}* vertical on *${platform || 'multiple platforms'}*.`
+      }
+    });
 
     blocks.push({
       type: 'actions',
@@ -276,7 +340,7 @@ async function notifyFileRequestCreated(editorUserId, requestTitle, requestType,
           type: 'button',
           text: {
             type: 'plain_text',
-            text: '📋 View Request'
+            text: '📋 View Request & Start Work'
           },
           url: requestUrl,
           style: 'primary'
@@ -499,6 +563,134 @@ async function notifyPublicLinkCreated(userId, fileName, publicUrl, expiresAt) {
 }
 
 /**
+ * Notify editor when a new launch request is created
+ * Enhanced with vertical, platform, creative count, and deadline details
+ */
+async function notifyLaunchRequestCreated(editorUserId, requestData) {
+  try {
+    const notificationType = 'launch_request_created';
+
+    if (!await isUserSlackEnabled(editorUserId, notificationType)) {
+      return { success: false, reason: 'notifications_disabled' };
+    }
+
+    const slackUserId = await getSlackUserId(editorUserId);
+    if (!slackUserId) {
+      return { success: false, reason: 'no_slack_connection' };
+    }
+
+    const {
+      requestTitle,
+      requestType,
+      vertical,
+      platform,
+      numCreatives,
+      deadline,
+      briefNotes,
+      createdByName,
+      requestUrl
+    } = requestData;
+
+    // Build comprehensive message
+    const message = `🚀 New ${requestType || 'Launch Request'} assigned to you from ${createdByName}`;
+
+    // Build detailed blocks
+    const blocks = [
+      {
+        type: 'header',
+        text: {
+          type: 'plain_text',
+          text: `🚀 New Launch Request Assigned to You`,
+          emoji: true
+        }
+      },
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `*Request Title:* ${requestTitle || requestType}`
+        }
+      },
+      {
+        type: 'section',
+        fields: [
+          {
+            type: 'mrkdwn',
+            text: `*Type:*\n${requestType || 'Launch Request'}`
+          },
+          {
+            type: 'mrkdwn',
+            text: `*Created By:*\n${createdByName}`
+          },
+          {
+            type: 'mrkdwn',
+            text: `*Vertical:*\n${vertical || 'Not specified'}`
+          },
+          {
+            type: 'mrkdwn',
+            text: `*Platform:*\n${platform || 'Not specified'}`
+          },
+          {
+            type: 'mrkdwn',
+            text: `*Creatives Requested:*\n${numCreatives || 1}`
+          },
+          {
+            type: 'mrkdwn',
+            text: `*Deadline:*\n${deadline ? new Date(deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'No deadline set'}`
+          }
+        ]
+      }
+    ];
+
+    if (briefNotes) {
+      blocks.push({
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `*Brief Notes:*\n${briefNotes.substring(0, 500)}${briefNotes.length > 500 ? '...' : ''}`
+        }
+      });
+    }
+
+    blocks.push({
+      type: 'divider'
+    });
+
+    blocks.push({
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: `📊 *Summary:* You've been assigned to create *${numCreatives || 1} creative${numCreatives > 1 ? 's' : ''}* for the *${vertical || 'unspecified'}* vertical on *${platform || 'multiple platforms'}*.`
+      }
+    });
+
+    blocks.push({
+      type: 'actions',
+      elements: [
+        {
+          type: 'button',
+          text: {
+            type: 'plain_text',
+            text: '🚀 View Request & Start Work'
+          },
+          url: requestUrl,
+          style: 'primary'
+        }
+      ]
+    });
+
+    await sendMessage(slackUserId, message, blocks);
+    await logNotification(notificationType, editorUserId, slackUserId, slackUserId, message, blocks, 'sent');
+
+    return { success: true };
+  } catch (error) {
+    console.error('notifyLaunchRequestCreated error:', error);
+    await logNotification('launch_request_created', editorUserId, null, null, `Error: ${error.message}`, null, 'failed', error.message);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
  * Notify user when they are mentioned in a comment
  */
 async function notifyCommentMention(userId, mentionedByName, fileName, commentText, fileUrl) {
@@ -622,6 +814,7 @@ module.exports = {
   sendMessage,
   notifyFileShared,
   notifyFileRequestCreated,
+  notifyLaunchRequestCreated,
   notifyFileRequestCompleted,
   notifyRequestReassigned,
   notifyPublicLinkCreated,
