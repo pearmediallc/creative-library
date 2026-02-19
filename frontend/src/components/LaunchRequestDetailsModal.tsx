@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   X, Upload, CheckCircle, RefreshCw, UserPlus, FileText,
   ChevronDown, ChevronUp, Paperclip, FolderOpen, Users,
-  Loader2, AlertCircle
+  Loader2, AlertCircle, Rocket, XCircle
 } from 'lucide-react';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
@@ -74,6 +74,9 @@ interface LaunchRequest {
   uploads?: UploadFile[];
   reassignments?: any[];
   upload_count?: number;
+  launched_at?: string;
+  closed_at?: string;
+  reopened_at?: string;
 }
 
 interface Props {
