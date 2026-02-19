@@ -56,26 +56,48 @@ export function SharedByMePage() {
     }
   };
 
-  // 🆕 Group resources by uploader
+  // Group resources by recipient (grantee)
   const groupResourcesByUser = () => {
     const grouped = new Map<string, typeof resources>();
 
     resources.forEach(resource => {
-      const uploaderId = resource.uploaded_by || 'unknown';
-      if (!grouped.has(uploaderId)) {
-        grouped.set(uploaderId, []);
-      }
-      grouped.get(uploaderId)!.push(resource);
+      // Group by each unique grantee this resource is shared with
+      resource.shares.forEach(share => {
+        const granteeKey = `${share.grantee_id}-${formatDate(share.granted_at)}`;
+        if (!grouped.has(granteeKey)) {
+          grouped.set(granteeKey, []);
+        }
+        // Check if this resource is already in this grantee's list
+        const existingResource = grouped.get(granteeKey)!.find(
+          r => r.resource_id === resource.resource_id && r.resource_type === resource.resource_type
+        );
+        if (!existingResource) {
+          grouped.get(granteeKey)!.push(resource);
+        }
+      });
     });
 
-    return Array.from(grouped.entries()).map(([uploaderId, userResources]) => ({
-      uploaded_by: uploaderId,
-      uploaded_by_name: userResources[0]?.uploaded_by_name || 'Unknown User',
-      uploaded_by_email: userResources[0]?.uploaded_by_email,
-      resources: userResources,
-      file_count: userResources.length,
-      total_size: userResources.reduce((sum, r) => sum + (r.file_size || 0), 0)
-    }));
+    return Array.from(grouped.entries()).map(([granteeKey, userResources]) => {
+      // Get the first share to determine grantee info and date
+      const firstShare = userResources[0]?.shares[0];
+      const shareDate = firstShare ? formatDate(firstShare.granted_at) : '';
+
+      return {
+        uploaded_by: firstShare?.grantee_id || 'unknown',
+        uploaded_by_name: firstShare?.grantee_name || 'Unknown User',
+        uploaded_by_email: firstShare?.grantee_email,
+        share_date: shareDate,
+        resources: userResources,
+        file_count: userResources.length,
+        total_size: userResources.reduce((sum, r) => sum + (r.file_size || 0), 0)
+      };
+    }).sort((a, b) => {
+      // Sort by grantee name, then by date
+      if (a.uploaded_by_name !== b.uploaded_by_name) {
+        return a.uploaded_by_name.localeCompare(b.uploaded_by_name);
+      }
+      return b.share_date.localeCompare(a.share_date);
+    });
   };
 
   const userGroups = groupResourcesByUser();

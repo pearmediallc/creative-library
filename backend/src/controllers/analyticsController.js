@@ -578,7 +578,7 @@ class AnalyticsController {
           STRING_AGG(DISTINCT e.display_name, ', ' ORDER BY e.display_name) as assigned_editors,
           COALESCE(SUM(fre.num_creatives_assigned), 0) as total_creatives,
           COALESCE(SUM(fre.creatives_completed), 0) as completed_creatives,
-          MIN(fre.assigned_at) as first_assignment_at,
+          MIN(fre.created_at) as first_assignment_at,
           MAX(fre.accepted_at) as last_accepted_at
         FROM file_request_verticals frv
         JOIN file_requests fr ON fr.id = frv.file_request_id

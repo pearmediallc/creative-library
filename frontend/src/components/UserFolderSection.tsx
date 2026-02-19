@@ -31,6 +31,7 @@ interface UserGroup {
   uploaded_by: string;
   uploaded_by_name: string;
   uploaded_by_email?: string;
+  share_date?: string;
   resources: SharedResource[];
   total_size: number;
   file_count: number;
@@ -87,6 +88,12 @@ export function UserFolderSection({ userGroup, onResourceClick, onRevokeShare }:
               {userGroup.uploaded_by_name}
             </h3>
             <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
+              {userGroup.share_date && (
+                <>
+                  <span>{userGroup.share_date}</span>
+                  <span>•</span>
+                </>
+              )}
               <span>{userGroup.file_count} {userGroup.file_count === 1 ? 'file' : 'files'}</span>
               <span>•</span>
               <span>{formatBytes(userGroup.total_size)}</span>
