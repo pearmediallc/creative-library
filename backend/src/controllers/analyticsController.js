@@ -512,6 +512,37 @@ class AnalyticsController {
         }
       });
 
+      // For non-admin users, ensure ALL assigned verticals appear (even with 0 requests)
+      if (userRole !== 'admin') {
+        assignedVerticals.forEach(vertical => {
+          if (!verticalMap.has(vertical)) {
+            verticalMap.set(vertical, {
+              vertical: vertical,
+              file_requests: {
+                total: 0,
+                video: 0,
+                pending: 0,
+                launched: 0,
+                closed: 0,
+                total_creatives: 0,
+                completed_creatives: 0,
+                editors_working: ''
+              },
+              launch_requests: {
+                total: 0,
+                video: 0,
+                pending: 0,
+                launched: 0,
+                closed: 0,
+                total_creatives: 0,
+                completed_creatives: 0,
+                editors_working: ''
+              }
+            });
+          }
+        });
+      }
+
       // Convert map to array and add computed fields
       const verticals = Array.from(verticalMap.values()).map(v => ({
         ...v,
