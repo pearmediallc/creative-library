@@ -5,15 +5,20 @@ import { mediaApi, analyticsApi, editorApi } from '../lib/api';
 import { formatBytes, formatNumber } from '../lib/utils';
 import { StorageStats, EditorPerformance } from '../types';
 import { useAuth } from '../contexts/AuthContext';
+import { VerticalDashboard } from '../components/VerticalDashboard';
 
 export function DashboardPage() {
   const { user } = useAuth();
   const [stats, setStats] = useState<StorageStats | null>(null);
   const [editorPerformance, setEditorPerformance] = useState<EditorPerformance[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isVerticalHead, setIsVerticalHead] = useState(false);
 
   // Only admins can see analytics data (ads, spend, editor performance)
   const canViewAnalytics = user?.role === 'admin';
+
+  // Admin or vertical heads can see vertical dashboard
+  const canViewVerticalDashboard = user?.role === 'admin' || isVerticalHead;
 
   useEffect(() => {
     const fetchData = async () => {
@@ -21,6 +26,18 @@ export function DashboardPage() {
         // Always fetch stats
         const statsRes = await mediaApi.getStats();
         setStats(statsRes.data.data);
+
+        // Check if user is a vertical head
+        if (user?.role === 'creative') {
+          try {
+            const verticalDashRes = await analyticsApi.getVerticalDashboard();
+            // If response has data, user is a vertical head
+            setIsVerticalHead(verticalDashRes.data.data?.length > 0);
+          } catch (err) {
+            // Not a vertical head
+            setIsVerticalHead(false);
+          }
+        }
 
         // Only fetch analytics if user is admin
         if (canViewAnalytics) {
@@ -35,7 +52,7 @@ export function DashboardPage() {
     };
 
     fetchData();
-  }, [canViewAnalytics]);
+  }, [canViewAnalytics, user?.role]);
 
   if (loading) {
     return (
@@ -107,6 +124,11 @@ export function DashboardPage() {
             </>
           )}
         </div>
+
+        {/* Vertical Dashboard - show to admins and vertical heads */}
+        {canViewVerticalDashboard && (
+          <VerticalDashboard />
+        )}
 
         {/* Only show editor performance to admins */}
         {canViewAnalytics && (

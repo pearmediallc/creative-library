@@ -1039,6 +1039,33 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
                 </div>
               )}
 
+              {request.launched_at && (
+                <div className="flex items-center gap-2 text-sm">
+                  <Rocket className="w-4 h-4 text-green-500" />
+                  <span className="text-gray-700 dark:text-gray-300">
+                    Launched: {formatDate(request.launched_at)}
+                  </span>
+                </div>
+              )}
+
+              {request.closed_at && (
+                <div className="flex items-center gap-2 text-sm">
+                  <XCircle className="w-4 h-4 text-gray-500" />
+                  <span className="text-gray-700 dark:text-gray-300">
+                    Closed: {formatDate(request.closed_at)}
+                  </span>
+                </div>
+              )}
+
+              {request.reopened_at && (
+                <div className="flex items-center gap-2 text-sm">
+                  <RotateCcw className="w-4 h-4 text-orange-500" />
+                  <span className="text-gray-700 dark:text-gray-300">
+                    Reopened: {formatDate(request.reopened_at)} {request.reopen_count ? `(${request.reopen_count} times)` : ''}
+                  </span>
+                </div>
+              )}
+
               {request.picked_up_at && request.completed_at && (
                 <div className="flex items-center gap-2 text-sm">
                   <Clock className="w-4 h-4 text-blue-500" />

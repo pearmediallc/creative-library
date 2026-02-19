@@ -874,6 +874,20 @@ export function LaunchRequestDetailsModal({ request: initialRequest, onClose, on
                       ? formatDate(request.test_deadline)
                       : '—'}
                   </div>
+                  {request.launched_at && (
+                    <div className="flex items-center gap-1.5">
+                      <Rocket className="w-4 h-4 text-green-500" />
+                      <span className="text-muted-foreground">Launched: </span>
+                      <span>{formatDateTime(request.launched_at)}</span>
+                    </div>
+                  )}
+                  {request.closed_at && (
+                    <div className="flex items-center gap-1.5">
+                      <XCircle className="w-4 h-4 text-gray-500" />
+                      <span className="text-muted-foreground">Closed: </span>
+                      <span>{formatDateTime(request.closed_at)}</span>
+                    </div>
+                  )}
                   {request.concept_notes && (
                     <div className="col-span-2">
                       <span className="text-muted-foreground">Concept Notes: </span>

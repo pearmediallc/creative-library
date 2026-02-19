@@ -998,20 +998,48 @@ class LaunchRequestController {
       const { editor_distribution = [], editor_ids = [] } = req.body;
 
       if (editor_distribution.length > 0) {
-        // Remove existing and re-assign with distribution
-        await client.query(`DELETE FROM launch_request_editors WHERE launch_request_id = $1`, [id]);
+        // Mark existing editors not in the new distribution as 'reassigned' (preserve history)
+        const newEditorIds = editor_distribution.map(d => d.editor_id);
+        await client.query(
+          `UPDATE launch_request_editors
+           SET status = 'reassigned', updated_at = NOW()
+           WHERE launch_request_id = $1
+             AND editor_id != ALL($2::uuid[])
+             AND status IN ('pending', 'in_progress')`,
+          [id, newEditorIds]
+        );
+
+        // Upsert each editor assignment (add new or update existing)
         for (const dist of editor_distribution) {
           await client.query(
-            `INSERT INTO launch_request_editors (launch_request_id, editor_id, num_creatives_assigned)
-             VALUES ($1, $2, $3)`,
+            `INSERT INTO launch_request_editors (launch_request_id, editor_id, num_creatives_assigned, status, assigned_at)
+             VALUES ($1, $2, $3, 'pending', NOW())
+             ON CONFLICT (launch_request_id, editor_id) DO UPDATE
+             SET num_creatives_assigned = $3,
+                 status = CASE WHEN launch_request_editors.status = 'reassigned' THEN 'pending' ELSE launch_request_editors.status END,
+                 updated_at = NOW()`,
             [id, dist.editor_id, dist.num_creatives]
           );
         }
       } else if (editor_ids.length > 0) {
-        await client.query(`DELETE FROM launch_request_editors WHERE launch_request_id = $1`, [id]);
+        // Mark existing editors not in the new list as 'reassigned'
+        await client.query(
+          `UPDATE launch_request_editors
+           SET status = 'reassigned', updated_at = NOW()
+           WHERE launch_request_id = $1
+             AND editor_id != ALL($2::uuid[])
+             AND status IN ('pending', 'in_progress')`,
+          [id, editor_ids]
+        );
+
+        // Upsert each editor (add new or reactivate existing)
         for (const editorId of editor_ids) {
           await client.query(
-            `INSERT INTO launch_request_editors (launch_request_id, editor_id) VALUES ($1, $2)`,
+            `INSERT INTO launch_request_editors (launch_request_id, editor_id, status, assigned_at)
+             VALUES ($1, $2, 'pending', NOW())
+             ON CONFLICT (launch_request_id, editor_id) DO UPDATE
+             SET status = CASE WHEN launch_request_editors.status = 'reassigned' THEN 'pending' ELSE launch_request_editors.status END,
+                 updated_at = NOW()`,
             [id, editorId]
           );
         }

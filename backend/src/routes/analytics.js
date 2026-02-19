@@ -56,4 +56,10 @@ router.get('/unified',
   analyticsController.getUnifiedAnalytics.bind(analyticsController)
 );
 
+// Get vertical dashboard analytics (Admin and Vertical Heads)
+router.get('/vertical-dashboard',
+  authenticateToken,
+  analyticsController.getVerticalDashboard.bind(analyticsController)
+);
+
 module.exports = router;

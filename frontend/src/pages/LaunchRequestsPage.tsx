@@ -5,7 +5,7 @@ import { Button } from '../components/ui/Button';
 import { launchRequestApi } from '../lib/api';
 import { formatDateTime } from '../lib/utils';
 import {
-  Plus, Search, Rocket, Trash2, Copy, Link as LinkIcon, Filter
+  Plus, Search, Rocket, Trash2, Copy, Link as LinkIcon, Filter, RefreshCw
 } from 'lucide-react';
 import { CreateLaunchRequestModal } from '../components/CreateLaunchRequestModal';
 import { LaunchRequestDetailsModal } from '../components/LaunchRequestDetailsModal';
@@ -132,6 +132,28 @@ export function LaunchRequestsPage() {
       fetchRequests();
     } catch (err: any) {
       alert(err.response?.data?.error || 'Failed to delete');
+    }
+  };
+
+  const handleLaunch = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!window.confirm('Mark this launch request as launched?')) return;
+    try {
+      await launchRequestApi.launch(id);
+      fetchRequests();
+    } catch (err: any) {
+      alert(err.response?.data?.error || 'Failed to launch');
+    }
+  };
+
+  const handleReopen = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!window.confirm('Reopen this closed launch request?')) return;
+    try {
+      await launchRequestApi.reopen(id);
+      fetchRequests();
+    } catch (err: any) {
+      alert(err.response?.data?.error || 'Failed to reopen');
     }
   };
 
@@ -349,6 +371,28 @@ export function LaunchRequestsPage() {
                           >
                             <LinkIcon className="w-4 h-4" />
                           </Button>
+                          {/* Launch button - buyer/admin only, when status is buyer_assigned */}
+                          {(user?.role === 'buyer' || user?.role === 'admin') && request.status === 'buyer_assigned' && (
+                            <Button
+                              variant="ghost" size="sm"
+                              className="text-green-600 hover:text-green-700"
+                              onClick={(e) => handleLaunch(request.id, e)}
+                              title="Mark as Launched"
+                            >
+                              <Rocket className="w-4 h-4" />
+                            </Button>
+                          )}
+                          {/* Reopen button - admin/strategist only, when status is closed */}
+                          {(user?.role === 'admin' || user?.id === request.created_by_name) && request.status === 'closed' && (
+                            <Button
+                              variant="ghost" size="sm"
+                              className="text-orange-600 hover:text-orange-700"
+                              onClick={(e) => handleReopen(request.id, e)}
+                              title="Reopen Request"
+                            >
+                              <RefreshCw className="w-4 h-4" />
+                            </Button>
+                          )}
                           {(user?.role === 'admin' || user?.id === request.created_by_name) && (
                             <Button
                               variant="ghost" size="sm"

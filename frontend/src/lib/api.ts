@@ -908,6 +908,9 @@ export const analyticsApi = {
     date_to?: string;
     bulk_fetch?: boolean;
   }) => api.get('/analytics/unified', { params }),
+
+  // Get vertical dashboard analytics
+  getVerticalDashboard: () => api.get('/analytics/vertical-dashboard'),
 };
 
 // Metadata Tags endpoints

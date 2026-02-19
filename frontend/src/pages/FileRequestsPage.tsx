@@ -5,7 +5,7 @@ import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { fileRequestApi, editorApi } from '../lib/api';
 import { formatDate, formatDateTime } from '../lib/utils';
-import { Inbox, Plus, Link as LinkIcon, Copy, XCircle, Trash2, CheckCircle, UserPlus, Search, Filter, List, Grid } from 'lucide-react';
+import { Inbox, Plus, Link as LinkIcon, Copy, XCircle, Trash2, CheckCircle, UserPlus, Search, Filter, List, Grid, Rocket, RotateCcw } from 'lucide-react';
 import { CreateFileRequestModal } from '../components/CreateFileRequestModal';
 import { FileRequestDetailsModal } from '../components/FileRequestDetailsModal';
 import { ReassignFileRequestModal } from '../components/ReassignFileRequestModal';
@@ -174,6 +174,38 @@ export function FileRequestsPage() {
   const handleReassign = (request: FileRequest) => {
     setRequestToReassign(request);
     setShowReassignModal(true);
+  };
+
+  const handleLaunchRequest = async (id: string, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    // eslint-disable-next-line no-restricted-globals
+    if (!confirm('Mark this request as launched?')) {
+      return;
+    }
+
+    try {
+      await fileRequestApi.launch(id);
+      fetchRequests();
+    } catch (error: any) {
+      console.error('Failed to launch request:', error);
+      alert(error.response?.data?.error || 'Failed to launch request');
+    }
+  };
+
+  const handleReopenRequest = async (id: string, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    // eslint-disable-next-line no-restricted-globals
+    if (!confirm('Reopen this closed request?')) {
+      return;
+    }
+
+    try {
+      await fileRequestApi.reopenRequest(id);
+      fetchRequests();
+    } catch (error: any) {
+      console.error('Failed to reopen request:', error);
+      alert(error.response?.data?.error || 'Failed to reopen request');
+    }
   };
 
 
@@ -568,6 +600,32 @@ export function FileRequestsPage() {
                               <UserPlus className="w-4 h-4" />
                             </Button>
                           )}
+                          {/* Launch button - creator/buyer when status is uploaded */}
+                          {(user?.id === request.created_by || user?.id === request.assigned_buyer_id) &&
+                           request.status === 'uploaded' && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-green-600 hover:text-green-700"
+                              onClick={(e) => handleLaunchRequest(request.id, e)}
+                              title="Mark as Launched"
+                            >
+                              <Rocket className="w-4 h-4" />
+                            </Button>
+                          )}
+                          {/* Reopen button - creator/buyer when status is closed */}
+                          {(user?.id === request.created_by || user?.id === request.assigned_buyer_id) &&
+                           request.status === 'closed' && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-orange-600 hover:text-orange-700"
+                              onClick={(e) => handleReopenRequest(request.id, e)}
+                              title="Reopen Request"
+                            >
+                              <RotateCcw className="w-4 h-4" />
+                            </Button>
+                          )}
                           {request.is_active && (
                             <Button
                               variant="ghost"
@@ -712,6 +770,32 @@ export function FileRequestsPage() {
                         >
                           <UserPlus className="w-3 h-3 mr-1" />
                           Reassign
+                        </Button>
+                      )}
+                      {/* Launch button - creator/buyer when status is uploaded */}
+                      {(user?.id === request.created_by || user?.id === request.assigned_buyer_id) &&
+                       request.status === 'uploaded' && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-green-600 hover:text-green-700"
+                          onClick={(e) => handleLaunchRequest(request.id, e)}
+                        >
+                          <Rocket className="w-3 h-3 mr-1" />
+                          Launch
+                        </Button>
+                      )}
+                      {/* Reopen button - creator/buyer when status is closed */}
+                      {(user?.id === request.created_by || user?.id === request.assigned_buyer_id) &&
+                       request.status === 'closed' && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-orange-600 hover:text-orange-700"
+                          onClick={(e) => handleReopenRequest(request.id, e)}
+                        >
+                          <RotateCcw className="w-3 h-3 mr-1" />
+                          Reopen
                         </Button>
                       )}
                       {request.is_active && (

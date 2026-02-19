@@ -370,6 +370,172 @@ class AnalyticsController {
       next(error);
     }
   }
+
+  /**
+   * Get vertical-based dashboard analytics
+   * Shows counts and progress for each vertical
+   * Admin sees all verticals, vertical heads see only their assigned verticals
+   */
+  static async getVerticalDashboard(req, res, next) {
+    try {
+      const userId = req.user.id;
+      const userRole = req.user.role;
+
+      // Get user's assigned verticals if they are a vertical head
+      let assignedVerticals = [];
+      if (userRole !== 'admin') {
+        const verticalHeadsResult = await query(
+          `SELECT vertical FROM vertical_heads WHERE head_editor_id = $1`,
+          [userId]
+        );
+        assignedVerticals = verticalHeadsResult.rows.map(r => r.vertical);
+
+        if (assignedVerticals.length === 0) {
+          // Not a vertical head and not admin - no access
+          return res.json({ success: true, data: [] });
+        }
+      }
+
+      // Build vertical filter condition
+      const verticalFilter = userRole === 'admin'
+        ? ''
+        : `AND frv.vertical = ANY($1::text[])`;
+      const queryParams = userRole === 'admin' ? [] : [assignedVerticals];
+
+      // File Requests analytics by vertical
+      const fileRequestsQuery = `
+        SELECT
+          frv.vertical,
+          COUNT(DISTINCT fr.id) as total_requests,
+          COUNT(DISTINCT fr.id) FILTER (WHERE fr.request_type LIKE '%Video%' OR fr.request_type LIKE '%video%') as video_requests,
+          COUNT(DISTINCT fr.id) FILTER (WHERE fr.status IN ('open', 'in_progress', 'uploaded')) as pending_requests,
+          COUNT(DISTINCT fr.id) FILTER (WHERE fr.status = 'launched') as launched_requests,
+          COUNT(DISTINCT fr.id) FILTER (WHERE fr.status = 'closed') as closed_requests,
+          STRING_AGG(DISTINCT e.display_name, ', ') as editors_working,
+          COALESCE(SUM(fre.num_creatives_assigned), 0) as total_creatives,
+          COALESCE(SUM(fre.creatives_completed), 0) as completed_creatives
+        FROM file_request_verticals frv
+        JOIN file_requests fr ON fr.id = frv.file_request_id
+        LEFT JOIN file_request_editors fre ON fre.request_id = fr.id AND fre.status IN ('pending', 'accepted', 'in_progress')
+        LEFT JOIN editors e ON e.id = fre.editor_id
+        WHERE fr.is_active = TRUE
+        ${verticalFilter}
+        GROUP BY frv.vertical
+        ORDER BY total_requests DESC
+      `;
+
+      const fileRequestsResult = await query(fileRequestsQuery, queryParams);
+
+      // Launch Requests analytics by vertical
+      const launchRequestsQuery = `
+        SELECT
+          lrv.vertical,
+          COUNT(DISTINCT lr.id) as total_requests,
+          COUNT(DISTINCT lr.id) FILTER (WHERE lr.request_type LIKE '%Video%' OR lr.request_type LIKE '%video%') as video_requests,
+          COUNT(DISTINCT lr.id) FILTER (WHERE lr.status IN ('draft', 'pending_review', 'in_production', 'ready_to_launch', 'buyer_assigned')) as pending_requests,
+          COUNT(DISTINCT lr.id) FILTER (WHERE lr.status = 'launched') as launched_requests,
+          COUNT(DISTINCT lr.id) FILTER (WHERE lr.status = 'closed') as closed_requests,
+          STRING_AGG(DISTINCT e.display_name, ', ') as editors_working,
+          COALESCE(SUM(lre.num_creatives_assigned), 0) as total_creatives,
+          COALESCE(SUM(lre.creatives_completed), 0) as completed_creatives
+        FROM launch_request_verticals lrv
+        JOIN launch_requests lr ON lr.id = lrv.launch_request_id
+        LEFT JOIN launch_request_editors lre ON lre.launch_request_id = lr.id AND lre.status IN ('pending', 'in_progress')
+        LEFT JOIN editors e ON e.id = lre.editor_id
+        WHERE 1=1
+        ${verticalFilter.replace('frv.vertical', 'lrv.vertical')}
+        GROUP BY lrv.vertical
+        ORDER BY total_requests DESC
+      `;
+
+      const launchRequestsResult = await query(launchRequestsQuery, queryParams);
+
+      // Merge file requests and launch requests data by vertical
+      const verticalMap = new Map();
+
+      fileRequestsResult.rows.forEach(row => {
+        verticalMap.set(row.vertical, {
+          vertical: row.vertical,
+          file_requests: {
+            total: parseInt(row.total_requests, 10),
+            video: parseInt(row.video_requests, 10),
+            pending: parseInt(row.pending_requests, 10),
+            launched: parseInt(row.launched_requests, 10),
+            closed: parseInt(row.closed_requests, 10),
+            total_creatives: parseInt(row.total_creatives, 10),
+            completed_creatives: parseInt(row.completed_creatives, 10),
+            editors_working: row.editors_working || ''
+          },
+          launch_requests: {
+            total: 0,
+            video: 0,
+            pending: 0,
+            launched: 0,
+            closed: 0,
+            total_creatives: 0,
+            completed_creatives: 0,
+            editors_working: ''
+          }
+        });
+      });
+
+      launchRequestsResult.rows.forEach(row => {
+        const existing = verticalMap.get(row.vertical);
+        const launchData = {
+          total: parseInt(row.total_requests, 10),
+          video: parseInt(row.video_requests, 10),
+          pending: parseInt(row.pending_requests, 10),
+          launched: parseInt(row.launched_requests, 10),
+          closed: parseInt(row.closed_requests, 10),
+          total_creatives: parseInt(row.total_creatives, 10),
+          completed_creatives: parseInt(row.completed_creatives, 10),
+          editors_working: row.editors_working || ''
+        };
+
+        if (existing) {
+          existing.launch_requests = launchData;
+        } else {
+          verticalMap.set(row.vertical, {
+            vertical: row.vertical,
+            file_requests: {
+              total: 0,
+              video: 0,
+              pending: 0,
+              launched: 0,
+              closed: 0,
+              total_creatives: 0,
+              completed_creatives: 0,
+              editors_working: ''
+            },
+            launch_requests: launchData
+          });
+        }
+      });
+
+      // Convert map to array and add computed fields
+      const verticals = Array.from(verticalMap.values()).map(v => ({
+        ...v,
+        combined_total: v.file_requests.total + v.launch_requests.total,
+        combined_video: v.file_requests.video + v.launch_requests.video,
+        combined_pending: v.file_requests.pending + v.launch_requests.pending,
+        combined_creatives: v.file_requests.total_creatives + v.launch_requests.total_creatives,
+        combined_completed: v.file_requests.completed_creatives + v.launch_requests.completed_creatives,
+        progress_percent: (v.file_requests.total_creatives + v.launch_requests.total_creatives) > 0
+          ? Math.round(((v.file_requests.completed_creatives + v.launch_requests.completed_creatives) /
+              (v.file_requests.total_creatives + v.launch_requests.total_creatives)) * 100)
+          : 0
+      })).sort((a, b) => b.combined_total - a.combined_total);
+
+      res.json({
+        success: true,
+        data: verticals
+      });
+
+    } catch (error) {
+      logger.error('Vertical dashboard error', { error: error.message, stack: error.stack });
+      next(error);
+    }
+  }
 }
 
 module.exports = new AnalyticsController();
