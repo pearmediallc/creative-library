@@ -56,47 +56,88 @@ export function SharedByMePage() {
     }
   };
 
-  // Group resources by recipient (grantee)
+  // Group resources by recipient (grantee) and date
+  // Structure: Recipient Name > Date Shared > Files
   const groupResourcesByUser = () => {
-    const grouped = new Map<string, typeof resources>();
+    // First, create a flat list of all shares
+    const allShares: Array<{
+      grantee_id: string;
+      grantee_name: string;
+      grantee_email?: string;
+      granted_date: string;
+      resource: SharedResource;
+    }> = [];
 
     resources.forEach(resource => {
-      // Group by each unique grantee this resource is shared with
       resource.shares.forEach(share => {
-        const granteeKey = `${share.grantee_id}-${formatDate(share.granted_at)}`;
-        if (!grouped.has(granteeKey)) {
-          grouped.set(granteeKey, []);
-        }
-        // Check if this resource is already in this grantee's list
-        const existingResource = grouped.get(granteeKey)!.find(
-          r => r.resource_id === resource.resource_id && r.resource_type === resource.resource_type
-        );
-        if (!existingResource) {
-          grouped.get(granteeKey)!.push(resource);
-        }
+        const grantedDate = new Date(share.granted_at).toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric'
+        });
+
+        allShares.push({
+          grantee_id: share.grantee_id,
+          grantee_name: share.grantee_name,
+          grantee_email: share.grantee_email,
+          granted_date: grantedDate,
+          resource: resource
+        });
       });
     });
 
-    return Array.from(grouped.entries()).map(([granteeKey, userResources]) => {
-      // Get the first share to determine grantee info and date
-      const firstShare = userResources[0]?.shares[0];
-      const shareDate = firstShare ? formatDate(firstShare.granted_at) : '';
+    // Group by grantee, then by date
+    const grouped = new Map<string, Map<string, typeof resources>>();
 
-      return {
-        uploaded_by: firstShare?.grantee_id || 'unknown',
-        uploaded_by_name: firstShare?.grantee_name || 'Unknown User',
-        uploaded_by_email: firstShare?.grantee_email,
-        share_date: shareDate,
-        resources: userResources,
-        file_count: userResources.length,
-        total_size: userResources.reduce((sum, r) => sum + (r.file_size || 0), 0)
-      };
-    }).sort((a, b) => {
-      // Sort by grantee name, then by date
+    allShares.forEach(share => {
+      // First level: group by grantee
+      if (!grouped.has(share.grantee_id)) {
+        grouped.set(share.grantee_id, new Map());
+      }
+
+      const granteeGroup = grouped.get(share.grantee_id)!;
+
+      // Second level: group by date
+      if (!granteeGroup.has(share.granted_date)) {
+        granteeGroup.set(share.granted_date, []);
+      }
+
+      // Check if resource already exists in this date group (avoid duplicates)
+      const dateGroup = granteeGroup.get(share.granted_date)!;
+      const exists = dateGroup.some(
+        r => r.resource_id === share.resource.resource_id && r.resource_type === share.resource.resource_type
+      );
+      if (!exists) {
+        dateGroup.push(share.resource);
+      }
+    });
+
+    // Convert to array format for rendering
+    const result: any[] = [];
+
+    grouped.forEach((dateGroups, granteeId) => {
+      dateGroups.forEach((resources, grantedDate) => {
+        const firstResource = resources[0];
+        const firstShare = firstResource?.shares.find(s => s.grantee_id === granteeId);
+
+        result.push({
+          uploaded_by: granteeId,
+          uploaded_by_name: firstShare?.grantee_name || 'Unknown User',
+          uploaded_by_email: firstShare?.grantee_email,
+          share_date: grantedDate,
+          resources: resources,
+          file_count: resources.length,
+          total_size: resources.reduce((sum, r) => sum + (r.file_size || 0), 0)
+        });
+      });
+    });
+
+    // Sort: first by grantee name, then by date (most recent first)
+    return result.sort((a, b) => {
       if (a.uploaded_by_name !== b.uploaded_by_name) {
         return a.uploaded_by_name.localeCompare(b.uploaded_by_name);
       }
-      return b.share_date.localeCompare(a.share_date);
+      return new Date(b.share_date).getTime() - new Date(a.share_date).getTime();
     });
   };
 
