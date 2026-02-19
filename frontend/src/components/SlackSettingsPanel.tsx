@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from './ui/Button';
+import { AccordionItem } from './ui/Accordion';
 import { slackApi } from '../lib/api';
-import { MessageSquare, Check, X, Bell, BellOff } from 'lucide-react';
+import { MessageSquare, Check, X, Bell, BellOff, Loader2 } from 'lucide-react';
 
 interface SlackConnection {
   connected: boolean;
@@ -164,23 +165,28 @@ export function SlackSettingsPanel() {
 
   if (loading) {
     return (
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-        <div className="flex items-center gap-2 mb-4">
-          <MessageSquare className="w-5 h-5 text-purple-500" />
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Slack Integration</h3>
+      <AccordionItem
+        title="Slack Integration"
+        subtitle="Connect your Slack workspace to receive notifications"
+        defaultOpen={false}
+        icon={<MessageSquare className="w-5 h-5 text-green-600" />}
+      >
+        <div className="flex items-center justify-center py-8">
+          <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+          <span className="ml-3 text-muted-foreground">Loading Slack settings...</span>
         </div>
-        <p className="text-gray-500 dark:text-gray-400">Loading...</p>
-      </div>
+      </AccordionItem>
     );
   }
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-      {/* Header */}
-      <div className="flex items-center gap-2 mb-4">
-        <MessageSquare className="w-5 h-5 text-purple-500" />
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Slack Integration</h3>
-      </div>
+    <AccordionItem
+      title="Slack Integration"
+      subtitle={connection?.connected ? `Connected as ${connection.user_name || 'User'}` : "Connect your Slack workspace to receive notifications"}
+      defaultOpen={false}
+      icon={<MessageSquare className="w-5 h-5 text-green-600" />}
+    >
+      <div className="pt-4">{/* Header removed - now in accordion title */}
 
       {/* Message */}
       {message && (
@@ -373,6 +379,7 @@ export function SlackSettingsPanel() {
           </div>
         </>
       )}
-    </div>
+      </div>
+    </AccordionItem>
   );
 }

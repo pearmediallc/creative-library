@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Card } from './ui/Card';
 import { Button } from './ui/Button';
+import { Accordion, AccordionItem } from './ui/Accordion';
 import { Bell, Volume2, Chrome, MessageSquare, Save, Loader2 } from 'lucide-react';
 import axios from 'axios';
 
@@ -163,33 +164,29 @@ export function NotificationPreferencesPanel() {
   }
 
   return (
-    <Card className="p-6">
-      <div className="space-y-6">
-        <div>
-          <h2 className="text-xl font-semibold flex items-center gap-2">
-            <Bell className="w-5 h-5" />
-            Notification Preferences
-          </h2>
-          <p className="text-sm text-muted-foreground mt-1">
-            Control how and when you receive notifications
-          </p>
+    <div className="space-y-4">
+      {error && (
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-200 px-4 py-3 rounded">
+          {error}
         </div>
+      )}
 
-        {error && (
-          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-200 px-4 py-3 rounded">
-            {error}
-          </div>
-        )}
+      {successMessage && (
+        <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-800 dark:text-green-200 px-4 py-3 rounded">
+          {successMessage}
+        </div>
+      )}
 
-        {successMessage && (
-          <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-800 dark:text-green-200 px-4 py-3 rounded">
-            {successMessage}
-          </div>
-        )}
-
-        {/* Master Controls */}
-        <div className="space-y-4 pb-6 border-b">
-          <h3 className="font-medium">Master Controls</h3>
+      <Accordion>
+        {/* Master Controls Accordion */}
+        <AccordionItem
+          title="Notification Preferences"
+          subtitle="Control how and when you receive notifications"
+          defaultOpen={true}
+          icon={<Bell className="w-5 h-5 text-blue-600" />}
+        >
+          <div className="space-y-4 pt-4">{/* Master Controls */}
+          <div className="space-y-3">{/* <h3 className="font-medium">Master Controls</h3> */}
 
           <div className="flex items-center justify-between py-3 px-4 bg-muted/30 rounded-lg">
             <div className="flex items-center gap-3">
@@ -264,15 +261,37 @@ export function NotificationPreferencesPanel() {
           </div>
         </div>
 
-        {/* Per-Notification Type Controls */}
-        <div className="space-y-4">
-          <h3 className="font-medium">Notification Types</h3>
-          <p className="text-sm text-muted-foreground">
-            Customize how you receive each type of notification
-          </p>
+          {/* Save Button */}
+          <div className="flex justify-end pt-4 border-t mt-6">
+            <Button
+              onClick={savePreferences}
+              disabled={saving}
+              className="flex items-center gap-2"
+            >
+              {saving ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Save className="w-4 h-4" />
+                  Save Preferences
+                </>
+              )}
+            </Button>
+          </div>
+        </AccordionItem>
 
-          <div className="space-y-2">
-            <div className="grid grid-cols-4 gap-4 text-sm font-medium text-muted-foreground px-4 py-2">
+        {/* Per-Notification Type Controls Accordion */}
+        <AccordionItem
+          title="Notification Types"
+          subtitle="Customize how you receive each type of notification"
+          defaultOpen={false}
+          icon={<MessageSquare className="w-5 h-5 text-purple-600" />}
+        >
+          <div className="space-y-2 pt-4">
+            <div className="grid grid-cols-4 gap-4 text-sm font-medium text-muted-foreground px-4 py-2 bg-muted/20 rounded-lg">
               <div>Notification Type</div>
               <div className="text-center">Browser</div>
               <div className="text-center">Sound</div>
@@ -317,29 +336,8 @@ export function NotificationPreferencesPanel() {
               </div>
             ))}
           </div>
-        </div>
-
-        {/* Save Button */}
-        <div className="flex justify-end pt-4 border-t">
-          <Button
-            onClick={savePreferences}
-            disabled={saving}
-            className="flex items-center gap-2"
-          >
-            {saving ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Saving...
-              </>
-            ) : (
-              <>
-                <Save className="w-4 h-4" />
-                Save Preferences
-              </>
-            )}
-          </Button>
-        </div>
-      </div>
-    </Card>
+        </AccordionItem>
+      </Accordion>
+    </div>
   );
 }
