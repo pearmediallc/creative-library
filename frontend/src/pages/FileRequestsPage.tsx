@@ -33,7 +33,9 @@ interface FileRequest {
   num_creatives?: number;
   buyer_name?: string;
   buyer_email?: string;
+  created_by?: string; // User ID of creator
   created_by_name?: string;
+  assigned_buyer_id?: string; // User ID of assigned buyer
   assigned_editors?: string; // STRING_AGG returns a comma-separated string
   completed_editors_count?: number;
   total_editors_count?: number;

@@ -376,7 +376,7 @@ class AnalyticsController {
    * Shows counts and progress for each vertical
    * Admin sees all verticals, vertical heads see only their assigned verticals
    */
-  static async getVerticalDashboard(req, res, next) {
+  async getVerticalDashboard(req, res, next) {
     try {
       const userId = req.user.id;
       const userRole = req.user.role;
