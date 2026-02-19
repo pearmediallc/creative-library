@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Card } from './ui/Card';
 import { analyticsApi } from '../lib/api';
-import { TrendingUp, Video, FileText, CheckCircle, Clock } from 'lucide-react';
+import { TrendingUp, Video, FileText, CheckCircle, Clock, ChevronDown, ChevronUp, Calendar, User, Users } from 'lucide-react';
 import { getVerticalBadgeClasses } from '../constants/statusColors';
 
 interface VerticalStats {
@@ -34,10 +34,38 @@ interface VerticalStats {
   progress_percent: number;
 }
 
+interface DetailedRequest {
+  id: string;
+  title: string;
+  type: 'file_request' | 'launch_request';
+  request_type: string;
+  status: string;
+  creator: string;
+  buyer: string;
+  editors: string;
+  total_creatives: number;
+  completed_creatives: number;
+  progress_percent: number;
+  created_at: string;
+  first_assignment_at?: string;
+  last_accepted_at?: string;
+  launched_at?: string;
+  closed_at?: string;
+}
+
+interface VerticalDetails {
+  vertical: string;
+  file_requests: DetailedRequest[];
+  launch_requests: DetailedRequest[];
+}
+
 export function VerticalDashboard() {
   const [stats, setStats] = useState<VerticalStats[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [expandedVertical, setExpandedVertical] = useState<string | null>(null);
+  const [detailedData, setDetailedData] = useState<VerticalDetails | null>(null);
+  const [detailsLoading, setDetailsLoading] = useState(false);
 
   useEffect(() => {
     fetchVerticalStats();
@@ -54,6 +82,68 @@ export function VerticalDashboard() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchVerticalDetails = async (vertical: string) => {
+    try {
+      setDetailsLoading(true);
+      const response = await analyticsApi.getVerticalDetailedRequests(vertical);
+      setDetailedData(response.data.data);
+    } catch (err: any) {
+      console.error('Failed to fetch vertical details:', err);
+      alert(err.response?.data?.error || 'Failed to load detailed requests');
+    } finally {
+      setDetailsLoading(false);
+    }
+  };
+
+  const toggleVertical = async (vertical: string) => {
+    if (expandedVertical === vertical) {
+      setExpandedVertical(null);
+      setDetailedData(null);
+    } else {
+      setExpandedVertical(vertical);
+      await fetchVerticalDetails(vertical);
+    }
+  };
+
+  const formatDateTime = (dateStr?: string) => {
+    if (!dateStr) return '—';
+    const date = new Date(dateStr);
+    return date.toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  const formatDate = (dateStr?: string) => {
+    if (!dateStr) return '—';
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    });
+  };
+
+  const getStatusBadgeColor = (status: string) => {
+    const statusMap: Record<string, string> = {
+      'open': 'bg-blue-100 text-blue-800',
+      'pending': 'bg-blue-100 text-blue-800',
+      'in_progress': 'bg-yellow-100 text-yellow-800',
+      'uploaded': 'bg-purple-100 text-purple-800',
+      'launched': 'bg-green-100 text-green-800',
+      'closed': 'bg-gray-100 text-gray-800',
+      'draft': 'bg-gray-100 text-gray-800',
+      'pending_review': 'bg-blue-100 text-blue-800',
+      'in_production': 'bg-yellow-100 text-yellow-800',
+      'ready_to_launch': 'bg-purple-100 text-purple-800',
+      'buyer_assigned': 'bg-indigo-100 text-indigo-800'
+    };
+    return statusMap[status] || 'bg-gray-100 text-gray-800';
   };
 
   const ProgressBar = ({ percent }: { percent: number }) => (
@@ -193,57 +283,238 @@ export function VerticalDashboard() {
                   ...vertical.launch_requests.editors_working.split(', ').filter(Boolean)
                 ]);
                 const editorsDisplay = Array.from(allEditors).join(', ') || '—';
+                const isExpanded = expandedVertical === vertical.vertical;
 
                 return (
-                  <tr key={vertical.vertical} className="hover:bg-muted/50 transition-colors">
-                    <td className="p-4">
-                      <span className={getVerticalBadgeClasses(vertical.vertical)}>
-                        {vertical.vertical}
-                      </span>
-                    </td>
-                    <td className="p-4 text-center">
-                      <div className="font-medium">{vertical.combined_total}</div>
-                      <div className="text-xs text-muted-foreground">
-                        FR: {vertical.file_requests.total} / LR: {vertical.launch_requests.total}
-                      </div>
-                    </td>
-                    <td className="p-4 text-center">
-                      <div className="flex items-center justify-center gap-1">
-                        <Video className="w-4 h-4 text-purple-500" />
-                        <span className="font-medium">{vertical.combined_video}</span>
-                      </div>
-                    </td>
-                    <td className="p-4 text-center">
-                      <div className="flex items-center justify-center gap-1">
-                        <Clock className="w-4 h-4 text-orange-500" />
-                        <span className="font-medium">{vertical.combined_pending}</span>
-                      </div>
-                    </td>
-                    <td className="p-4 text-center">
-                      <div className="flex items-center justify-center gap-1">
-                        <CheckCircle className="w-4 h-4 text-green-500" />
-                        <span className="font-medium">
-                          {vertical.file_requests.launched + vertical.launch_requests.launched}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="p-4">
-                      <div className="space-y-1">
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-muted-foreground">
-                            {vertical.combined_completed} / {vertical.combined_creatives}
+                  <React.Fragment key={vertical.vertical}>
+                    <tr
+                      className="hover:bg-muted/50 transition-colors cursor-pointer"
+                      onClick={() => toggleVertical(vertical.vertical)}
+                    >
+                      <td className="p-4">
+                        <div className="flex items-center gap-2">
+                          {isExpanded ? (
+                            <ChevronUp className="w-4 h-4 text-muted-foreground" />
+                          ) : (
+                            <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                          )}
+                          <span className={getVerticalBadgeClasses(vertical.vertical)}>
+                            {vertical.vertical}
                           </span>
-                          <span className="font-medium">{vertical.progress_percent}%</span>
                         </div>
-                        <ProgressBar percent={vertical.progress_percent} />
-                      </div>
-                    </td>
-                    <td className="p-4">
-                      <div className="text-sm text-muted-foreground max-w-xs truncate" title={editorsDisplay}>
-                        {editorsDisplay}
-                      </div>
-                    </td>
-                  </tr>
+                      </td>
+                      <td className="p-4 text-center">
+                        <div className="font-medium">{vertical.combined_total}</div>
+                        <div className="text-xs text-muted-foreground">
+                          FR: {vertical.file_requests.total} / LR: {vertical.launch_requests.total}
+                        </div>
+                      </td>
+                      <td className="p-4 text-center">
+                        <div className="flex items-center justify-center gap-1">
+                          <Video className="w-4 h-4 text-purple-500" />
+                          <span className="font-medium">{vertical.combined_video}</span>
+                        </div>
+                      </td>
+                      <td className="p-4 text-center">
+                        <div className="flex items-center justify-center gap-1">
+                          <Clock className="w-4 h-4 text-orange-500" />
+                          <span className="font-medium">{vertical.combined_pending}</span>
+                        </div>
+                      </td>
+                      <td className="p-4 text-center">
+                        <div className="flex items-center justify-center gap-1">
+                          <CheckCircle className="w-4 h-4 text-green-500" />
+                          <span className="font-medium">
+                            {vertical.file_requests.launched + vertical.launch_requests.launched}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="p-4">
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">
+                              {vertical.combined_completed} / {vertical.combined_creatives}
+                            </span>
+                            <span className="font-medium">{vertical.progress_percent}%</span>
+                          </div>
+                          <ProgressBar percent={vertical.progress_percent} />
+                        </div>
+                      </td>
+                      <td className="p-4">
+                        <div className="text-sm text-muted-foreground max-w-xs truncate" title={editorsDisplay}>
+                          {editorsDisplay}
+                        </div>
+                      </td>
+                    </tr>
+
+                    {/* Expanded Details Row */}
+                    {isExpanded && (
+                      <tr>
+                        <td colSpan={7} className="p-0 bg-muted/30">
+                          <div className="p-6">
+                            {detailsLoading ? (
+                              <div className="flex items-center justify-center py-8">
+                                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+                                <span className="ml-3 text-muted-foreground">Loading details...</span>
+                              </div>
+                            ) : detailedData ? (
+                              <div className="space-y-6">
+                                {/* File Requests Section */}
+                                {detailedData.file_requests.length > 0 && (
+                                  <div>
+                                    <h4 className="font-semibold mb-3 flex items-center gap-2">
+                                      <FileText className="w-4 h-4" />
+                                      File Requests ({detailedData.file_requests.length})
+                                    </h4>
+                                    <div className="overflow-x-auto">
+                                      <table className="w-full text-sm">
+                                        <thead className="bg-muted/50 border-b">
+                                          <tr>
+                                            <th className="text-left p-3 font-medium">Title</th>
+                                            <th className="text-left p-3 font-medium">Type</th>
+                                            <th className="text-left p-3 font-medium">Status</th>
+                                            <th className="text-left p-3 font-medium">Creator</th>
+                                            <th className="text-left p-3 font-medium">Buyer</th>
+                                            <th className="text-left p-3 font-medium">Editors</th>
+                                            <th className="text-center p-3 font-medium">Progress</th>
+                                            <th className="text-left p-3 font-medium">Created</th>
+                                            <th className="text-left p-3 font-medium">Assigned</th>
+                                            <th className="text-left p-3 font-medium">Accepted</th>
+                                          </tr>
+                                        </thead>
+                                        <tbody className="divide-y">
+                                          {detailedData.file_requests.map((req) => (
+                                            <tr key={req.id} className="hover:bg-muted/30">
+                                              <td className="p-3 max-w-xs truncate" title={req.title}>{req.title}</td>
+                                              <td className="p-3">{req.request_type}</td>
+                                              <td className="p-3">
+                                                <span className={`px-2 py-1 rounded text-xs ${getStatusBadgeColor(req.status)}`}>
+                                                  {req.status}
+                                                </span>
+                                              </td>
+                                              <td className="p-3">
+                                                <div className="flex items-center gap-1">
+                                                  <User className="w-3 h-3 text-muted-foreground" />
+                                                  {req.creator || '—'}
+                                                </div>
+                                              </td>
+                                              <td className="p-3">
+                                                <div className="flex items-center gap-1">
+                                                  <User className="w-3 h-3 text-muted-foreground" />
+                                                  {req.buyer || '—'}
+                                                </div>
+                                              </td>
+                                              <td className="p-3 max-w-xs truncate">
+                                                <div className="flex items-center gap-1" title={req.editors}>
+                                                  <Users className="w-3 h-3 text-muted-foreground" />
+                                                  {req.editors}
+                                                </div>
+                                              </td>
+                                              <td className="p-3 text-center">
+                                                <div className="text-xs">
+                                                  {req.completed_creatives}/{req.total_creatives} ({req.progress_percent}%)
+                                                </div>
+                                              </td>
+                                              <td className="p-3 text-xs whitespace-nowrap">
+                                                <div className="flex items-center gap-1">
+                                                  <Calendar className="w-3 h-3 text-muted-foreground" />
+                                                  {formatDate(req.created_at)}
+                                                </div>
+                                              </td>
+                                              <td className="p-3 text-xs whitespace-nowrap">{formatDate(req.first_assignment_at)}</td>
+                                              <td className="p-3 text-xs whitespace-nowrap">{formatDate(req.last_accepted_at)}</td>
+                                            </tr>
+                                          ))}
+                                        </tbody>
+                                      </table>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* Launch Requests Section */}
+                                {detailedData.launch_requests.length > 0 && (
+                                  <div>
+                                    <h4 className="font-semibold mb-3 flex items-center gap-2">
+                                      <FileText className="w-4 h-4" />
+                                      Launch Requests ({detailedData.launch_requests.length})
+                                    </h4>
+                                    <div className="overflow-x-auto">
+                                      <table className="w-full text-sm">
+                                        <thead className="bg-muted/50 border-b">
+                                          <tr>
+                                            <th className="text-left p-3 font-medium">Title</th>
+                                            <th className="text-left p-3 font-medium">Type</th>
+                                            <th className="text-left p-3 font-medium">Status</th>
+                                            <th className="text-left p-3 font-medium">Creator</th>
+                                            <th className="text-left p-3 font-medium">Buyer</th>
+                                            <th className="text-left p-3 font-medium">Editors</th>
+                                            <th className="text-center p-3 font-medium">Progress</th>
+                                            <th className="text-left p-3 font-medium">Created</th>
+                                            <th className="text-left p-3 font-medium">Assigned</th>
+                                            <th className="text-left p-3 font-medium">Launched</th>
+                                          </tr>
+                                        </thead>
+                                        <tbody className="divide-y">
+                                          {detailedData.launch_requests.map((req) => (
+                                            <tr key={req.id} className="hover:bg-muted/30">
+                                              <td className="p-3 max-w-xs truncate" title={req.title}>{req.title}</td>
+                                              <td className="p-3">{req.request_type}</td>
+                                              <td className="p-3">
+                                                <span className={`px-2 py-1 rounded text-xs ${getStatusBadgeColor(req.status)}`}>
+                                                  {req.status}
+                                                </span>
+                                              </td>
+                                              <td className="p-3">
+                                                <div className="flex items-center gap-1">
+                                                  <User className="w-3 h-3 text-muted-foreground" />
+                                                  {req.creator || '—'}
+                                                </div>
+                                              </td>
+                                              <td className="p-3">
+                                                <div className="flex items-center gap-1">
+                                                  <User className="w-3 h-3 text-muted-foreground" />
+                                                  {req.buyer || '—'}
+                                                </div>
+                                              </td>
+                                              <td className="p-3 max-w-xs truncate">
+                                                <div className="flex items-center gap-1" title={req.editors}>
+                                                  <Users className="w-3 h-3 text-muted-foreground" />
+                                                  {req.editors}
+                                                </div>
+                                              </td>
+                                              <td className="p-3 text-center">
+                                                <div className="text-xs">
+                                                  {req.completed_creatives}/{req.total_creatives} ({req.progress_percent}%)
+                                                </div>
+                                              </td>
+                                              <td className="p-3 text-xs whitespace-nowrap">
+                                                <div className="flex items-center gap-1">
+                                                  <Calendar className="w-3 h-3 text-muted-foreground" />
+                                                  {formatDate(req.created_at)}
+                                                </div>
+                                              </td>
+                                              <td className="p-3 text-xs whitespace-nowrap">{formatDate(req.first_assignment_at)}</td>
+                                              <td className="p-3 text-xs whitespace-nowrap">{formatDate(req.launched_at)}</td>
+                                            </tr>
+                                          ))}
+                                        </tbody>
+                                      </table>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {detailedData.file_requests.length === 0 && detailedData.launch_requests.length === 0 && (
+                                  <p className="text-center text-muted-foreground py-8">No requests found for this vertical</p>
+                                )}
+                              </div>
+                            ) : (
+                              <p className="text-center text-muted-foreground py-8">Failed to load details</p>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
                 );
               })}
             </tbody>

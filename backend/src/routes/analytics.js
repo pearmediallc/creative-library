@@ -62,4 +62,10 @@ router.get('/vertical-dashboard',
   analyticsController.getVerticalDashboard.bind(analyticsController)
 );
 
+// Get detailed granular requests for a specific vertical (Admin and Vertical Heads)
+router.get('/vertical-dashboard/:vertical/details',
+  authenticateToken,
+  analyticsController.getVerticalDetailedRequests.bind(analyticsController)
+);
+
 module.exports = router;

@@ -911,6 +911,10 @@ export const analyticsApi = {
 
   // Get vertical dashboard analytics
   getVerticalDashboard: () => api.get('/analytics/vertical-dashboard'),
+
+  // Get detailed granular requests for a specific vertical
+  getVerticalDetailedRequests: (vertical: string) =>
+    api.get(`/analytics/vertical-dashboard/${encodeURIComponent(vertical)}/details`),
 };
 
 // Metadata Tags endpoints

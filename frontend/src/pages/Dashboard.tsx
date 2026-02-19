@@ -12,13 +12,10 @@ export function DashboardPage() {
   const [stats, setStats] = useState<StorageStats | null>(null);
   const [editorPerformance, setEditorPerformance] = useState<EditorPerformance[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isVerticalHead, setIsVerticalHead] = useState(false);
+  const [showVerticalDashboard, setShowVerticalDashboard] = useState(false);
 
   // Only admins can see analytics data (ads, spend, editor performance)
   const canViewAnalytics = user?.role === 'admin';
-
-  // Admin or vertical heads can see vertical dashboard
-  const canViewVerticalDashboard = user?.role === 'admin' || isVerticalHead;
 
   useEffect(() => {
     const fetchData = async () => {
@@ -27,15 +24,16 @@ export function DashboardPage() {
         const statsRes = await mediaApi.getStats();
         setStats(statsRes.data.data);
 
-        // Check if user is a vertical head
-        if (user?.role === 'creative') {
+        // Check if user can see vertical dashboard (admin or vertical head)
+        if (user?.role === 'admin') {
+          setShowVerticalDashboard(true);
+        } else if (user?.role === 'creative') {
           try {
             const verticalDashRes = await analyticsApi.getVerticalDashboard();
             // If response has data, user is a vertical head
-            setIsVerticalHead(verticalDashRes.data.data?.length > 0);
+            setShowVerticalDashboard(verticalDashRes.data.data?.length > 0);
           } catch (err) {
-            // Not a vertical head
-            setIsVerticalHead(false);
+            setShowVerticalDashboard(false);
           }
         }
 
@@ -126,7 +124,7 @@ export function DashboardPage() {
         </div>
 
         {/* Vertical Dashboard - show to admins and vertical heads */}
-        {canViewVerticalDashboard && (
+        {showVerticalDashboard && (
           <VerticalDashboard />
         )}
 

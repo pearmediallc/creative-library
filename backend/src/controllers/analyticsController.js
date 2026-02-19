@@ -536,6 +536,144 @@ class AnalyticsController {
       next(error);
     }
   }
+
+  /**
+   * Get detailed granular request data for a specific vertical
+   * Shows individual requests with who requested, when accepted, assigned editors, timestamps
+   */
+  async getVerticalDetailedRequests(req, res, next) {
+    try {
+      const userId = req.user.id;
+      const userRole = req.user.role;
+      const { vertical } = req.params;
+
+      // Check access - admin or vertical head for this vertical
+      if (userRole !== 'admin') {
+        const verticalHeadsResult = await query(
+          `SELECT 1 FROM vertical_heads WHERE head_editor_id = $1 AND vertical = $2`,
+          [userId, vertical]
+        );
+
+        if (verticalHeadsResult.rows.length === 0) {
+          return res.status(403).json({
+            success: false,
+            error: 'Not authorized to view this vertical'
+          });
+        }
+      }
+
+      // Get detailed file requests for this vertical
+      const fileRequestsQuery = `
+        SELECT
+          fr.id,
+          fr.title,
+          fr.request_type,
+          fr.status,
+          fr.created_at,
+          fr.updated_at,
+          fr.launched_at,
+          fr.closed_at,
+          u_creator.username as creator_name,
+          u_buyer.username as buyer_name,
+          STRING_AGG(DISTINCT e.display_name, ', ' ORDER BY e.display_name) as assigned_editors,
+          COALESCE(SUM(fre.num_creatives_assigned), 0) as total_creatives,
+          COALESCE(SUM(fre.creatives_completed), 0) as completed_creatives,
+          MIN(fre.assigned_at) as first_assignment_at,
+          MAX(fre.accepted_at) as last_accepted_at
+        FROM file_request_verticals frv
+        JOIN file_requests fr ON fr.id = frv.file_request_id
+        LEFT JOIN users u_creator ON u_creator.id = fr.created_by
+        LEFT JOIN users u_buyer ON u_buyer.id = fr.assigned_buyer_id
+        LEFT JOIN file_request_editors fre ON fre.request_id = fr.id AND fre.status IN ('pending', 'accepted', 'in_progress')
+        LEFT JOIN editors e ON e.id = fre.editor_id
+        WHERE frv.vertical = $1 AND fr.is_active = TRUE
+        GROUP BY fr.id, u_creator.username, u_buyer.username
+        ORDER BY fr.created_at DESC
+      `;
+
+      const fileRequests = await query(fileRequestsQuery, [vertical]);
+
+      // Get detailed launch requests for this vertical
+      const launchRequestsQuery = `
+        SELECT
+          lr.id,
+          lr.title,
+          lr.request_type,
+          lr.status,
+          lr.created_at,
+          lr.updated_at,
+          lr.launched_at,
+          lr.closed_at,
+          u_creator.username as creator_name,
+          u_buyer.username as buyer_name,
+          STRING_AGG(DISTINCT e.display_name, ', ' ORDER BY e.display_name) as assigned_editors,
+          COALESCE(SUM(lre.num_creatives_assigned), 0) as total_creatives,
+          COALESCE(SUM(lre.creatives_completed), 0) as completed_creatives,
+          MIN(lre.assigned_at) as first_assignment_at
+        FROM launch_request_verticals lrv
+        JOIN launch_requests lr ON lr.id = lrv.launch_request_id
+        LEFT JOIN users u_creator ON u_creator.id = lr.created_by
+        LEFT JOIN users u_buyer ON u_buyer.id = lr.assigned_buyer_id
+        LEFT JOIN launch_request_editors lre ON lre.launch_request_id = lr.id AND lre.status IN ('pending', 'in_progress')
+        LEFT JOIN editors e ON e.id = lre.editor_id
+        WHERE lrv.vertical = $1
+        GROUP BY lr.id, u_creator.username, u_buyer.username
+        ORDER BY lr.created_at DESC
+      `;
+
+      const launchRequests = await query(launchRequestsQuery, [vertical]);
+
+      res.json({
+        success: true,
+        data: {
+          vertical,
+          file_requests: fileRequests.rows.map(r => ({
+            id: r.id,
+            title: r.title,
+            type: 'file_request',
+            request_type: r.request_type,
+            status: r.status,
+            creator: r.creator_name,
+            buyer: r.buyer_name,
+            editors: r.assigned_editors || '—',
+            total_creatives: parseInt(r.total_creatives, 10),
+            completed_creatives: parseInt(r.completed_creatives, 10),
+            progress_percent: parseInt(r.total_creatives, 10) > 0
+              ? Math.round((parseInt(r.completed_creatives, 10) / parseInt(r.total_creatives, 10)) * 100)
+              : 0,
+            created_at: r.created_at,
+            first_assignment_at: r.first_assignment_at,
+            last_accepted_at: r.last_accepted_at,
+            launched_at: r.launched_at,
+            closed_at: r.closed_at
+          })),
+          launch_requests: launchRequests.rows.map(r => ({
+            id: r.id,
+            title: r.title,
+            type: 'launch_request',
+            request_type: r.request_type,
+            status: r.status,
+            creator: r.creator_name,
+            buyer: r.buyer_name,
+            editors: r.assigned_editors || '—',
+            total_creatives: parseInt(r.total_creatives, 10),
+            completed_creatives: parseInt(r.completed_creatives, 10),
+            progress_percent: parseInt(r.total_creatives, 10) > 0
+              ? Math.round((parseInt(r.completed_creatives, 10) / parseInt(r.total_creatives, 10)) * 100)
+              : 0,
+            created_at: r.created_at,
+            first_assignment_at: r.first_assignment_at,
+            launched_at: r.launched_at,
+            closed_at: r.closed_at
+          }))
+        }
+      });
+
+    } catch (error) {
+      logger.error('Vertical detailed requests error', { error: error.message, stack: error.stack });
+      next(error);
+    }
+  }
 }
 
 module.exports = new AnalyticsController();
