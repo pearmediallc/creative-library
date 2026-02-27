@@ -150,6 +150,11 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
   // Edit history state
   const [editHistory, setEditHistory] = useState<any[]>([]);
 
+  // Edit mode state
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [editedRequest, setEditedRequest] = useState<any>({});
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+
   useEffect(() => {
     fetchRequestDetails();
     fetchReassignments();
@@ -589,9 +594,55 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
   };
 
   const handleEditRequest = () => {
-    // TODO: Open CreateFileRequestModal in edit mode
-    // For now, navigate or show alert
-    alert('Edit functionality will open the request in edit mode. Implementation pending.');
+    setIsEditMode(true);
+    setEditedRequest({
+      title: request.title,
+      concept_notes: request.concept_notes,
+      num_creatives: request.num_creatives,
+      request_type: request.request_type,
+      deadline: request.deadline,
+      platforms: request.platforms || [],
+      verticals: request.verticals || []
+    });
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditMode(false);
+    setEditedRequest({});
+  };
+
+  const handleSaveEdit = async () => {
+    try {
+      setIsSavingEdit(true);
+      const API_BASE_URL = (process.env.REACT_APP_API_URL || 'http://localhost:3001/api');
+      const token = localStorage.getItem('token');
+
+      const response = await fetch(`${API_BASE_URL}/file-requests/${requestId}`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          ...editedRequest,
+          edit_reason: 'Updated request details'
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update request');
+      }
+
+      alert('Request updated successfully!');
+      setIsEditMode(false);
+      fetchRequestDetails();
+      fetchEditHistory();
+    } catch (error) {
+      console.error('Error updating request:', error);
+      alert('Failed to update request. Please try again.');
+    } finally {
+      setIsSavingEdit(false);
+    }
   };
 
   const handleDuplicateRequest = async () => {
@@ -681,26 +732,48 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
             </p>
           </div>
           <div className="flex items-center gap-2">
-            {/* Edit Button */}
-            {(user?.id === request.created_by || user?.role === 'admin' || user?.view_all_requests) &&
-             request.status !== 'closed' && request.status !== 'launched' && (
-              <button
-                onClick={() => handleEditRequest()}
-                className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
-                title="Edit Request"
-              >
-                <Edit2 className="w-4 h-4" />
-              </button>
-            )}
+            {isEditMode ? (
+              <>
+                {/* Save Button */}
+                <button
+                  onClick={handleSaveEdit}
+                  disabled={isSavingEdit}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                >
+                  {isSavingEdit ? 'Saving...' : 'Save'}
+                </button>
+                {/* Cancel Button */}
+                <button
+                  onClick={handleCancelEdit}
+                  disabled={isSavingEdit}
+                  className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 transition-colors"
+                >
+                  Cancel
+                </button>
+              </>
+            ) : (
+              <>
+                {/* Edit Button - Now visible to ALL users */}
+                {request.status !== 'closed' && request.status !== 'launched' && (
+                  <button
+                    onClick={() => handleEditRequest()}
+                    className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                    title="Edit Request"
+                  >
+                    <Edit2 className="w-4 h-4" />
+                  </button>
+                )}
 
-            {/* Duplicate Button */}
-            <button
-              onClick={() => handleDuplicateRequest()}
-              className="p-2 text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-400 rounded-lg transition-colors"
-              title="Duplicate Request"
-            >
-              <Copy className="w-4 h-4" />
-            </button>
+                {/* Duplicate Button */}
+                <button
+                  onClick={() => handleDuplicateRequest()}
+                  className="p-2 text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-400 rounded-lg transition-colors"
+                  title="Duplicate Request"
+                >
+                  <Copy className="w-4 h-4" />
+                </button>
+              </>
+            )}
 
             <button
               onClick={onClose}
@@ -729,18 +802,41 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
               )}
 
               {/* Number of Creatives */}
-              {request.num_creatives_requested !== undefined && request.num_creatives_requested > 0 && (
+              {(request.num_creatives_requested !== undefined && request.num_creatives_requested > 0) || isEditMode ? (
                 <div>
                   <span className="text-blue-700 dark:text-blue-300 font-medium">Creatives Requested:</span>
-                  <p className="text-blue-900 dark:text-blue-100">{request.num_creatives_requested}</p>
+                  {isEditMode ? (
+                    <input
+                      type="number"
+                      value={editedRequest.num_creatives || ''}
+                      onChange={(e) => setEditedRequest({ ...editedRequest, num_creatives: parseInt(e.target.value) || 0 })}
+                      className="mt-1 w-full px-2 py-1 text-sm border border-blue-300 dark:border-blue-700 rounded bg-white dark:bg-gray-800 text-blue-900 dark:text-blue-100"
+                      min="1"
+                    />
+                  ) : (
+                    <p className="text-blue-900 dark:text-blue-100">{request.num_creatives_requested}</p>
+                  )}
                 </div>
-              )}
+              ) : null}
 
               {/* Request Type */}
-              {request.request_type && (
+              {(request.request_type || isEditMode) && (
                 <div>
                   <span className="text-blue-700 dark:text-blue-300 font-medium">Type:</span>
-                  <p className="text-blue-900 dark:text-blue-100 capitalize">{request.request_type}</p>
+                  {isEditMode ? (
+                    <select
+                      value={editedRequest.request_type || ''}
+                      onChange={(e) => setEditedRequest({ ...editedRequest, request_type: e.target.value })}
+                      className="mt-1 w-full px-2 py-1 text-sm border border-blue-300 dark:border-blue-700 rounded bg-white dark:bg-gray-800 text-blue-900 dark:text-blue-100"
+                    >
+                      <option value="UGC">UGC</option>
+                      <option value="Special Request">Special Request</option>
+                      <option value="Static">Static</option>
+                      <option value="Video">Video</option>
+                    </select>
+                  ) : (
+                    <p className="text-blue-900 dark:text-blue-100 capitalize">{request.request_type}</p>
+                  )}
                 </div>
               )}
 
@@ -948,12 +1044,22 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
 
           {/* Request Info */}
           <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 space-y-3">
-            {request.description && (
+            {(request.description || isEditMode) && (
               <div>
                 <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Description
                 </h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400">{request.description}</p>
+                {isEditMode ? (
+                  <textarea
+                    value={editedRequest.concept_notes || ''}
+                    onChange={(e) => setEditedRequest({ ...editedRequest, concept_notes: e.target.value })}
+                    className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                    rows={4}
+                    placeholder="Enter request description..."
+                  />
+                ) : (
+                  <p className="text-sm text-gray-600 dark:text-gray-400">{request.description}</p>
+                )}
               </div>
             )}
 

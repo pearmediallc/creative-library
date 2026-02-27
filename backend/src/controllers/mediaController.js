@@ -491,6 +491,133 @@ class MediaController {
   }
 
   /**
+   * Download file without metadata (stripped clean)
+   * GET /api/media/:id/download-clean
+   */
+  async downloadFileWithoutMetadata(req, res, next) {
+    try {
+      const { id } = req.params;
+      const userId = req.user.id;
+      const userRole = req.user.role;
+
+      logger.info('📥 Download without metadata request for file:', id);
+
+      // Get file metadata
+      const file = await mediaService.getMediaFile(id);
+
+      if (!file) {
+        return res.status(404).json({
+          success: false,
+          error: 'File not found'
+        });
+      }
+
+      // 🔒 SECURITY CHECK: Same permission check as regular download
+      const isOwner = file.uploaded_by === userId;
+      const isAdmin = userRole === 'admin' || userRole === 'super_admin';
+      const isBuyer = userRole === 'buyer' || file.assigned_buyer_id === userId;
+
+      const FilePermission = require('../models/FilePermission');
+      const hasDownloadPermission = await FilePermission.checkPermission(
+        'media_file',
+        id,
+        userId,
+        'download'
+      );
+
+      if (!isOwner && !isAdmin && !isBuyer && !hasDownloadPermission) {
+        return res.status(403).json({
+          success: false,
+          error: 'You do not have permission to download this file'
+        });
+      }
+
+      // Fetch file from S3/CloudFront
+      const https = require('https');
+      const http = require('http');
+      const url = require('url');
+
+      const parsedUrl = url.parse(file.s3_url);
+      const protocol = parsedUrl.protocol === 'https:' ? https : http;
+
+      protocol.get(parsedUrl.href, async (proxyRes) => {
+        // Collect file data in buffer
+        const chunks = [];
+        proxyRes.on('data', (chunk) => chunks.push(chunk));
+        proxyRes.on('end', async () => {
+          try {
+            const buffer = Buffer.concat(chunks);
+            logger.info('✅ File fetched from S3, now stripping metadata...');
+
+            // Strip metadata based on file type
+            const metadataService = require('../services/metadataService');
+            let cleanBuffer;
+
+            const isImage = file.mime_type?.startsWith('image/');
+            const isVideo = file.mime_type?.startsWith('video/');
+
+            if (isImage) {
+              cleanBuffer = await metadataService.removeMetadataFromImage(buffer);
+              logger.info('✅ Image metadata stripped');
+            } else if (isVideo) {
+              cleanBuffer = await metadataService.removeMetadataFromVideo(buffer);
+              logger.info('✅ Video metadata stripped');
+            } else {
+              // For other file types, just return original
+              cleanBuffer = buffer;
+              logger.info('ℹ️  File type not supported for metadata removal, returning original');
+            }
+
+            // Set response headers
+            res.setHeader('Access-Control-Allow-Origin', '*');
+            res.setHeader('Access-Control-Allow-Methods', 'GET');
+            res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
+            res.setHeader('Content-Type', file.mime_type);
+            res.setHeader('Content-Length', cleanBuffer.length);
+            res.setHeader('Content-Disposition', `attachment; filename="clean_${file.original_filename}"`);
+
+            // Send clean file
+            res.send(cleanBuffer);
+
+            // Log download activity
+            await logActivity({
+              req,
+              actionType: 'media_download_clean',
+              resourceType: 'media_file',
+              resourceId: id,
+              resourceName: file.original_filename,
+              details: {
+                file_type: file.file_type,
+                metadata_stripped: isImage || isVideo
+              },
+              status: 'success'
+            });
+
+            logger.info('✅ Clean file download completed:', file.original_filename);
+
+          } catch (error) {
+            logger.error('Error processing file for metadata removal:', error);
+            res.status(500).json({
+              success: false,
+              error: 'Failed to process file'
+            });
+          }
+        });
+      }).on('error', (err) => {
+        logger.error('Error fetching file from S3:', err);
+        res.status(500).json({
+          success: false,
+          error: 'Failed to fetch file'
+        });
+      });
+
+    } catch (error) {
+      logger.error('Download without metadata error:', error);
+      next(error);
+    }
+  }
+
+  /**
    * ✨ NEW: Start bulk metadata operation (async)
    * POST /api/media/bulk/metadata
    * Body: { file_ids: [], operation: 'add' | 'remove' | 'remove_and_add', metadata: {} }

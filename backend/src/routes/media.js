@@ -65,6 +65,12 @@ router.get('/:id/download',
   mediaController.downloadFile.bind(mediaController)
 );
 
+// Download file without metadata (strip EXIF/metadata)
+router.get('/:id/download-clean',
+  authenticateToken,
+  mediaController.downloadFileWithoutMetadata.bind(mediaController)
+);
+
 // Get single file
 router.get('/:id',
   authenticateToken,

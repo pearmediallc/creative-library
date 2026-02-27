@@ -98,6 +98,7 @@ export function MediaLibraryPage() {
     metadata: Record<string, any>;
   } | null>(null);
   const [downloadingZip, setDownloadingZip] = useState(false);
+  const [showDownloadMenu, setShowDownloadMenu] = useState<string | null>(null);
 
   // Version history state
   const [versionHistoryFile, setVersionHistoryFile] = useState<{
@@ -562,11 +563,12 @@ export function MediaLibraryPage() {
     });
   };
 
-  const handleDownload = async (file: MediaFile) => {
+  const handleDownload = async (file: MediaFile, stripMetadata = false) => {
     try {
       // Use authenticated fetch with Bearer token to download file
       const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
-      const downloadUrl = `${API_BASE}/media/${file.id}/download`;
+      const endpoint = stripMetadata ? 'download-clean' : 'download';
+      const downloadUrl = `${API_BASE}/media/${file.id}/${endpoint}`;
       const token = localStorage.getItem('token');
 
       const response = await fetch(downloadUrl, {
@@ -583,7 +585,8 @@ export function MediaLibraryPage() {
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = file.original_filename;
+      const filename = stripMetadata ? `clean_${file.original_filename}` : file.original_filename;
+      link.download = filename;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -1130,15 +1133,39 @@ export function MediaLibraryPage() {
                               </div>
                               <div className="space-y-2">
                                 <div className="flex gap-2 pt-3 border-t border-border">
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="flex-1"
-                                    onClick={() => handleDownload(file)}
-                                  >
-                                    <Download className="w-4 h-4 mr-1" />
-                                    Download
-                                  </Button>
+                                  <div className="relative flex-1">
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="w-full"
+                                      onClick={() => setShowDownloadMenu(showDownloadMenu === file.id ? null : file.id)}
+                                    >
+                                      <Download className="w-4 h-4 mr-1" />
+                                      Download ▼
+                                    </Button>
+                                    {showDownloadMenu === file.id && (
+                                      <div className="absolute left-0 mt-1 w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md shadow-lg z-50">
+                                        <button
+                                          onClick={() => {
+                                            handleDownload(file, false);
+                                            setShowDownloadMenu(null);
+                                          }}
+                                          className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700"
+                                        >
+                                          Download Original
+                                        </button>
+                                        <button
+                                          onClick={() => {
+                                            handleDownload(file, true);
+                                            setShowDownloadMenu(null);
+                                          }}
+                                          className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 border-t border-gray-200 dark:border-gray-700"
+                                        >
+                                          Download Clean (No Metadata)
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
                                   <Button
                                     variant="outline"
                                     size="sm"
