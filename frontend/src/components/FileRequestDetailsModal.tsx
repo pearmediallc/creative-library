@@ -1644,7 +1644,7 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
       {show3StepCanvas && (
         <CanvasBrief3Step
           requestId={requestId}
-          initialContent={canvas?.content}
+          initialContent={canvas?.content ? JSON.stringify(canvas.content) : undefined}
           onSave={handleSave3StepCanvas}
           onClose={() => setShow3StepCanvas(false)}
         />
