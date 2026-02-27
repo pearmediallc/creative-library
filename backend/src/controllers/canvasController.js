@@ -290,14 +290,20 @@ class CanvasController {
         });
       }
 
-      // Validate content - accept both Canvas Editor format (blocks) and Canvas Brief format (headline/script/samples)
-      const isCanvasEditor = content && content.blocks;
-      const isCanvasBrief = content && (content.headline || content.script || content.samples);
-
-      if (!content || (!isCanvasEditor && !isCanvasBrief)) {
+      // Validate content - ONLY accept Canvas Brief format (headline/script/samples)
+      if (!content || typeof content !== 'object') {
         return res.status(400).json({
           success: false,
-          error: 'Invalid canvas content - must have either blocks (Canvas Editor) or headline/script/samples (Canvas Brief)'
+          error: 'Invalid canvas content - content must be an object'
+        });
+      }
+
+      // Canvas Brief must have at least one of: headline, script, or samples
+      const hasContent = content.headline || content.script || (content.samples && content.samples.length > 0);
+      if (!hasContent) {
+        return res.status(400).json({
+          success: false,
+          error: 'Canvas Brief must have at least a headline, script, or reference samples'
         });
       }
 

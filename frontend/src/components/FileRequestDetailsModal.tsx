@@ -3,8 +3,6 @@ import { X, Copy, Calendar, Folder, Mail, CheckCircle, Clock, FileText, Upload a
 import { Button } from './ui/Button';
 import { fileRequestApi, mediaApi } from '../lib/api';
 import { formatDate } from '../lib/utils';
-import { CanvasEditor } from './CanvasEditor';
-import { CanvasRenderer } from './CanvasRenderer';
 import { CanvasBrief3Step } from './CanvasBrief3Step';
 import { UploadedFileCard } from './UploadedFileCard';
 import { UploadHistoryTimeline } from './UploadHistoryTimeline';
@@ -123,8 +121,6 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
   const [request, setRequest] = useState<FileRequestDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [canvas, setCanvas] = useState<Canvas | null>(null);
-  const [showCanvas, setShowCanvas] = useState(false);
-  const [canvasMode, setCanvasMode] = useState<'view' | 'edit'>('view');
   const [show3StepCanvas, setShow3StepCanvas] = useState(false);
 
   // Upload state
@@ -1819,31 +1815,6 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
           </Button>
         </div>
       </div>
-
-      {/* Canvas Modal */}
-      {showCanvas && (
-        canvasMode === 'edit' ? (
-          <CanvasEditor
-            requestId={requestId}
-            onClose={() => {
-              setShowCanvas(false);
-              fetchRequestDetails(); // Refresh to get updated canvas
-            }}
-            onSave={(savedCanvas) => {
-              setCanvas(savedCanvas);
-            }}
-          />
-        ) : (
-          canvas && (
-            <CanvasRenderer
-              content={canvas.content}
-              attachments={canvas.attachments}
-              onClose={() => setShowCanvas(false)}
-              readOnly={true}
-            />
-          )
-        )
-      )}
 
       {/* Reassignment Modal - multi-editor with creative distribution */}
       {showReassignModal && request && (
