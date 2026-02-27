@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { DashboardLayout } from '../components/layout/DashboardLayout';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
@@ -59,6 +59,7 @@ export function MediaLibraryPage() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedEditor, setSelectedEditor] = useState('');
+  const [selectedVertical, setSelectedVertical] = useState('');
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
@@ -196,6 +197,33 @@ export function MediaLibraryPage() {
   const isAdmin = user?.role === 'admin';
   const canUpload = user?.role === 'admin' || user?.role === 'creative';
   const canDelete = user?.role === 'admin';
+
+  // Filtered files based on search and vertical
+  const filteredFiles = useMemo(() => {
+    let result = files;
+
+    // Apply search filter
+    if (searchTerm.trim()) {
+      const search = searchTerm.toLowerCase();
+      result = result.filter(file =>
+        file.original_filename.toLowerCase().includes(search) ||
+        file.description?.toLowerCase().includes(search) ||
+        file.tags?.some(tag => tag.toLowerCase().includes(search))
+      );
+    }
+
+    // Apply vertical filter
+    // NOTE: This requires files to have vertical metadata - for now, this will filter
+    // based on files that came from file/launch requests with vertical tags
+    // TODO: Backend implementation needed for proper vertical filtering via JOINs
+    if (selectedVertical) {
+      // This is a placeholder - actual vertical filtering requires backend JOIN queries
+      // with file_request_uploads -> file_requests -> file_request_verticals tables
+      result = result;  // Keep all for now until backend filtering is implemented
+    }
+
+    return result;
+  }, [files, searchTerm, selectedVertical]);
 
   // Handle URL parameters on mount (for direct folder/file links from Slack, etc.)
   useEffect(() => {
@@ -850,6 +878,35 @@ export function MediaLibraryPage() {
               </div>
             )}
 
+            {/* Global Search and Vertical Filter */}
+            <div className="flex gap-3 mb-4">
+              {/* Global Search Box */}
+              <div className="flex-1">
+                <input
+                  type="text"
+                  placeholder="Search by filename..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              {/* Vertical Filter Dropdown */}
+              <select
+                value={selectedVertical}
+                onChange={(e) => setSelectedVertical(e.target.value)}
+                className="px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">All Verticals</option>
+                <option value="Home Insurance">Home Insurance</option>
+                <option value="Auto Insurance">Auto Insurance</option>
+                <option value="BizOp">BizOp</option>
+                <option value="Guns">Guns</option>
+                <option value="Refi">Refi</option>
+                <option value="Medicare">Medicare</option>
+              </select>
+            </div>
+
             {/* Filters and View Toggle */}
             <div className="flex gap-4 items-center">
               {/* Filter Button with Dropdown */}
@@ -969,16 +1026,16 @@ export function MediaLibraryPage() {
                 )}
 
                 {/* FILES */}
-                {files.length > 0 ? (
+                {filteredFiles.length > 0 ? (
                   <>
                     {folders.length > 0 && <h2 className="text-lg font-semibold mb-4 mt-8">Files</h2>}
                     {viewMode === 'grid' ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                       {(() => {
-                        const totalPages = Math.ceil(files.length / filesPerPage);
+                        const totalPages = Math.ceil(filteredFiles.length / filesPerPage);
                         const startIdx = (currentPage - 1) * filesPerPage;
                         const endIdx = startIdx + filesPerPage;
-                        const paginatedFiles = files.slice(startIdx, endIdx);
+                        const paginatedFiles = filteredFiles.slice(startIdx, endIdx);
 
                         return paginatedFiles.map((file) => (
                           <Card
@@ -1189,10 +1246,10 @@ export function MediaLibraryPage() {
                           </thead>
                           <tbody>
                             {(() => {
-                              const totalPages = Math.ceil(files.length / filesPerPage);
+                              const totalPages = Math.ceil(filteredFiles.length / filesPerPage);
                               const startIdx = (currentPage - 1) * filesPerPage;
                               const endIdx = startIdx + filesPerPage;
-                              const paginatedFiles = files.slice(startIdx, endIdx);
+                              const paginatedFiles = filteredFiles.slice(startIdx, endIdx);
 
                               return paginatedFiles.map((file, index) => (
                                 <tr
