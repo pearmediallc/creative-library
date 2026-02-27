@@ -22,7 +22,10 @@ export function CanvasBrief3Step({ requestId, initialContent, onSave, onClose }:
 
   const [headline, setHeadline] = useState(parsedInitial.headline || '');
   const [script, setScript] = useState(parsedInitial.script || '');
-  const [samples, setSamples] = useState<UploadedSample[]>(parsedInitial.samples || []);
+  // When editing, samples won't have File objects, just metadata
+  // We'll store them separately and only upload new files
+  const [samples, setSamples] = useState<UploadedSample[]>([]);
+  const [existingSamples, setExistingSamples] = useState<any[]>(parsedInitial.samples || []);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -63,23 +66,33 @@ export function CanvasBrief3Step({ requestId, initialContent, onSave, onClose }:
     setSamples(updated);
   };
 
+  const removeExistingSample = (index: number) => {
+    const updated = existingSamples.filter((_, i) => i !== index);
+    setExistingSamples(updated);
+  };
+
   const handleSave = async () => {
     setIsSaving(true);
+
+    // Combine existing samples with new samples
+    const newSamplesMetadata = samples.map(s => ({
+      filename: s.file.name,
+      instruction: s.instruction,
+      type: s.file.type,
+      size: s.file.size
+    }));
+
+    const allSamples = [...existingSamples, ...newSamplesMetadata];
 
     // Prepare data for saving
     const content = {
       headline,
       script,
-      samples: samples.map(s => ({
-        filename: s.file.name,
-        instruction: s.instruction,
-        type: s.file.type,
-        size: s.file.size
-      })),
-      created_at: new Date().toISOString()
+      samples: allSamples,
+      created_at: parsedInitial.created_at || new Date().toISOString()
     };
 
-    // Pass both content and files to parent
+    // Pass both content and files to parent (only new files)
     const files = samples.map(s => s.file);
     await onSave(JSON.stringify(content), files);
 
@@ -172,11 +185,58 @@ export function CanvasBrief3Step({ requestId, initialContent, onSave, onClose }:
             </div>
 
             {/* Uploaded Samples List */}
-            {samples.length > 0 && (
+            {(existingSamples.length > 0 || samples.length > 0) && (
               <div className="mt-6 space-y-4">
+                {/* Existing Samples */}
+                {existingSamples.map((sample, index) => (
+                  <div
+                    key={`existing-${index}`}
+                    className="border border-blue-200 dark:border-blue-700 rounded-lg p-4 bg-blue-50 dark:bg-blue-900/20"
+                  >
+                    <div className="flex items-start gap-4">
+                      {/* Placeholder for existing files */}
+                      <div className="w-20 h-20 bg-blue-100 dark:bg-blue-800 rounded flex items-center justify-center">
+                        <Upload className="w-8 h-8 text-blue-600 dark:text-blue-400" />
+                      </div>
+
+                      {/* File Info */}
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between mb-2">
+                          <div>
+                            <span className="text-sm font-medium text-gray-900 dark:text-white">
+                              {sample.filename}
+                            </span>
+                            <span className="ml-2 text-xs text-blue-600 dark:text-blue-400">
+                              (Existing)
+                            </span>
+                          </div>
+                          <button
+                            onClick={() => removeExistingSample(index)}
+                            className="p-1 hover:bg-red-100 dark:hover:bg-red-900/20 rounded text-red-600"
+                            title="Remove file"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                          {sample.size ? `${(sample.size / 1024).toFixed(2)} KB` : 'Size unknown'}
+                        </p>
+
+                        {/* Instruction Display (read-only for existing) */}
+                        {sample.instruction && (
+                          <div className="text-xs text-gray-600 dark:text-gray-400 bg-white dark:bg-gray-800 rounded p-2 border border-gray-300 dark:border-gray-700">
+                            {sample.instruction}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+
+                {/* New Samples */}
                 {samples.map((sample, index) => (
                   <div
-                    key={index}
+                    key={`new-${index}`}
                     className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-gray-50 dark:bg-gray-900"
                   >
                     <div className="flex items-start gap-4">
@@ -196,9 +256,14 @@ export function CanvasBrief3Step({ requestId, initialContent, onSave, onClose }:
                       {/* File Info and Instruction */}
                       <div className="flex-1">
                         <div className="flex items-center justify-between mb-2">
-                          <span className="text-sm font-medium text-gray-900 dark:text-white">
-                            {sample.file.name}
-                          </span>
+                          <div>
+                            <span className="text-sm font-medium text-gray-900 dark:text-white">
+                              {sample.file.name}
+                            </span>
+                            <span className="ml-2 text-xs text-green-600 dark:text-green-400">
+                              (New)
+                            </span>
+                          </div>
                           <button
                             onClick={() => removeSample(index)}
                             className="p-1 hover:bg-red-100 dark:hover:bg-red-900/20 rounded text-red-600"

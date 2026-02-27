@@ -911,8 +911,9 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
               </>
             ) : (
               <>
-                {/* Edit Button - Now visible to ALL users */}
-                {request.status !== 'closed' && request.status !== 'launched' && (
+                {/* Edit Button - Only for buyers and admins */}
+                {(user?.role === 'buyer' || user?.role === 'admin') &&
+                 request.status !== 'closed' && request.status !== 'launched' && (
                   <button
                     onClick={() => handleEditRequest()}
                     className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
@@ -922,14 +923,16 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
                   </button>
                 )}
 
-                {/* Duplicate Button */}
-                <button
-                  onClick={() => handleDuplicateRequest()}
-                  className="p-2 text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-400 rounded-lg transition-colors"
-                  title="Duplicate Request"
-                >
-                  <Copy className="w-4 h-4" />
-                </button>
+                {/* Duplicate Button - Only for buyers and admins */}
+                {(user?.role === 'buyer' || user?.role === 'admin') && (
+                  <button
+                    onClick={() => handleDuplicateRequest()}
+                    className="p-2 text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-400 rounded-lg transition-colors"
+                    title="Duplicate Request"
+                  >
+                    <Copy className="w-4 h-4" />
+                  </button>
+                )}
               </>
             )}
 
@@ -1167,24 +1170,44 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
             <div className="flex gap-2">
               {canvas ? (
                 <>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setShow3StepCanvas(true)}
-                  >
-                    <FileText className="w-4 h-4 mr-2" />
-                    View/Edit Canvas
-                  </Button>
+                  {/* Edit Canvas - Only buyers and admins can edit */}
+                  {(user?.role === 'buyer' || user?.role === 'admin') && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShow3StepCanvas(true)}
+                    >
+                      <FileText className="w-4 h-4 mr-2" />
+                      Edit Canvas
+                    </Button>
+                  )}
+                  {/* View-only for creatives */}
+                  {user?.role === 'creative' && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled
+                      className="cursor-default opacity-75"
+                    >
+                      <FileText className="w-4 h-4 mr-2" />
+                      View Canvas (Read-only)
+                    </Button>
+                  )}
                 </>
               ) : (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShow3StepCanvas(true)}
-                >
-                  <FileText className="w-4 h-4 mr-2" />
-                  Create Canvas Brief
-                  </Button>
+                <>
+                  {/* Create Canvas - Only buyers and admins can create */}
+                  {(user?.role === 'buyer' || user?.role === 'admin') && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShow3StepCanvas(true)}
+                    >
+                      <FileText className="w-4 h-4 mr-2" />
+                      Create Canvas Brief
+                    </Button>
+                  )}
+                </>
               )}
             </div>
 
@@ -1822,7 +1845,13 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
       {show3StepCanvas && (
         <CanvasBrief3Step
           requestId={requestId}
-          initialContent={canvas?.content ? JSON.stringify(canvas.content) : undefined}
+          initialContent={
+            canvas?.content
+              ? typeof canvas.content === 'string'
+                ? canvas.content
+                : JSON.stringify(canvas.content)
+              : undefined
+          }
           onSave={handleSave3StepCanvas}
           onClose={() => setShow3StepCanvas(false)}
         />
