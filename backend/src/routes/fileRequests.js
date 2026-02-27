@@ -39,6 +39,18 @@ router.patch('/:id',
   fileRequestController.update.bind(fileRequestController)
 );
 
+// Duplicate file request
+router.post('/:id/duplicate',
+  authenticateToken,
+  fileRequestController.duplicate.bind(fileRequestController)
+);
+
+// Get edit history for file request
+router.get('/:id/edit-history',
+  authenticateToken,
+  fileRequestController.getEditHistory.bind(fileRequestController)
+);
+
 // Delete file request
 router.delete('/:id',
   authenticateToken,

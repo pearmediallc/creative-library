@@ -609,6 +609,359 @@ class FileRequestController {
   }
 
   /**
+   * Update an existing file request
+   * PATCH /api/file-requests/:id
+   */
+  async update(req, res, next) {
+    try {
+      const requestId = req.params.id;
+      const userId = req.user.id;
+      const userRole = req.user.role;
+
+      // Get existing request to verify ownership and get previous values
+      const existingResult = await query(
+        'SELECT * FROM file_requests WHERE id = $1',
+        [requestId]
+      );
+
+      if (existingResult.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          error: 'File request not found'
+        });
+      }
+
+      const existingRequest = existingResult.rows[0];
+
+      // Check if user has permission to edit (creator or admin)
+      const isCreator = existingRequest.created_by === userId;
+      const isAdmin = userRole === 'admin';
+
+      // Check if user has view_all_requests permission
+      const userPerms = await query('SELECT view_all_requests FROM users WHERE id = $1', [userId]);
+      const hasViewAll = userPerms.rows[0]?.view_all_requests || false;
+
+      if (!isCreator && !isAdmin && !hasViewAll) {
+        return res.status(403).json({
+          success: false,
+          error: 'You do not have permission to edit this request'
+        });
+      }
+
+      // Don't allow editing if request is closed or launched
+      if (existingRequest.status === 'closed' || existingRequest.status === 'launched') {
+        return res.status(400).json({
+          success: false,
+          error: `Cannot edit request with status: ${existingRequest.status}`
+        });
+      }
+
+      const {
+        title,
+        concept_notes,
+        num_creatives,
+        deadline,
+        custom_message,
+        platforms,
+        verticals,
+        request_type,
+        edit_reason
+      } = req.body;
+
+      // Track changes for history
+      const changes = {};
+      const previousValues = {};
+
+      // Update file_requests table
+      const updateFields = [];
+      const updateValues = [];
+      let paramCounter = 1;
+
+      if (title !== undefined && title !== existingRequest.title) {
+        updateFields.push(`title = $${paramCounter++}`);
+        updateValues.push(title);
+        changes.title = title;
+        previousValues.title = existingRequest.title;
+      }
+
+      if (concept_notes !== undefined && concept_notes !== existingRequest.concept_notes) {
+        updateFields.push(`concept_notes = $${paramCounter++}`);
+        updateValues.push(concept_notes);
+        changes.concept_notes = concept_notes;
+        previousValues.concept_notes = existingRequest.concept_notes;
+      }
+
+      if (num_creatives !== undefined && num_creatives !== existingRequest.num_creatives) {
+        updateFields.push(`num_creatives = $${paramCounter++}`);
+        updateValues.push(num_creatives);
+        changes.num_creatives = num_creatives;
+        previousValues.num_creatives = existingRequest.num_creatives;
+      }
+
+      if (deadline !== undefined && deadline !== existingRequest.deadline) {
+        updateFields.push(`deadline = $${paramCounter++}`);
+        updateValues.push(deadline);
+        changes.deadline = deadline;
+        previousValues.deadline = existingRequest.deadline;
+      }
+
+      if (custom_message !== undefined && custom_message !== existingRequest.custom_message) {
+        updateFields.push(`custom_message = $${paramCounter++}`);
+        updateValues.push(custom_message);
+        changes.custom_message = custom_message;
+        previousValues.custom_message = existingRequest.custom_message;
+      }
+
+      if (request_type !== undefined && request_type !== existingRequest.request_type) {
+        updateFields.push(`request_type = $${paramCounter++}`);
+        updateValues.push(request_type);
+        changes.request_type = request_type;
+        previousValues.request_type = existingRequest.request_type;
+      }
+
+      // Always update updated_at
+      updateFields.push(`updated_at = NOW()`);
+
+      if (updateFields.length > 1) { // More than just updated_at
+        updateValues.push(requestId);
+        const updateQuery = `
+          UPDATE file_requests
+          SET ${updateFields.join(', ')}
+          WHERE id = $${paramCounter}
+          RETURNING *
+        `;
+        await query(updateQuery, updateValues);
+      }
+
+      // Update platforms if provided
+      if (platforms !== undefined) {
+        const existingPlatforms = await query(
+          'SELECT platform FROM file_request_platforms WHERE file_request_id = $1',
+          [requestId]
+        );
+        const existingPlatformList = existingPlatforms.rows.map(r => r.platform);
+
+        if (JSON.stringify(platforms.sort()) !== JSON.stringify(existingPlatformList.sort())) {
+          await query('DELETE FROM file_request_platforms WHERE file_request_id = $1', [requestId]);
+          if (platforms.length > 0) {
+            for (const platform of platforms) {
+              await query(
+                'INSERT INTO file_request_platforms (file_request_id, platform) VALUES ($1, $2)',
+                [requestId, platform]
+              );
+            }
+          }
+          changes.platforms = platforms;
+          previousValues.platforms = existingPlatformList;
+        }
+      }
+
+      // Update verticals if provided
+      if (verticals !== undefined) {
+        const existingVerticals = await query(
+          'SELECT vertical, is_primary FROM file_request_verticals WHERE file_request_id = $1',
+          [requestId]
+        );
+        const existingVerticalList = existingVerticals.rows.map(r => ({
+          vertical: r.vertical,
+          is_primary: r.is_primary
+        }));
+
+        if (JSON.stringify(verticals) !== JSON.stringify(existingVerticalList)) {
+          await query('DELETE FROM file_request_verticals WHERE file_request_id = $1', [requestId]);
+          if (verticals.length > 0) {
+            for (let i = 0; i < verticals.length; i++) {
+              const vertical = typeof verticals[i] === 'string' ? verticals[i] : verticals[i].vertical;
+              const isPrimary = i === 0 || (typeof verticals[i] === 'object' && verticals[i].is_primary);
+              await query(
+                'INSERT INTO file_request_verticals (file_request_id, vertical, is_primary) VALUES ($1, $2, $3)',
+                [requestId, vertical, isPrimary]
+              );
+            }
+          }
+          changes.verticals = verticals;
+          previousValues.verticals = existingVerticalList;
+        }
+      }
+
+      // Record edit history if there were changes
+      if (Object.keys(changes).length > 0) {
+        await query(
+          `INSERT INTO file_request_edit_history
+           (file_request_id, edited_by, edited_by_name, changes, previous_values, edit_reason)
+           VALUES ($1, $2, $3, $4, $5, $6)`,
+          [
+            requestId,
+            userId,
+            req.user.name || req.user.email,
+            JSON.stringify(changes),
+            JSON.stringify(previousValues),
+            edit_reason || null
+          ]
+        );
+      }
+
+      // Get updated request with all details
+      const updated = await this.getById({ params: { id: requestId }, user: req.user });
+
+      logger.info('File request updated', {
+        requestId,
+        userId,
+        changes: Object.keys(changes)
+      });
+
+      res.json({
+        success: true,
+        data: updated,
+        message: 'File request updated successfully'
+      });
+
+    } catch (error) {
+      logger.error('Update file request error', {
+        error: error.message,
+        stack: error.stack
+      });
+      next(error);
+    }
+  }
+
+  /**
+   * Duplicate an existing file request
+   * POST /api/file-requests/:id/duplicate
+   */
+  async duplicate(req, res, next) {
+    try {
+      const sourceRequestId = req.params.id;
+      const userId = req.user.id;
+
+      // Get source request
+      const sourceResult = await query(
+        'SELECT * FROM file_requests WHERE id = $1',
+        [sourceRequestId]
+      );
+
+      if (sourceResult.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          error: 'File request not found'
+        });
+      }
+
+      const sourceRequest = sourceResult.rows[0];
+
+      // Get platforms and verticals
+      const platformsResult = await query(
+        'SELECT platform FROM file_request_platforms WHERE file_request_id = $1',
+        [sourceRequestId]
+      );
+      const platforms = platformsResult.rows.map(r => r.platform);
+
+      const verticalsResult = await query(
+        'SELECT vertical, is_primary FROM file_request_verticals WHERE file_request_id = $1 ORDER BY is_primary DESC',
+        [sourceRequestId]
+      );
+      const verticals = verticalsResult.rows.map(r => r.vertical);
+
+      // Get canvas content if exists
+      const canvasResult = await query(
+        'SELECT content, attachments FROM file_request_canvas WHERE file_request_id = $1',
+        [sourceRequestId]
+      );
+      const canvasContent = canvasResult.rows.length > 0 ? canvasResult.rows[0].content : null;
+      const canvasAttachments = canvasResult.rows.length > 0 ? canvasResult.rows[0].attachments : null;
+
+      // Create new request (call existing create logic)
+      const newRequestData = {
+        title: `Copy of ${sourceRequest.title}`,
+        concept_notes: sourceRequest.concept_notes,
+        num_creatives: sourceRequest.num_creatives,
+        request_type: sourceRequest.request_type,
+        custom_message: sourceRequest.custom_message,
+        allow_multiple_uploads: sourceRequest.allow_multiple_uploads,
+        require_email: sourceRequest.require_email,
+        platforms,
+        verticals,
+        // Offset deadline by 7 days if exists
+        deadline: sourceRequest.deadline ? new Date(new Date(sourceRequest.deadline).getTime() + 7 * 24 * 60 * 60 * 1000).toISOString() : null,
+        folder_id: sourceRequest.folder_id
+      };
+
+      // Create the request using existing create logic
+      const newRequest = await this.create(
+        { body: newRequestData, user: req.user },
+        { json: (data) => data },
+        (err) => { throw err; }
+      );
+
+      const newRequestId = newRequest.data.id;
+
+      // Copy canvas content if exists
+      if (canvasContent) {
+        await query(
+          'INSERT INTO file_request_canvas (file_request_id, content, attachments) VALUES ($1, $2, $3)',
+          [newRequestId, canvasContent, canvasAttachments || '[]']
+        );
+      }
+
+      logger.info('File request duplicated', {
+        sourceRequestId,
+        newRequestId,
+        userId
+      });
+
+      res.json({
+        success: true,
+        data: newRequest.data,
+        message: 'File request duplicated successfully'
+      });
+
+    } catch (error) {
+      logger.error('Duplicate file request error', {
+        error: error.message,
+        stack: error.stack
+      });
+      next(error);
+    }
+  }
+
+  /**
+   * Get edit history for a file request
+   * GET /api/file-requests/:id/edit-history
+   */
+  async getEditHistory(req, res, next) {
+    try {
+      const requestId = req.params.id;
+
+      const history = await query(
+        `SELECT
+          id,
+          edited_by,
+          edited_by_name,
+          edited_at,
+          changes,
+          previous_values,
+          edit_reason
+         FROM file_request_edit_history
+         WHERE file_request_id = $1
+         ORDER BY edited_at DESC`,
+        [requestId]
+      );
+
+      res.json({
+        success: true,
+        data: history.rows
+      });
+
+    } catch (error) {
+      logger.error('Get edit history error', {
+        error: error.message,
+        stack: error.stack
+      });
+      next(error);
+    }
+  }
+
+  /**
    * Get all file requests for current user
    * GET /api/file-requests
    */

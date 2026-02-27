@@ -5,6 +5,7 @@ export interface User {
   role: 'admin' | 'creative' | 'buyer';
   is_active: boolean;
   upload_limit_monthly: number;
+  view_all_requests?: boolean;
   created_at: string;
 }
 

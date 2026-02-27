@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { X, Copy, Calendar, Folder, Mail, CheckCircle, Clock, FileText, Upload as UploadIcon, Rocket, XCircle, RotateCcw, UserPlus } from 'lucide-react';
+import { X, Copy, Calendar, Folder, Mail, CheckCircle, Clock, FileText, Upload as UploadIcon, Rocket, XCircle, RotateCcw, UserPlus, Edit2 } from 'lucide-react';
 import { Button } from './ui/Button';
 import { fileRequestApi, mediaApi } from '../lib/api';
 import { formatDate } from '../lib/utils';
@@ -568,6 +568,43 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
     onUpdate();
   };
 
+  const handleEditRequest = () => {
+    // TODO: Open CreateFileRequestModal in edit mode
+    // For now, navigate or show alert
+    alert('Edit functionality will open the request in edit mode. Implementation pending.');
+  };
+
+  const handleDuplicateRequest = async () => {
+    try {
+      const API_BASE_URL = (process.env.REACT_APP_API_URL || 'http://localhost:3001/api');
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE_URL}/file-requests/${requestId}/duplicate`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to duplicate request');
+      }
+
+      const result = await response.json();
+
+      // Show success message
+      alert(`Request duplicated successfully! New request ID: ${result.data.id}`);
+
+      // Refresh and notify parent
+      onUpdate();
+      onClose();
+
+    } catch (error) {
+      console.error('Error duplicating request:', error);
+      alert('Failed to duplicate request. Please try again.');
+    }
+  };
+
   // Determine if user can reassign
   const canReassign = user && request && (
     user.role === 'admin' ||
@@ -623,12 +660,35 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
               )}
             </p>
           </div>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            {/* Edit Button */}
+            {(user?.id === request.created_by || user?.role === 'admin' || user?.view_all_requests) &&
+             request.status !== 'closed' && request.status !== 'launched' && (
+              <button
+                onClick={() => handleEditRequest()}
+                className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                title="Edit Request"
+              >
+                <Edit2 className="w-4 h-4" />
+              </button>
+            )}
+
+            {/* Duplicate Button */}
+            <button
+              onClick={() => handleDuplicateRequest()}
+              className="p-2 text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-400 rounded-lg transition-colors"
+              title="Duplicate Request"
+            >
+              <Copy className="w-4 h-4" />
+            </button>
+
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Content */}
