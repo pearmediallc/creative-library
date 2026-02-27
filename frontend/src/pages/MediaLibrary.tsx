@@ -1397,7 +1397,7 @@ export function MediaLibraryPage() {
                                         <Share2 className="w-4 h-4" />
                                       </button>
                                       <button
-                                        onClick={() => handleToggleStar(file)}
+                                        onClick={() => handleToggleStar(file.id, !file.is_starred)}
                                         className="p-1.5 hover:bg-accent rounded transition-colors"
                                         title={file.is_starred ? 'Remove from starred' : 'Add to starred'}
                                       >
