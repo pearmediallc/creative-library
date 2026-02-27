@@ -696,6 +696,9 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
 
       // Step 2: Upload reference files to "canvas brief reference" folder
       if (files.length > 0) {
+        // Count existing samples to correctly index new ones
+        const existingSamplesCount = contentObj.samples.filter((s: any) => s.file_id).length;
+
         // First, find or create the "canvas brief reference" folder
         const foldersResponse = await fetch(`${API_BASE_URL}/folders`, {
           headers: { 'Authorization': `Bearer ${token}` }
@@ -798,9 +801,12 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
           dateFolderId = createdDateFolder.data.id;
         }
 
+        // Upload files and collect their IDs
+        const uploadedFileIds: string[] = [];
+
         for (let i = 0; i < files.length; i++) {
           const file = files[i];
-          const instruction = parsedContent.samples[i]?.instruction || '';
+          const instruction = contentObj.samples[existingSamplesCount + i]?.instruction || '';
 
           const formData = new FormData();
           formData.append('file', file);
@@ -822,6 +828,31 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
             console.error('Upload failed:', errorData);
             throw new Error(`Failed to upload ${file.name}: ${errorData.error || 'Unknown error'}`);
           }
+
+          const uploadData = await uploadResponse.json();
+          uploadedFileIds.push(uploadData.data.file.id);
+        }
+
+        // Update canvas samples with file IDs
+        if (uploadedFileIds.length > 0) {
+          const updatedContent = { ...contentObj };
+          // Add file_id to the newly uploaded samples
+          for (let i = 0; i < uploadedFileIds.length; i++) {
+            const sampleIndex = existingSamplesCount + i;
+            if (updatedContent.samples[sampleIndex]) {
+              updatedContent.samples[sampleIndex].file_id = uploadedFileIds[i];
+            }
+          }
+
+          // Update canvas with file IDs
+          await fetch(`${API_BASE_URL}/file-requests/${requestId}/canvas`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ content: updatedContent })
+          });
         }
       }
 

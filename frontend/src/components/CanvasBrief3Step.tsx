@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { X, Upload, Trash2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, Upload, Trash2, Download, Eye } from 'lucide-react';
 
 interface CanvasBrief3StepProps {
   requestId: string;
@@ -15,6 +15,15 @@ interface UploadedSample {
   instruction: string;
 }
 
+interface MediaFile {
+  id: string;
+  filename: string;
+  file_type: string;
+  s3_url: string;
+  thumbnail_url?: string;
+  file_size: number;
+}
+
 export function CanvasBrief3Step({ requestId, initialContent, onSave, onClose, readOnly = false }: CanvasBrief3StepProps) {
   const [isSaving, setIsSaving] = useState(false);
 
@@ -27,6 +36,42 @@ export function CanvasBrief3Step({ requestId, initialContent, onSave, onClose, r
   // We'll store them separately and only upload new files
   const [samples, setSamples] = useState<UploadedSample[]>([]);
   const [existingSamples, setExistingSamples] = useState<any[]>(parsedInitial.samples || []);
+  const [mediaFiles, setMediaFiles] = useState<Record<string, MediaFile>>({});
+
+  // Fetch media files for existing samples that have file_id
+  useEffect(() => {
+    const fetchMediaFiles = async () => {
+      const fileIds = existingSamples
+        .filter(s => s.file_id)
+        .map(s => s.file_id);
+
+      if (fileIds.length === 0) return;
+
+      try {
+        const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
+        const token = localStorage.getItem('token');
+
+        const fetchedFiles: Record<string, MediaFile> = {};
+
+        for (const fileId of fileIds) {
+          const response = await fetch(`${API_BASE_URL}/media/${fileId}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            fetchedFiles[fileId] = data.data;
+          }
+        }
+
+        setMediaFiles(fetchedFiles);
+      } catch (error) {
+        console.error('Failed to fetch media files:', error);
+      }
+    };
+
+    fetchMediaFiles();
+  }, [existingSamples]);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -193,52 +238,102 @@ export function CanvasBrief3Step({ requestId, initialContent, onSave, onClose, r
             {(existingSamples.length > 0 || samples.length > 0) && (
               <div className="mt-6 space-y-4">
                 {/* Existing Samples */}
-                {existingSamples.map((sample, index) => (
-                  <div
-                    key={`existing-${index}`}
-                    className="border border-blue-200 dark:border-blue-700 rounded-lg p-4 bg-blue-50 dark:bg-blue-900/20"
-                  >
-                    <div className="flex items-start gap-4">
-                      {/* Placeholder for existing files */}
-                      <div className="w-20 h-20 bg-blue-100 dark:bg-blue-800 rounded flex items-center justify-center">
-                        <Upload className="w-8 h-8 text-blue-600 dark:text-blue-400" />
-                      </div>
+                {existingSamples.map((sample, index) => {
+                  const mediaFile = sample.file_id ? mediaFiles[sample.file_id] : null;
 
-                      {/* File Info */}
-                      <div className="flex-1">
-                        <div className="flex items-center justify-between mb-2">
-                          <div>
-                            <span className="text-sm font-medium text-gray-900 dark:text-white">
-                              {sample.filename}
-                            </span>
-                            <span className="ml-2 text-xs text-blue-600 dark:text-blue-400">
-                              (Existing)
-                            </span>
-                          </div>
-                          {!readOnly && (
-                            <button
-                              onClick={() => removeExistingSample(index)}
-                              className="p-1 hover:bg-red-100 dark:hover:bg-red-900/20 rounded text-red-600"
-                              title="Remove file"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          )}
-                        </div>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
-                          {sample.size ? `${(sample.size / 1024).toFixed(2)} KB` : 'Size unknown'}
-                        </p>
-
-                        {/* Instruction Display (read-only for existing) */}
-                        {sample.instruction && (
-                          <div className="text-xs text-gray-600 dark:text-gray-400 bg-white dark:bg-gray-800 rounded p-2 border border-gray-300 dark:border-gray-700">
-                            {sample.instruction}
+                  return (
+                    <div
+                      key={`existing-${index}`}
+                      className="border border-blue-200 dark:border-blue-700 rounded-lg p-4 bg-blue-50 dark:bg-blue-900/20"
+                    >
+                      <div className="flex items-start gap-4">
+                        {/* Preview or Placeholder */}
+                        {mediaFile ? (
+                          mediaFile.file_type === 'image' && mediaFile.thumbnail_url ? (
+                            <img
+                              src={mediaFile.thumbnail_url}
+                              alt={mediaFile.filename}
+                              className="w-20 h-20 object-cover rounded"
+                            />
+                          ) : mediaFile.file_type === 'video' && mediaFile.thumbnail_url ? (
+                            <div className="relative w-20 h-20">
+                              <img
+                                src={mediaFile.thumbnail_url}
+                                alt={mediaFile.filename}
+                                className="w-20 h-20 object-cover rounded"
+                              />
+                              <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-30 rounded">
+                                <Eye className="w-6 h-6 text-white" />
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="w-20 h-20 bg-blue-100 dark:bg-blue-800 rounded flex items-center justify-center">
+                              <Upload className="w-8 h-8 text-blue-600 dark:text-blue-400" />
+                            </div>
+                          )
+                        ) : (
+                          <div className="w-20 h-20 bg-blue-100 dark:bg-blue-800 rounded flex items-center justify-center">
+                            <Upload className="w-8 h-8 text-blue-600 dark:text-blue-400" />
                           </div>
                         )}
+
+                        {/* File Info */}
+                        <div className="flex-1">
+                          <div className="flex items-center justify-between mb-2">
+                            <div>
+                              <span className="text-sm font-medium text-gray-900 dark:text-white">
+                                {mediaFile?.filename || sample.filename}
+                              </span>
+                              <span className="ml-2 text-xs text-blue-600 dark:text-blue-400">
+                                (Existing)
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {/* Download/View Button */}
+                              {mediaFile && (
+                                <a
+                                  href={mediaFile.s3_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="p-1 hover:bg-blue-100 dark:hover:bg-blue-900/20 rounded text-blue-600 dark:text-blue-400"
+                                  title={mediaFile.file_type === 'video' ? 'View video' : 'Download file'}
+                                >
+                                  {mediaFile.file_type === 'video' ? (
+                                    <Eye className="w-4 h-4" />
+                                  ) : (
+                                    <Download className="w-4 h-4" />
+                                  )}
+                                </a>
+                              )}
+                              {!readOnly && (
+                                <button
+                                  onClick={() => removeExistingSample(index)}
+                                  className="p-1 hover:bg-red-100 dark:hover:bg-red-900/20 rounded text-red-600"
+                                  title="Remove file"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                            {mediaFile
+                              ? `${(mediaFile.file_size / 1024).toFixed(2)} KB`
+                              : sample.size ? `${(sample.size / 1024).toFixed(2)} KB` : 'Size unknown'
+                            }
+                          </p>
+
+                          {/* Instruction Display (read-only for existing) */}
+                          {sample.instruction && (
+                            <div className="text-xs text-gray-600 dark:text-gray-400 bg-white dark:bg-gray-800 rounded p-2 border border-gray-300 dark:border-gray-700">
+                              {sample.instruction}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
 
                 {/* New Samples - Hide in read-only mode */}
                 {!readOnly && samples.map((sample, index) => (
