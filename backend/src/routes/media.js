@@ -89,6 +89,12 @@ router.get('/:id/activity',
   mediaController.getFileActivity.bind(mediaController)
 );
 
+// ✨ NEW: Update analytics metrics (Facebook/RedTrack ads)
+router.patch('/:id/analytics',
+  authenticateToken,
+  mediaController.updateAnalytics.bind(mediaController)
+);
+
 // ✨ NEW: Media file tags endpoints
 router.get('/:id/tags',
   authenticateToken,

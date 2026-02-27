@@ -2085,6 +2085,61 @@ class MediaController {
       next(error);
     }
   }
+
+  /**
+   * Update analytics metrics for a media file
+   * PATCH /api/media/:id/analytics
+   * Body: { analytics_metrics: { creative_performance: {...}, profitability: {...} } }
+   */
+  async updateAnalytics(req, res, next) {
+    try {
+      const { id } = req.params;
+      const { analytics_metrics } = req.body;
+
+      // Verify file exists and user has access
+      const fileResult = await query(
+        'SELECT id, original_filename FROM media_files WHERE id = $1',
+        [id]
+      );
+
+      if (fileResult.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          error: 'Media file not found'
+        });
+      }
+
+      // Update analytics metrics
+      const updateResult = await query(
+        `UPDATE media_files
+         SET analytics_metrics = $1,
+             updated_at = NOW()
+         WHERE id = $2
+         RETURNING id, analytics_metrics`,
+        [JSON.stringify(analytics_metrics), id]
+      );
+
+      logger.info('Analytics metrics updated', {
+        fileId: id,
+        userId: req.user.id,
+        filename: fileResult.rows[0].original_filename
+      });
+
+      res.json({
+        success: true,
+        data: updateResult.rows[0],
+        message: 'Analytics metrics updated successfully'
+      });
+
+    } catch (error) {
+      logger.error('Update analytics metrics error', {
+        error: error.message,
+        stack: error.stack,
+        fileId: req.params.id
+      });
+      next(error);
+    }
+  }
 }
 
 module.exports = new MediaController();

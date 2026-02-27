@@ -6,10 +6,11 @@ import { Card } from '../components/ui/Card';
 import { mediaApi, editorApi, folderApi, adminApi, starredApi } from '../lib/api';
 import { MediaFile, Editor } from '../types';
 import { formatBytes, formatDate } from '../lib/utils';
-import { Image as ImageIcon, Video, X, Download, Trash2, Info, PackageOpen, Calendar, Filter, Clock, FolderInput, Share2, Star, LayoutGrid, List, FileText, Tag, FolderPlus } from 'lucide-react';
+import { Image as ImageIcon, Video, X, Download, Trash2, Info, PackageOpen, Calendar, Filter, Clock, FolderInput, Share2, Star, LayoutGrid, List, FileText, Tag, FolderPlus, BarChart3 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { BulkMetadataEditor } from '../components/BulkMetadataEditor';
 import { MetadataViewer } from '../components/MetadataViewer';
+import { AnalyticsMetricsPanel } from '../components/AnalyticsMetricsPanel';
 import { FolderTree } from '../components/FolderTree';
 import { Breadcrumb } from '../components/Breadcrumb';
 import { FolderCard } from '../components/FolderCard';
@@ -183,6 +184,19 @@ export function MediaLibraryPage() {
     isOpen: false,
     mediaId: '',
     fileName: ''
+  });
+
+  // Analytics metrics panel state
+  const [analyticsPanel, setAnalyticsPanel] = useState<{
+    isOpen: boolean;
+    fileId: string;
+    fileName: string;
+    currentMetrics?: any;
+  }>({
+    isOpen: false,
+    fileId: '',
+    fileName: '',
+    currentMetrics: null
   });
 
   // Add to collection modal state
@@ -761,6 +775,37 @@ export function MediaLibraryPage() {
     }
   };
 
+  const handleOpenAnalytics = (file: MediaFile) => {
+    setAnalyticsPanel({
+      isOpen: true,
+      fileId: file.id,
+      fileName: file.original_filename,
+      currentMetrics: file.analytics_metrics
+    });
+  };
+
+  const handleSaveAnalytics = async (metrics: any) => {
+    const API_BASE_URL = (process.env.REACT_APP_API_URL || 'http://localhost:3001/api');
+    const token = localStorage.getItem('token');
+
+    const response = await fetch(`${API_BASE_URL}/media/${analyticsPanel.fileId}/analytics`, {
+      method: 'PATCH',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ analytics_metrics: metrics })
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to save analytics metrics');
+    }
+
+    // Refresh files to show updated metrics
+    await fetchData();
+    alert('Analytics metrics saved successfully!');
+  };
+
   const handleRename = async (newName: string) => {
     if (renameDialog.resourceType === 'file') {
       await mediaApi.rename(renameDialog.resourceId, newName);
@@ -1182,6 +1227,16 @@ export function MediaLibraryPage() {
                                     variant="outline"
                                     size="sm"
                                     className="flex-1"
+                                    onClick={() => handleOpenAnalytics(file)}
+                                    title="Add analytics metrics"
+                                  >
+                                    <BarChart3 className="w-4 h-4 mr-1" />
+                                    Analytics
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="flex-1"
                                     onClick={() => handleFileTags(file)}
                                     title="Manage tags"
                                   >
@@ -1528,6 +1583,16 @@ export function MediaLibraryPage() {
           metadata={metadataViewerFile.metadata}
           filename={metadataViewerFile.filename}
           onClose={() => setMetadataViewerFile(null)}
+        />
+      )}
+
+      {analyticsPanel.isOpen && (
+        <AnalyticsMetricsPanel
+          fileId={analyticsPanel.fileId}
+          fileName={analyticsPanel.fileName}
+          initialMetrics={analyticsPanel.currentMetrics}
+          onClose={() => setAnalyticsPanel({ isOpen: false, fileId: '', fileName: '', currentMetrics: null })}
+          onSave={handleSaveAnalytics}
         />
       )}
 

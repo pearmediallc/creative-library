@@ -43,6 +43,25 @@ export interface MediaFile {
   deleted_by?: string;
   folder_id?: string;
   is_starred?: boolean;
+  analytics_metrics?: {
+    creative_performance: {
+      hook_rate: number | null;
+      hold_rate: number | null;
+      avg_video_duration: number | null;
+      ctr: number | null;
+      ff_retention: number | null;
+      video_plays_25: number | null;
+      video_plays_50: number | null;
+      video_plays_75: number | null;
+      video_plays_100: number | null;
+    };
+    profitability: {
+      spend: number | null;
+      profit: number | null;
+      revenue: number | null;
+      roi: number | null;
+    };
+  };
   created_at: string;
   updated_at: string;
   upload_date?: string;
