@@ -732,6 +732,12 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
           }
         }
 
+        // Create folder structure: Canvas Brief Reference / [Date] / [Request Name]
+        const now = new Date();
+        const dateFolder = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+        const requestName = request?.title || 'Untitled Request';
+        const folderPath = `Canvas Brief Reference/${dateFolder}/${requestName}`;
+
         for (let i = 0; i < files.length; i++) {
           const file = files[i];
           const instruction = parsedContent.samples[i]?.instruction || '';
@@ -740,8 +746,9 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
           formData.append('file', file);
           formData.append('editor_id', editorId);
           formData.append('folder_id', canvasFolderId);
-          formData.append('description', `Canvas Brief Sample - ${request?.title || 'Request'}: ${instruction}`);
-          formData.append('tags', JSON.stringify(['canvas-brief', `request-${requestId}`]));
+          formData.append('folder_path', folderPath);  // Use folder_path for S3 structure
+          formData.append('description', `Canvas Brief Sample - ${requestName}: ${instruction}`);
+          formData.append('tags', JSON.stringify(['canvas-brief', `request-${requestId}`, dateFolder]));
 
           const uploadResponse = await fetch(`${API_BASE_URL}/media/upload`, {
             method: 'POST',
@@ -1152,6 +1159,47 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
                   </Button>
               )}
             </div>
+
+            {/* Canvas Brief Content Summary */}
+            {canvas && (() => {
+              try {
+                const content = typeof canvas.content === 'string' ? JSON.parse(canvas.content) : canvas.content;
+                return (
+                  <div className="mt-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                    {content.headline && (
+                      <div className="mb-3">
+                        <h4 className="text-xs font-semibold text-blue-700 dark:text-blue-300 mb-1">HEADLINE</h4>
+                        <p className="text-sm text-blue-900 dark:text-blue-100">{content.headline}</p>
+                      </div>
+                    )}
+                    {content.script && (
+                      <div className="mb-3">
+                        <h4 className="text-xs font-semibold text-blue-700 dark:text-blue-300 mb-1">SCRIPT</h4>
+                        <p className="text-sm text-blue-900 dark:text-blue-100 whitespace-pre-wrap">{content.script}</p>
+                      </div>
+                    )}
+                    {content.samples && content.samples.length > 0 && (
+                      <div>
+                        <h4 className="text-xs font-semibold text-blue-700 dark:text-blue-300 mb-2">REFERENCE SAMPLES ({content.samples.length})</h4>
+                        <div className="space-y-2">
+                          {content.samples.map((sample: any, idx: number) => (
+                            <div key={idx} className="bg-white dark:bg-gray-800 rounded p-2 border border-blue-200 dark:border-blue-700">
+                              <p className="text-xs font-medium text-gray-900 dark:text-white">{sample.filename}</p>
+                              {sample.instruction && (
+                                <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">{sample.instruction}</p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              } catch (e) {
+                console.error('Failed to parse canvas content:', e);
+                return null;
+              }
+            })()}
           </div>
 
           {/* Request Info */}
