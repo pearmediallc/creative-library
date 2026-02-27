@@ -3762,7 +3762,7 @@ class FileRequestController {
       // - single: reassign_to (editor_id or user_id)
       // - multiple: editor_ids[] (editor_id or user_id entries)
       // Optional: editor_quotas map { [editor_id]: number }
-      const { editor_quotas } = req.body;
+      const { editor_quotas, editor_notes } = req.body;
       const targets = hasMultiple ? editor_ids : [reassign_to];
 
       const resolvedTargets = [];
@@ -3820,16 +3820,20 @@ class FileRequestController {
           : null;
         const safeQuota = quota && !Number.isNaN(quota) && quota > 0 ? Math.floor(quota) : null;
         const numCreativesAssigned = creativesMap[editorId] !== undefined ? creativesMap[editorId] : 0;
+        const editorNote = editor_notes && editor_notes[editorId] ? editor_notes[editorId] : null;
 
         await query(
-          `INSERT INTO file_request_editors (request_id, editor_id, status, deliverables_quota, num_creatives_assigned)
-           VALUES ($1, $2, 'pending', $3, $4)
+          `INSERT INTO file_request_editors (request_id, editor_id, status, deliverables_quota, num_creatives_assigned, reassignment_notes, last_reassigned_at, last_reassigned_by)
+           VALUES ($1, $2, 'pending', $3, $4, $5, NOW(), $6)
            ON CONFLICT (request_id, editor_id) DO UPDATE
            SET status = 'pending',
                deliverables_quota = COALESCE($3, file_request_editors.deliverables_quota),
                num_creatives_assigned = CASE WHEN $4 > 0 THEN $4 ELSE file_request_editors.num_creatives_assigned END,
+               reassignment_notes = COALESCE($5, file_request_editors.reassignment_notes),
+               last_reassigned_at = NOW(),
+               last_reassigned_by = $6,
                updated_at = CURRENT_TIMESTAMP`,
-          [id, editorId, safeQuota, numCreativesAssigned]
+          [id, editorId, safeQuota, numCreativesAssigned, editorNote, userId]
         );
       }
 

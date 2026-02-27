@@ -757,6 +757,17 @@ export function MediaLibraryPage() {
 
   const selectedFileObjects = files.filter(f => selectedFiles.includes(f.id));
 
+  const handleToggleStar = async (fileId: string, isStarred: boolean) => {
+    try {
+      await starredApi.toggleStarred(fileId, isStarred);
+      // Update local state
+      setFiles(files.map(f => f.id === fileId ? { ...f, is_starred: isStarred } : f));
+    } catch (error: any) {
+      console.error('Failed to toggle star:', error);
+      alert('Failed to update star status');
+    }
+  };
+
   const handleRename = async (newName: string) => {
     if (renameDialog.resourceType === 'file') {
       await mediaApi.rename(renameDialog.resourceId, newName);
@@ -1099,6 +1110,19 @@ export function MediaLibraryPage() {
                                   />
                                 </div>
                               )}
+                              {/* Star Button */}
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleToggleStar(file.id, !file.is_starred);
+                                }}
+                                className="absolute bottom-2 right-2 p-1.5 rounded-full bg-black/50 hover:bg-black/70 transition-colors"
+                                title={file.is_starred ? "Remove star" : "Mark as high performer"}
+                              >
+                                <Star
+                                  className={`w-5 h-5 ${file.is_starred ? 'fill-yellow-400 text-yellow-400' : 'text-white'}`}
+                                />
+                              </button>
                               <div className="absolute top-2 right-2">
                                 <span className="px-2 py-1 text-xs font-medium rounded bg-background/80 backdrop-blur">
                                   {file.file_type}

@@ -43,6 +43,7 @@ export function ReassignFileRequestModal({
   );
   const [reassignReason, setReassignReason] = useState('');
   const [editorQuotas, setEditorQuotas] = useState<Record<string, string>>({});
+  const [editorNotes, setEditorNotes] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [workloadData, setWorkloadData] = useState<Map<string, EditorWorkload>>(new Map());
@@ -115,6 +116,7 @@ export function ReassignFileRequestModal({
         await fileRequestApi.reassign(requestId, {
           editor_distribution: editorDistribution,
           editor_quotas: Object.keys(quotas).length ? quotas : undefined,
+          editor_notes: editorNotes,
           reason: reassignReason,
           note: reassignReason
         });
@@ -123,6 +125,7 @@ export function ReassignFileRequestModal({
         await fileRequestApi.reassign(requestId, {
           editor_ids: selectedEditorIds,
           editor_quotas: Object.keys(quotas).length ? quotas : undefined,
+          editor_notes: editorNotes,
           note: reassignReason
         });
       }
@@ -279,6 +282,33 @@ export function ReassignFileRequestModal({
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
                 {selectedEditorIds.length} editor(s) selected
               </p>
+
+              {/* Per-Editor Notes */}
+              {selectedEditorIds.length > 0 && (
+                <div className="mt-4 space-y-3">
+                  <label className="block text-sm font-medium text-gray-900 dark:text-white">
+                    Per-Editor Notes (Optional)
+                  </label>
+                  {selectedEditorIds.map(editorId => {
+                    const editor = allEditors.find(e => e.id === editorId);
+                    if (!editor) return null;
+                    return (
+                      <div key={editorId} className="space-y-1">
+                        <label className="text-xs text-gray-600 dark:text-gray-400">
+                          {editor.display_name || editor.name}
+                        </label>
+                        <textarea
+                          value={editorNotes[editorId] || ''}
+                          onChange={(e) => setEditorNotes({ ...editorNotes, [editorId]: e.target.value })}
+                          placeholder={`Notes for ${editor.display_name || editor.name} (e.g., "Focus on quality", "Increase speed")`}
+                          className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          rows={2}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             {/* Creative Distribution (if numCreatives > 0) */}

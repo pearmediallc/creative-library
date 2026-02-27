@@ -978,20 +978,39 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
                         <span className="font-medium text-gray-900 dark:text-white">
                           {editor.display_name || editor.name}
                         </span>
-                        {/* Creative Distribution Display */}
+                        {/* Creative Distribution Display with Progress Bar */}
                         {editor.num_creatives_assigned !== undefined && editor.num_creatives_assigned > 0 && (
-                          <div className="mt-1 flex items-center gap-2">
-                            <span className="text-xs text-gray-600 dark:text-gray-400">
-                              Assigned: <span className="font-medium text-blue-600 dark:text-blue-400">{editor.num_creatives_assigned}</span> creative{editor.num_creatives_assigned !== 1 ? 's' : ''}
-                            </span>
-                            {editor.creatives_completed !== undefined && editor.creatives_completed > 0 && (
-                              <>
-                                <span className="text-xs text-gray-400">•</span>
-                                <span className="text-xs text-gray-600 dark:text-gray-400">
-                                  Completed: <span className="font-medium text-green-600 dark:text-green-400">{editor.creatives_completed}</span>
-                                </span>
-                              </>
-                            )}
+                          <div className="mt-2 space-y-1">
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-gray-600 dark:text-gray-400">
+                                Progress: <span className="font-medium text-blue-600 dark:text-blue-400">{editor.creatives_completed || 0}/{editor.num_creatives_assigned}</span> creatives
+                              </span>
+                              <span className="font-medium text-gray-700 dark:text-gray-300">
+                                {Math.round(((editor.creatives_completed || 0) / editor.num_creatives_assigned) * 100)}%
+                              </span>
+                            </div>
+                            {/* Progress Bar */}
+                            <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                              <div
+                                className={`h-2 rounded-full transition-all ${
+                                  editor.creatives_completed === editor.num_creatives_assigned
+                                    ? 'bg-green-600'
+                                    : editor.creatives_completed && editor.creatives_completed > 0
+                                    ? 'bg-yellow-500'
+                                    : 'bg-gray-400'
+                                }`}
+                                style={{ width: `${Math.round(((editor.creatives_completed || 0) / editor.num_creatives_assigned) * 100)}%` }}
+                              />
+                            </div>
+                            <div className="text-xs text-gray-500 dark:text-gray-400">
+                              {editor.creatives_completed === editor.num_creatives_assigned ? (
+                                <span className="text-green-600 dark:text-green-400 font-medium">✓ Completed</span>
+                              ) : editor.creatives_completed && editor.creatives_completed > 0 ? (
+                                <span className="text-yellow-600 dark:text-yellow-400">In Progress</span>
+                              ) : (
+                                <span>Not Started</span>
+                              )}
+                            </div>
                           </div>
                         )}
                       </div>
