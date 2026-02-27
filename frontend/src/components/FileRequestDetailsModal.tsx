@@ -258,17 +258,22 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
       // Try to load canvas
       try {
         const canvasResponse = await fileRequestApi.canvas.get(requestId);
-        console.log('[Canvas Debug] Canvas API response:', canvasResponse.data);
+        console.log('[Canvas Debug] Full canvas response:', JSON.stringify(canvasResponse.data, null, 2));
+        console.log('[Canvas Debug] Has canvas?', !!canvasResponse.data.canvas);
+        console.log('[Canvas Debug] isTemplate?', canvasResponse.data.isTemplate);
+
         if (canvasResponse.data.canvas && !canvasResponse.data.isTemplate) {
-          console.log('[Canvas Debug] Setting canvas state:', canvasResponse.data.canvas);
+          console.log('[Canvas Debug] ✓ Setting canvas state - canvas exists and is not template');
+          console.log('[Canvas Debug] Canvas content:', canvasResponse.data.canvas.content);
           setCanvas(canvasResponse.data.canvas);
         } else {
-          console.log('[Canvas Debug] Not setting canvas - isTemplate:', canvasResponse.data.isTemplate);
+          console.log('[Canvas Debug] ✗ Not setting canvas state');
+          console.log('[Canvas Debug] Reason:', !canvasResponse.data.canvas ? 'No canvas object' : 'Is template');
           setCanvas(null); // Explicitly set to null if no canvas exists
         }
       } catch (canvasError: any) {
         // Canvas is optional, ignore error
-        console.log('[Canvas Debug] Canvas fetch error:', canvasError);
+        console.log('[Canvas Debug] ✗ Canvas fetch error:', canvasError.message);
         console.log('[Canvas Debug] Error response:', canvasError.response?.data);
         setCanvas(null);
       }

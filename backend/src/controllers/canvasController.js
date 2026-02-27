@@ -156,6 +156,21 @@ class CanvasController {
         });
       }
 
+      // Parse content and attachments if they're strings
+      if (typeof canvas.content === 'string') {
+        canvas.content = JSON.parse(canvas.content);
+      }
+      if (typeof canvas.attachments === 'string') {
+        canvas.attachments = JSON.parse(canvas.attachments);
+      }
+
+      logger.info('Canvas fetched successfully', {
+        requestId,
+        userId,
+        hasContent: !!canvas.content,
+        contentKeys: canvas.content ? Object.keys(canvas.content) : []
+      });
+
       res.json({
         success: true,
         canvas,
@@ -273,9 +288,18 @@ class CanvasController {
         mentions: mentionedUserIds.length
       });
 
+      // Parse content and attachments for response
+      if (typeof canvas.content === 'string') {
+        canvas.content = JSON.parse(canvas.content);
+      }
+      if (typeof canvas.attachments === 'string') {
+        canvas.attachments = JSON.parse(canvas.attachments);
+      }
+
       res.json({
         success: true,
-        canvas
+        canvas,
+        isTemplate: false
       });
 
     } catch (error) {
