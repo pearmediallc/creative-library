@@ -870,30 +870,52 @@ class FileRequestController {
       const canvasContent = canvasResult.rows.length > 0 ? canvasResult.rows[0].content : null;
       const canvasAttachments = canvasResult.rows.length > 0 ? canvasResult.rows[0].attachments : null;
 
-      // Create new request (call existing create logic)
-      const newRequestData = {
-        title: `Copy of ${sourceRequest.title}`,
-        concept_notes: sourceRequest.concept_notes,
-        num_creatives: sourceRequest.num_creatives,
-        request_type: sourceRequest.request_type,
-        custom_message: sourceRequest.custom_message,
-        allow_multiple_uploads: sourceRequest.allow_multiple_uploads,
-        require_email: sourceRequest.require_email,
-        platforms,
-        verticals,
-        // Offset deadline by 7 days if exists
-        deadline: sourceRequest.deadline ? new Date(new Date(sourceRequest.deadline).getTime() + 7 * 24 * 60 * 60 * 1000).toISOString() : null,
-        folder_id: sourceRequest.folder_id
-      };
+      // Create new request directly (don't call create() - it needs real res object)
+      const crypto = require('crypto');
+      const request_token = crypto.randomBytes(32).toString('hex');
 
-      // Create the request using existing create logic
-      const newRequest = await this.create(
-        { body: newRequestData, user: req.user },
-        { json: (data) => data },
-        (err) => { throw err; }
+      const insertResult = await query(
+        `INSERT INTO file_requests (
+          title, description, concept_notes, num_creatives, request_type,
+          created_by, folder_id, request_token, deadline,
+          allow_multiple_uploads, require_email, custom_message,
+          status
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        RETURNING *`,
+        [
+          `Copy of ${sourceRequest.title}`,
+          sourceRequest.description,
+          sourceRequest.concept_notes,
+          sourceRequest.num_creatives,
+          sourceRequest.request_type,
+          userId,
+          sourceRequest.folder_id,
+          request_token,
+          sourceRequest.deadline ? new Date(new Date(sourceRequest.deadline).getTime() + 7 * 24 * 60 * 60 * 1000) : null,
+          sourceRequest.allow_multiple_uploads,
+          sourceRequest.require_email,
+          sourceRequest.custom_message,
+          'open'
+        ]
       );
 
-      const newRequestId = newRequest.data.id;
+      const newRequestId = insertResult.rows[0].id;
+
+      // Insert platforms
+      if (platforms.length > 0) {
+        const platformValues = platforms.map(p => `('${newRequestId}', '${p}')`).join(',');
+        await query(
+          `INSERT INTO file_request_platforms (file_request_id, platform) VALUES ${platformValues}`
+        );
+      }
+
+      // Insert verticals
+      if (verticals.length > 0) {
+        const verticalsValues = verticals.map((v, idx) => `('${newRequestId}', '${v}', ${idx === 0})`).join(',');
+        await query(
+          `INSERT INTO file_request_verticals (file_request_id, vertical, is_primary) VALUES ${verticalsValues}`
+        );
+      }
 
       // Copy canvas content if exists
       if (canvasContent) {
@@ -911,7 +933,7 @@ class FileRequestController {
 
       res.json({
         success: true,
-        data: newRequest.data,
+        data: insertResult.rows[0],
         message: 'File request duplicated successfully'
       });
 
