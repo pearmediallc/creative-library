@@ -7,8 +7,17 @@ import { CanvasBrief3Step } from './CanvasBrief3Step';
 import { UploadedFileCard } from './UploadedFileCard';
 import { UploadHistoryTimeline } from './UploadHistoryTimeline';
 import { ReassignFileRequestModal } from './ReassignFileRequestModal';
-import type { Canvas } from '../lib/canvasTemplates';
 import { useAuth } from '../contexts/AuthContext';
+
+// Canvas Brief type
+interface Canvas {
+  id?: string;
+  file_request_id: string;
+  content: any;
+  attachments?: any[];
+  created_at?: string;
+  updated_at?: string;
+}
 import { getFileRequestStatusColor, getVerticalBadgeClasses } from '../constants/statusColors';
 
 // Status badge helper using centralized colors

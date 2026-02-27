@@ -4,99 +4,6 @@ const { query } = require('../config/database');
 const mediaService = require('../services/mediaService');
 const logger = require('../utils/logger');
 
-// Product Brief Template
-const PRODUCT_BRIEF_TEMPLATE = {
-  blocks: [
-    {
-      type: 'heading',
-      level: 2,
-      content: '👥 The team',
-      icon: '👥'
-    },
-    {
-      type: 'text',
-      content: 'Leads: use @ to add someone'
-    },
-    {
-      type: 'text',
-      content: 'Team members: use @ to add someone'
-    },
-    {
-      type: 'heading',
-      level: 2,
-      content: '📦 Product description',
-      icon: '📦'
-    },
-    {
-      type: 'text',
-      content: "Now's your chance to go deep – tell your team what this product's about."
-    },
-    {
-      type: 'heading',
-      level: 2,
-      content: '⚠️ Problem statement',
-      icon: '⚠️'
-    },
-    {
-      type: 'text',
-      content: 'Explain the core problem that this product would address.'
-    },
-    {
-      type: 'heading',
-      level: 2,
-      content: '🔑 Key features',
-      icon: '🔑'
-    },
-    {
-      type: 'list',
-      items: ['Feature 1', 'Feature 2', 'Feature 3']
-    },
-    {
-      type: 'heading',
-      level: 2,
-      content: 'Milestones'
-    },
-    {
-      type: 'checklist',
-      items: [
-        { text: 'Milestone 1 - Date', checked: false },
-        { text: 'Milestone 2 - Date', checked: false },
-        { text: 'Milestone 3 - Date', checked: false }
-      ]
-    },
-    {
-      type: 'heading',
-      level: 2,
-      content: '💡 Success criteria',
-      icon: '💡'
-    },
-    {
-      type: 'text',
-      content: 'How will you measure product impact?'
-    },
-    {
-      type: 'heading',
-      level: 2,
-      content: '⚠️ Challenges and risks',
-      icon: '⚠️'
-    },
-    {
-      type: 'text',
-      content: 'Identify potential risks and how you plan to mitigate them.'
-    },
-    {
-      type: 'heading',
-      level: 2,
-      content: '🔗 Resources and appendix',
-      icon: '🔗'
-    },
-    {
-      type: 'attachments',
-      placeholder: 'Add reference files here'
-    }
-  ]
-};
-
 class CanvasController {
   /**
    * Extract mentioned user IDs from canvas content
@@ -109,30 +16,38 @@ class CanvasController {
     // Collect all mentioned names
     const mentionedNames = new Set();
 
-    if (content && content.blocks) {
-      content.blocks.forEach(block => {
-        if (block.content) {
-          let match;
-          while ((match = mentionRegex.exec(block.content)) !== null) {
-            const name = match[1].trim();
-            if (name) mentionedNames.add(name);
-          }
+    // Canvas Brief format: check headline, script, and sample instructions
+    if (content && (content.headline || content.script || content.samples)) {
+      // Check headline
+      if (content.headline) {
+        let match;
+        while ((match = mentionRegex.exec(content.headline)) !== null) {
+          const name = match[1].trim();
+          if (name) mentionedNames.add(name);
         }
+      }
 
-        // Check items array (for lists and checklists)
-        if (block.items && Array.isArray(block.items)) {
-          block.items.forEach(item => {
-            const text = typeof item === 'string' ? item : item.text;
-            if (text) {
-              let match;
-              while ((match = mentionRegex.exec(text)) !== null) {
-                const name = match[1].trim();
-                if (name) mentionedNames.add(name);
-              }
-            }
-          });
+      // Check script
+      if (content.script) {
+        let match;
+        while ((match = mentionRegex.exec(content.script)) !== null) {
+          const name = match[1].trim();
+          if (name) mentionedNames.add(name);
         }
-      });
+      }
+
+      // Check sample instructions
+      if (content.samples && Array.isArray(content.samples)) {
+        content.samples.forEach(sample => {
+          if (sample.instruction) {
+            let match;
+            while ((match = mentionRegex.exec(sample.instruction)) !== null) {
+              const name = match[1].trim();
+              if (name) mentionedNames.add(name);
+            }
+          }
+        });
+      }
     }
 
     // Look up user IDs from names
@@ -219,16 +134,20 @@ class CanvasController {
         });
       }
 
-      // Get existing canvas or return default template
+      // Get existing canvas or return empty structure
       let canvas = await Canvas.getByRequestId(requestId);
 
       if (!canvas) {
-        // Return default template (not saved yet)
+        // Return empty Canvas Brief structure (not saved yet)
         return res.json({
           success: true,
           canvas: {
             file_request_id: requestId,
-            content: PRODUCT_BRIEF_TEMPLATE,
+            content: {
+              headline: '',
+              script: '',
+              samples: []
+            },
             attachments: [],
             created_at: null,
             updated_at: null
@@ -344,11 +263,13 @@ class CanvasController {
         }
       }
 
-      logger.info('Canvas saved', {
+      logger.info('Canvas Brief saved', {
         canvasId: canvas.id,
         requestId,
         userId,
-        blockCount: content.blocks.length,
+        hasHeadline: !!content.headline,
+        hasScript: !!content.script,
+        samplesCount: content.samples ? content.samples.length : 0,
         mentions: mentionedUserIds.length
       });
 
@@ -407,8 +328,12 @@ class CanvasController {
       // Check canvas exists
       const exists = await Canvas.exists(requestId);
       if (!exists) {
-        // Create canvas with default template first
-        await Canvas.upsertCanvas(requestId, PRODUCT_BRIEF_TEMPLATE, []);
+        // Create empty Canvas Brief first
+        await Canvas.upsertCanvas(requestId, {
+          headline: '',
+          script: '',
+          samples: []
+        }, []);
       }
 
       // Upload file using media service
