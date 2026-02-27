@@ -596,11 +596,12 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
   };
 
   const handleEditRequest = () => {
+    if (!request) return;
     setIsEditMode(true);
     setEditedRequest({
       title: request.title,
-      concept_notes: request.concept_notes,
-      num_creatives: request.num_creatives,
+      concept_notes: request.description || '',
+      num_creatives: request.num_creatives_requested || 0,
       request_type: request.request_type,
       deadline: request.deadline,
       platforms: request.platforms || [],

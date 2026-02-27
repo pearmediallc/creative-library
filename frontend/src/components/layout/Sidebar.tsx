@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Image, Star, Clock, Trash2, TrendingUp, Users, Settings, LogOut, FileText, Tags, Share2, UserCheck, Layers, ChevronRight, Inbox, User, Download, BarChart3, Shield, Key, Rocket } from 'lucide-react';
+import { LayoutDashboard, Image, Star, Clock, Trash2, TrendingUp, Users, Settings, LogOut, FileText, Tags, Share2, UserCheck, Layers, ChevronRight, Inbox, User, Download, BarChart3, Shield, Key, Rocket, HelpCircle } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { cn } from '../../lib/utils';
 import { savedSearchApi, notificationApi } from '../../lib/api';
@@ -18,6 +18,7 @@ const baseNavigation = [
   { name: 'Shared by You', href: '/shared-by-me', icon: Share2 },
   { name: 'Teams', href: '/teams', icon: Users },
   { name: 'Settings', href: '/settings', icon: User },
+  { name: 'FAQ / Help', href: '/faq', icon: HelpCircle },
 ];
 
 // Navigation items for admin and buyers only (not for creatives/editors)

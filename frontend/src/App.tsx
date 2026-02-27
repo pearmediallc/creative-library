@@ -24,6 +24,7 @@ import { PublicLinkPage } from './pages/PublicLinkPage';
 import { FileRequestsPage } from './pages/FileRequestsPage';
 import { PublicFileRequestPage } from './pages/PublicFileRequestPage';
 import { UserSettingsPage } from './pages/UserSettings';
+import { FAQPage } from './pages/FAQPage';
 import { ActivityLogExportPage } from './pages/ActivityLogExport';
 import { WorkloadDashboardPage } from './pages/WorkloadDashboardPage';
 import { AccessRequestsPage } from './pages/AccessRequestsPage';
@@ -278,6 +279,14 @@ function AppRoutes() {
         element={
           <PrivateRoute>
             <UserSettingsPage />
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/faq"
+        element={
+          <PrivateRoute>
+            <FAQPage />
           </PrivateRoute>
         }
       />
