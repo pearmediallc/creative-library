@@ -5,6 +5,7 @@ import { fileRequestApi, mediaApi } from '../lib/api';
 import { formatDate } from '../lib/utils';
 import { CanvasEditor } from './CanvasEditor';
 import { CanvasRenderer } from './CanvasRenderer';
+import { CanvasBrief3Step } from './CanvasBrief3Step';
 import { UploadedFileCard } from './UploadedFileCard';
 import { UploadHistoryTimeline } from './UploadHistoryTimeline';
 import { ReassignFileRequestModal } from './ReassignFileRequestModal';
@@ -124,6 +125,7 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
   const [canvas, setCanvas] = useState<Canvas | null>(null);
   const [showCanvas, setShowCanvas] = useState(false);
   const [canvasMode, setCanvasMode] = useState<'view' | 'edit'>('view');
+  const [show3StepCanvas, setShow3StepCanvas] = useState(false);
 
   // Upload state
   const [showUploadForm, setShowUploadForm] = useState(true); // Show by default for better UX
@@ -645,6 +647,29 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
     }
   };
 
+  const handleSave3StepCanvas = async (content: string) => {
+    try {
+      const API_BASE_URL = (process.env.REACT_APP_API_URL || 'http://localhost:3001/api');
+      const token = localStorage.getItem('token');
+
+      await fetch(`${API_BASE_URL}/file-requests/${requestId}/canvas`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ content })
+      });
+
+      alert('Canvas Brief saved successfully!');
+      setShow3StepCanvas(false);
+      fetchRequestDetails(); // Refresh to show updated canvas
+    } catch (error) {
+      console.error('Error saving canvas:', error);
+      alert('Failed to save canvas. Please try again.');
+    }
+  };
+
   const handleDuplicateRequest = async () => {
     try {
       const API_BASE_URL = (process.env.REACT_APP_API_URL || 'http://localhost:3001/api');
@@ -1007,33 +1032,17 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => {
-                      setCanvasMode('view');
-                      setShowCanvas(true);
-                    }}
+                    onClick={() => setShow3StepCanvas(true)}
                   >
                     <FileText className="w-4 h-4 mr-2" />
-                    View Canvas
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setCanvasMode('edit');
-                      setShowCanvas(true);
-                    }}
-                  >
-                    Edit Canvas
+                    View/Edit Canvas
                   </Button>
                 </>
               ) : (
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => {
-                    setCanvasMode('edit');
-                    setShowCanvas(true);
-                  }}
+                  onClick={() => setShow3StepCanvas(true)}
                 >
                   <FileText className="w-4 h-4 mr-2" />
                   Create Canvas Brief
@@ -1627,6 +1636,16 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
           numCreatives={request.num_creatives_requested || 0}
           onClose={() => setShowReassignModal(false)}
           onSuccess={handleReassignSuccess}
+        />
+      )}
+
+      {/* 3-Step Canvas Brief Modal */}
+      {show3StepCanvas && (
+        <CanvasBrief3Step
+          requestId={requestId}
+          initialContent={canvas?.content}
+          onSave={handleSave3StepCanvas}
+          onClose={() => setShow3StepCanvas(false)}
         />
       )}
     </div>

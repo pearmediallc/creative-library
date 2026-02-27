@@ -12,6 +12,7 @@ import { getLaunchRequestStatusBadgeClasses } from '../constants/statusColors';
 import { getVerticalBadgeClasses } from '../constants/statusColors';
 import { useAuth } from '../contexts/AuthContext';
 import { CanvasEditor } from './CanvasEditor';
+import { CanvasBrief3Step } from './CanvasBrief3Step';
 
 interface Editor {
   id: string;
@@ -113,6 +114,8 @@ export function LaunchRequestDetailsModal({ request: initialRequest, onClose, on
 
   // ── canvas state ──────────────────────────────────────────────────────────
   const [showCanvas, setShowCanvas] = useState(false);
+  const [show3StepCanvas, setShow3StepCanvas] = useState(false);
+  const [canvasContent, setCanvasContent] = useState<string | null>(null);
 
   // ── upload state (drag/drop, multiple files, folder) ─────────────────────
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
