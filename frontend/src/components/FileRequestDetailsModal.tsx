@@ -696,8 +696,9 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
 
       // Step 2: Upload reference files to "canvas brief reference" folder
       if (files.length > 0) {
-        // Count existing samples to correctly index new ones
-        const existingSamplesCount = (contentObj.samples || []).filter((s: any) => s.file_id).length;
+        // Count how many samples were in the content before adding new files
+        // This helps us know which samples in the array are the newly uploaded ones
+        const samplesBeforeUpload = (contentObj.samples || []).length - files.length;
 
         // First, find or create the "canvas brief reference" folder
         const foldersResponse = await fetch(`${API_BASE_URL}/folders`, {
@@ -803,7 +804,7 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
 
         for (let i = 0; i < files.length; i++) {
           const file = files[i];
-          const instruction = contentObj.samples[existingSamplesCount + i]?.instruction || '';
+          const instruction = contentObj.samples[samplesBeforeUpload + i]?.instruction || '';
 
           const formData = new FormData();
           formData.append('file', file);
@@ -839,14 +840,19 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
           }
           // Add file_id to the newly uploaded samples
           for (let i = 0; i < uploadedFileIds.length; i++) {
-            const sampleIndex = existingSamplesCount + i;
+            const sampleIndex = samplesBeforeUpload + i;
             if (updatedContent.samples[sampleIndex]) {
               updatedContent.samples[sampleIndex].file_id = uploadedFileIds[i];
+              console.log(`[Canvas Debug] Added file_id ${uploadedFileIds[i]} to sample at index ${sampleIndex}`);
+            } else {
+              console.warn(`[Canvas Debug] No sample found at index ${sampleIndex} for file_id ${uploadedFileIds[i]}`);
             }
           }
 
+          console.log('[Canvas Debug] Updating canvas with file IDs:', uploadedFileIds);
+
           // Update canvas with file IDs
-          await fetch(`${API_BASE_URL}/file-requests/${requestId}/canvas`, {
+          const updateResponse = await fetch(`${API_BASE_URL}/file-requests/${requestId}/canvas`, {
             method: 'POST',
             headers: {
               'Authorization': `Bearer ${token}`,
@@ -854,15 +860,23 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
             },
             body: JSON.stringify({ content: updatedContent })
           });
+
+          if (!updateResponse.ok) {
+            const errorData = await updateResponse.json();
+            console.error('[Canvas Debug] Failed to update canvas with file IDs:', errorData);
+            // Don't throw - files are already uploaded, just log the error
+          } else {
+            console.log('[Canvas Debug] Successfully updated canvas with file IDs');
+          }
         }
       }
 
       alert('Canvas Brief saved successfully!');
       setShow3StepCanvas(false);
       fetchRequestDetails(); // Refresh to show updated canvas
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving canvas:', error);
-      alert('Failed to save canvas. Please try again.');
+      alert(`Failed to save canvas: ${error.message || 'Please try again.'}`);
     }
   };
 
