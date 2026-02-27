@@ -147,9 +147,13 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
   const [showReassignModal, setShowReassignModal] = useState(false);
   const [reassignments, setReassignments] = useState<any[]>([]);
 
+  // Edit history state
+  const [editHistory, setEditHistory] = useState<any[]>([]);
+
   useEffect(() => {
     fetchRequestDetails();
     fetchReassignments();
+    fetchEditHistory();
   }, [requestId]);
 
   // Subscribe to upload queue to refresh when uploads complete
@@ -558,6 +562,22 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
       setReassignments(response.data.data || []);
     } catch (error: any) {
       console.error('Failed to fetch reassignments:', error);
+    }
+  };
+
+  const fetchEditHistory = async () => {
+    try {
+      const API_BASE_URL = (process.env.REACT_APP_API_URL || 'http://localhost:3001/api');
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE_URL}/file-requests/${requestId}/edit-history`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      const result = await response.json();
+      setEditHistory(result.data || []);
+    } catch (error: any) {
+      console.error('Failed to fetch edit history:', error);
     }
   };
 
@@ -1393,6 +1413,47 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
               <UploadHistoryTimeline requestId={requestId} />
             </div>
           </div>
+
+          {/* Edit History Timeline */}
+          {editHistory.length > 0 && (
+            <div>
+              <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                Edit History
+              </h3>
+              <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 space-y-3">
+                {editHistory.map((edit: any) => (
+                  <div key={edit.id} className="border-l-4 border-blue-500 pl-4 py-2">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-sm font-medium text-gray-900 dark:text-white">
+                        {edit.edited_by_name}
+                      </span>
+                      <span className="text-xs text-gray-500 dark:text-gray-400">
+                        {formatDate(edit.edited_at)}
+                      </span>
+                    </div>
+                    <div className="text-xs text-gray-600 dark:text-gray-400 space-y-1">
+                      {Object.keys(edit.changes).map((field: string) => (
+                        <div key={field}>
+                          <span className="font-medium capitalize">{field.replace(/_/g, ' ')}:</span>
+                          <span className="text-red-600 dark:text-red-400 line-through ml-2">
+                            {JSON.stringify(edit.previous_values[field])}
+                          </span>
+                          <span className="text-green-600 dark:text-green-400 ml-2">
+                            {JSON.stringify(edit.changes[field])}
+                          </span>
+                        </div>
+                      ))}
+                      {edit.edit_reason && (
+                        <div className="mt-2 italic text-gray-500">
+                          Reason: {edit.edit_reason}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Footer */}
