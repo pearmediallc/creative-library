@@ -802,7 +802,10 @@ class FileRequestController {
       }
 
       // Get updated request with all details
-      const updated = await this.getById({ params: { id: requestId }, user: req.user });
+      const updatedResult = await query(
+        'SELECT * FROM file_requests WHERE id = $1',
+        [requestId]
+      );
 
       logger.info('File request updated', {
         requestId,
@@ -812,7 +815,7 @@ class FileRequestController {
 
       res.json({
         success: true,
-        data: updated,
+        data: updatedResult.rows[0],
         message: 'File request updated successfully'
       });
 
