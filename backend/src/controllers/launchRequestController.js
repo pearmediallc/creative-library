@@ -979,6 +979,37 @@ class LaunchRequestController {
     }
   }
 
+  async scheduleClose(req, res) {
+    try {
+      const { id } = req.params;
+      const { hours = 24 } = req.body;
+
+      const scheduledTime = new Date(Date.now() + hours * 60 * 60 * 1000);
+
+      await pool.query(
+        `UPDATE launch_requests
+         SET scheduled_close_at = $1, auto_close_enabled = TRUE
+         WHERE id = $2`,
+        [scheduledTime, id]
+      );
+
+      logger.info('Launch request scheduled for auto-close', {
+        requestId: id,
+        scheduledTime,
+        hours
+      });
+
+      res.json({
+        success: true,
+        message: `Request scheduled to close in ${hours} hours`,
+        scheduled_close_at: scheduledTime
+      });
+    } catch (err) {
+      logger.error('Schedule close error:', err);
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  }
+
   async reopen(req, res) {
     // closed → reopened
     return this._transition(req, res, 'reopened', ['closed'], {});

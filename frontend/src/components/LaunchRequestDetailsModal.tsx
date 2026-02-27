@@ -208,6 +208,25 @@ export function LaunchRequestDetailsModal({ request: initialRequest, onClose, on
   const handleLaunch = () => doAction('launch', () => launchRequestApi.launch(request.id));
   const handleClose = () => doAction('close', () => launchRequestApi.close(request.id));
   const handleReopen = () => doAction('reopen', () => launchRequestApi.reopen(request.id));
+  const handleScheduleClose = async () => {
+    try {
+      const API_BASE_URL = (process.env.REACT_APP_API_URL || 'http://localhost:3001/api');
+      const token = localStorage.getItem('token');
+      await fetch(`${API_BASE_URL}/launch-requests/${request.id}/schedule-close`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ hours: 24 })
+      });
+      alert('Request scheduled to close in 24 hours');
+      onUpdate();
+    } catch (error) {
+      console.error('Failed to schedule close:', error);
+      alert('Failed to schedule auto-close');
+    }
+  };
 
   const handleReassignCreative = async () => {
     if (!newCreativeHeadId) return;
@@ -515,9 +534,14 @@ export function LaunchRequestDetailsModal({ request: initialRequest, onClose, on
 
             {/* Close */}
             {(isAdmin || isStrategist) && request.status === 'launched' && (
-              <Button size="sm" variant="outline" onClick={handleClose} disabled={!!actionLoading}>
-                {actionLoading === 'close' ? 'Closing...' : 'Close Request'}
-              </Button>
+              <>
+                <Button size="sm" variant="outline" onClick={handleClose} disabled={!!actionLoading}>
+                  {actionLoading === 'close' ? 'Closing...' : 'Close Request'}
+                </Button>
+                <Button size="sm" variant="outline" onClick={handleScheduleClose} disabled={!!actionLoading || !!request.scheduled_close_at}>
+                  {request.scheduled_close_at ? 'Scheduled' : 'Close in 24hrs'}
+                </Button>
+              </>
             )}
 
             {/* Reopen */}

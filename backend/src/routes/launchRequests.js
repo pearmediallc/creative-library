@@ -46,6 +46,9 @@ router.post('/:id/launch', authenticateToken, (req, res) => launchRequestControl
 // Close (launched → closed)
 router.post('/:id/close', authenticateToken, (req, res) => launchRequestController.close(req, res));
 
+// Schedule auto-close
+router.post('/:id/schedule-close', authenticateToken, (req, res) => launchRequestController.scheduleClose(req, res));
+
 // Reopen (closed → reopened)
 router.post('/:id/reopen', authenticateToken, (req, res) => launchRequestController.reopen(req, res));
 
