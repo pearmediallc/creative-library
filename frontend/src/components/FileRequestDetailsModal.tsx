@@ -691,24 +691,71 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
 
         // Upload each file to the canvas brief reference folder
         const parsedContent = JSON.parse(content);
+
+        // Get a valid editor_id (for canvas briefs, we need to find an active editor)
+        // If user is a creative, get their editor ID, otherwise use the first assigned editor
+        let editorId = '';
+        if (user?.role === 'creative') {
+          // Get editor profile for creative user
+          try {
+            const editorResponse = await fetch(`${API_BASE_URL}/editors`, {
+              headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const editorsData = await editorResponse.json();
+            const userEditor = editorsData.data?.find((e: any) => e.user_id === user.id);
+            if (userEditor) {
+              editorId = userEditor.id;
+            }
+          } catch (err) {
+            console.error('Failed to get editor:', err);
+          }
+        }
+
+        // If still no editor_id, use the first assigned editor from the request
+        if (!editorId && request?.assigned_editors && request.assigned_editors.length > 0) {
+          editorId = request.assigned_editors[0].id;
+        }
+
+        // If still no editor, get any active editor as fallback
+        if (!editorId) {
+          try {
+            const editorResponse = await fetch(`${API_BASE_URL}/editors`, {
+              headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const editorsData = await editorResponse.json();
+            const firstEditor = editorsData.data?.find((e: any) => e.is_active);
+            if (firstEditor) {
+              editorId = firstEditor.id;
+            }
+          } catch (err) {
+            console.error('Failed to get fallback editor:', err);
+          }
+        }
+
         for (let i = 0; i < files.length; i++) {
           const file = files[i];
           const instruction = parsedContent.samples[i]?.instruction || '';
 
           const formData = new FormData();
           formData.append('file', file);
-          formData.append('editor_id', user?.id || ''); // Use current user as uploader
+          formData.append('editor_id', editorId);
           formData.append('folder_id', canvasFolderId);
-          formData.append('description', `Canvas Brief Sample: ${instruction}`);
+          formData.append('description', `Canvas Brief Sample - ${request?.title || 'Request'}: ${instruction}`);
           formData.append('tags', JSON.stringify(['canvas-brief', `request-${requestId}`]));
 
-          await fetch(`${API_BASE_URL}/media/upload`, {
+          const uploadResponse = await fetch(`${API_BASE_URL}/media/upload`, {
             method: 'POST',
             headers: {
               'Authorization': `Bearer ${token}`
             },
             body: formData
           });
+
+          if (!uploadResponse.ok) {
+            const errorData = await uploadResponse.json();
+            console.error('Upload failed:', errorData);
+            throw new Error(`Failed to upload ${file.name}: ${errorData.error || 'Unknown error'}`);
+          }
         }
       }
 
