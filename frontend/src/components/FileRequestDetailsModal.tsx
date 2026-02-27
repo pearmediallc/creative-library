@@ -697,7 +697,7 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
       // Step 2: Upload reference files to "canvas brief reference" folder
       if (files.length > 0) {
         // Count existing samples to correctly index new ones
-        const existingSamplesCount = contentObj.samples.filter((s: any) => s.file_id).length;
+        const existingSamplesCount = (contentObj.samples || []).filter((s: any) => s.file_id).length;
 
         // First, find or create the "canvas brief reference" folder
         const foldersResponse = await fetch(`${API_BASE_URL}/folders`, {
@@ -722,9 +722,6 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
           const createdFolder = await createFolderResponse.json();
           canvasFolderId = createdFolder.data.id;
         }
-
-        // Upload each file to the canvas brief reference folder
-        const parsedContent = JSON.parse(content);
 
         // Get a valid editor_id (for canvas briefs, we need to find an active editor)
         // If user is a creative, get their editor ID, otherwise use the first assigned editor
@@ -836,6 +833,10 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
         // Update canvas samples with file IDs
         if (uploadedFileIds.length > 0) {
           const updatedContent = { ...contentObj };
+          // Ensure samples array exists
+          if (!updatedContent.samples) {
+            updatedContent.samples = [];
+          }
           // Add file_id to the newly uploaded samples
           for (let i = 0; i < uploadedFileIds.length; i++) {
             const sampleIndex = existingSamplesCount + i;
