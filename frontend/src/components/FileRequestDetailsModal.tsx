@@ -660,7 +660,11 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
       const API_BASE_URL = (process.env.REACT_APP_API_URL || 'http://localhost:3001/api');
       const token = localStorage.getItem('token');
 
-      console.log('[Canvas Debug] Saving canvas content:', content);
+      console.log('[Canvas Debug] Saving canvas content (string):', content);
+
+      // Parse the content string back to object for API
+      const contentObj = JSON.parse(content);
+      console.log('[Canvas Debug] Parsed content (object):', contentObj);
 
       // Step 1: Save the canvas brief metadata
       const canvasSaveResponse = await fetch(`${API_BASE_URL}/file-requests/${requestId}/canvas`, {
@@ -669,7 +673,7 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ content })
+        body: JSON.stringify({ content: contentObj })
       });
 
       console.log('[Canvas Debug] Canvas save response status:', canvasSaveResponse.status);
@@ -1203,11 +1207,10 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
                     <Button
                       variant="outline"
                       size="sm"
-                      disabled
-                      className="cursor-default opacity-75"
+                      onClick={() => setShow3StepCanvas(true)}
                     >
                       <FileText className="w-4 h-4 mr-2" />
-                      View Canvas (Read-only)
+                      View Canvas
                     </Button>
                   )}
                 </>
@@ -1871,6 +1874,7 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
           }
           onSave={handleSave3StepCanvas}
           onClose={() => setShow3StepCanvas(false)}
+          readOnly={user?.role === 'creative'}
         />
       )}
     </div>

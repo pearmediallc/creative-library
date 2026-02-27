@@ -6,6 +6,7 @@ interface CanvasBrief3StepProps {
   initialContent?: string;
   onSave: (content: any, files: File[]) => void;
   onClose: () => void;
+  readOnly?: boolean;
 }
 
 interface UploadedSample {
@@ -14,7 +15,7 @@ interface UploadedSample {
   instruction: string;
 }
 
-export function CanvasBrief3Step({ requestId, initialContent, onSave, onClose }: CanvasBrief3StepProps) {
+export function CanvasBrief3Step({ requestId, initialContent, onSave, onClose, readOnly = false }: CanvasBrief3StepProps) {
   const [isSaving, setIsSaving] = useState(false);
 
   // Parse initial content if exists
@@ -135,8 +136,9 @@ export function CanvasBrief3Step({ requestId, initialContent, onSave, onClose }:
               type="text"
               value={headline}
               onChange={(e) => setHeadline(e.target.value)}
-              className="w-full px-4 py-3 text-sm border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Enter the main headline for this creative..."
+              disabled={readOnly}
+              className="w-full px-4 py-3 text-sm border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-60 disabled:cursor-not-allowed"
+              placeholder={readOnly ? "" : "Enter the main headline for this creative..."}
             />
           </div>
 
@@ -148,9 +150,10 @@ export function CanvasBrief3Step({ requestId, initialContent, onSave, onClose }:
             <textarea
               value={script}
               onChange={(e) => setScript(e.target.value)}
-              className="w-full px-4 py-3 text-sm border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              disabled={readOnly}
+              className="w-full px-4 py-3 text-sm border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-60 disabled:cursor-not-allowed"
               rows={8}
-              placeholder="Write the script or detailed description for the creative..."
+              placeholder={readOnly ? "" : "Write the script or detailed description for the creative..."}
             />
           </div>
 
@@ -160,13 +163,14 @@ export function CanvasBrief3Step({ requestId, initialContent, onSave, onClose }:
               Reference Samples
             </label>
 
-            {/* Drag & Drop Area */}
-            <div
-              onDrop={handleDrop}
-              onDragOver={handleDragOver}
-              className="border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-lg p-8 text-center hover:border-blue-500 dark:hover:border-blue-500 transition-colors cursor-pointer"
-              onClick={() => document.getElementById('canvas-file-input')?.click()}
-            >
+            {/* Drag & Drop Area - Hide in read-only mode */}
+            {!readOnly && (
+              <div
+                onDrop={handleDrop}
+                onDragOver={handleDragOver}
+                className="border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-lg p-8 text-center hover:border-blue-500 dark:hover:border-blue-500 transition-colors cursor-pointer"
+                onClick={() => document.getElementById('canvas-file-input')?.click()}
+              >
               <Upload className="w-12 h-12 mx-auto mb-4 text-gray-400" />
               <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
                 Drag and drop files here, or click to browse
@@ -182,7 +186,8 @@ export function CanvasBrief3Step({ requestId, initialContent, onSave, onClose }:
                 className="hidden"
                 accept="image/*,video/*"
               />
-            </div>
+              </div>
+            )}
 
             {/* Uploaded Samples List */}
             {(existingSamples.length > 0 || samples.length > 0) && (
@@ -210,13 +215,15 @@ export function CanvasBrief3Step({ requestId, initialContent, onSave, onClose }:
                               (Existing)
                             </span>
                           </div>
-                          <button
-                            onClick={() => removeExistingSample(index)}
-                            className="p-1 hover:bg-red-100 dark:hover:bg-red-900/20 rounded text-red-600"
-                            title="Remove file"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                          {!readOnly && (
+                            <button
+                              onClick={() => removeExistingSample(index)}
+                              className="p-1 hover:bg-red-100 dark:hover:bg-red-900/20 rounded text-red-600"
+                              title="Remove file"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
                         </div>
                         <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
                           {sample.size ? `${(sample.size / 1024).toFixed(2)} KB` : 'Size unknown'}
@@ -233,8 +240,8 @@ export function CanvasBrief3Step({ requestId, initialContent, onSave, onClose }:
                   </div>
                 ))}
 
-                {/* New Samples */}
-                {samples.map((sample, index) => (
+                {/* New Samples - Hide in read-only mode */}
+                {!readOnly && samples.map((sample, index) => (
                   <div
                     key={`new-${index}`}
                     className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-gray-50 dark:bg-gray-900"
@@ -299,16 +306,18 @@ export function CanvasBrief3Step({ requestId, initialContent, onSave, onClose }:
             onClick={onClose}
             className="px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
           >
-            Cancel
+            {readOnly ? 'Close' : 'Cancel'}
           </button>
 
-          <button
-            onClick={handleSave}
-            disabled={isSaving || !canSave()}
-            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            {isSaving ? 'Saving...' : 'Save Canvas Brief'}
-          </button>
+          {!readOnly && (
+            <button
+              onClick={handleSave}
+              disabled={isSaving || !canSave()}
+              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {isSaving ? 'Saving...' : 'Save Canvas Brief'}
+            </button>
+          )}
         </div>
       </div>
     </div>
