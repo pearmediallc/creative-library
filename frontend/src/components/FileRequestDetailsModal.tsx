@@ -648,11 +648,12 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
     }
   };
 
-  const handleSave3StepCanvas = async (content: string) => {
+  const handleSave3StepCanvas = async (content: string, files: File[]) => {
     try {
       const API_BASE_URL = (process.env.REACT_APP_API_URL || 'http://localhost:3001/api');
       const token = localStorage.getItem('token');
 
+      // Step 1: Save the canvas brief metadata
       await fetch(`${API_BASE_URL}/file-requests/${requestId}/canvas`, {
         method: 'POST',
         headers: {
@@ -661,6 +662,55 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
         },
         body: JSON.stringify({ content })
       });
+
+      // Step 2: Upload reference files to "canvas brief reference" folder
+      if (files.length > 0) {
+        // First, find or create the "canvas brief reference" folder
+        const foldersResponse = await fetch(`${API_BASE_URL}/folders`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const foldersData = await foldersResponse.json();
+
+        let canvasFolderId = foldersData.data?.find((f: any) =>
+          f.name.toLowerCase() === 'canvas brief reference'
+        )?.id;
+
+        // If folder doesn't exist, create it
+        if (!canvasFolderId) {
+          const createFolderResponse = await fetch(`${API_BASE_URL}/folders`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ name: 'Canvas Brief Reference' })
+          });
+          const createdFolder = await createFolderResponse.json();
+          canvasFolderId = createdFolder.data.id;
+        }
+
+        // Upload each file to the canvas brief reference folder
+        const parsedContent = JSON.parse(content);
+        for (let i = 0; i < files.length; i++) {
+          const file = files[i];
+          const instruction = parsedContent.samples[i]?.instruction || '';
+
+          const formData = new FormData();
+          formData.append('file', file);
+          formData.append('editor_id', user?.id || ''); // Use current user as uploader
+          formData.append('folder_id', canvasFolderId);
+          formData.append('description', `Canvas Brief Sample: ${instruction}`);
+          formData.append('tags', JSON.stringify(['canvas-brief', `request-${requestId}`]));
+
+          await fetch(`${API_BASE_URL}/media/upload`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`
+            },
+            body: formData
+          });
+        }
+      }
 
       alert('Canvas Brief saved successfully!');
       setShow3StepCanvas(false);
@@ -1026,6 +1076,11 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
               <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">
                 Canvas Brief
               </h3>
+              {canvas?.created_at && (
+                <span className="text-xs text-gray-500 dark:text-gray-400">
+                  Created: {formatDate(canvas.created_at)}
+                </span>
+              )}
             </div>
             <div className="flex gap-2">
               {canvas ? (
@@ -1047,7 +1102,7 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
                 >
                   <FileText className="w-4 h-4 mr-2" />
                   Create Canvas Brief
-                </Button>
+                  </Button>
               )}
             </div>
           </div>
