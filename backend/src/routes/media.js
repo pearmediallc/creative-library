@@ -19,10 +19,10 @@ const { upload } = require('../middleware/upload');
 const { processMetadata } = require('../middleware/metadataMiddleware');
 
 // Upload endpoint with file upload middleware
-// Only admin and creative users can upload
+// Admin, creative, and buyer users can upload (buyers for Canvas Brief references)
 router.post('/upload',
   authenticateToken,
-  requireRole('admin', 'creative'),
+  requireRole('admin', 'creative', 'buyer'),
   upload.single('file'),
   validate(schemas.mediaUpload),
   processMetadata,  // ✨ NEW: Process metadata before S3 upload
