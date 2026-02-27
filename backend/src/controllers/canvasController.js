@@ -276,19 +276,28 @@ class CanvasController {
       }
 
       const fileRequest = fileRequestResult.rows[0];
+      const userRole = req.user.role;
 
-      if (fileRequest.creator_id !== userId) {
+      // Check permissions - creator, admin, or buyer can edit canvas
+      const isCreator = fileRequest.creator_id === userId;
+      const isAdmin = userRole === 'admin';
+      const isBuyer = userRole === 'buyer';
+
+      if (!isCreator && !isAdmin && !isBuyer) {
         return res.status(403).json({
           success: false,
-          error: 'Only the request creator can edit the canvas'
+          error: 'Only the request creator, buyers, or admins can edit the canvas'
         });
       }
 
-      // Validate content
-      if (!content || !content.blocks) {
+      // Validate content - accept both Canvas Editor format (blocks) and Canvas Brief format (headline/script/samples)
+      const isCanvasEditor = content && content.blocks;
+      const isCanvasBrief = content && (content.headline || content.script || content.samples);
+
+      if (!content || (!isCanvasEditor && !isCanvasBrief)) {
         return res.status(400).json({
           success: false,
-          error: 'Invalid canvas content'
+          error: 'Invalid canvas content - must have either blocks (Canvas Editor) or headline/script/samples (Canvas Brief)'
         });
       }
 
