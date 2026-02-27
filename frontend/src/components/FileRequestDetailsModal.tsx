@@ -8,6 +8,7 @@ import { UploadedFileCard } from './UploadedFileCard';
 import { UploadHistoryTimeline } from './UploadHistoryTimeline';
 import { ReassignFileRequestModal } from './ReassignFileRequestModal';
 import { useAuth } from '../contexts/AuthContext';
+import { getFileRequestStatusColor, getVerticalBadgeClasses } from '../constants/statusColors';
 
 // Canvas Brief type
 interface Canvas {
@@ -18,7 +19,6 @@ interface Canvas {
   created_at?: string;
   updated_at?: string;
 }
-import { getFileRequestStatusColor, getVerticalBadgeClasses } from '../constants/statusColors';
 
 // Status badge helper using centralized colors
 function getStatusBadge(status: string | undefined) {
