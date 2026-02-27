@@ -732,11 +732,40 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
           }
         }
 
-        // Create folder structure: Canvas Brief Reference / [Date] / [Request Name]
+        // Create folder structure: Canvas Brief Reference / [Date] only
         const now = new Date();
         const dateFolder = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-        const requestName = request?.title || 'Untitled Request';
-        const folderPath = `Canvas Brief Reference/${dateFolder}/${requestName}`;
+
+        // Create dated subfolder under Canvas Brief Reference
+        let dateFolderId = canvasFolderId;
+        const dateFoldersResponse = await fetch(`${API_BASE_URL}/folders`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const allFolders = await dateFoldersResponse.json();
+
+        // Find or create date folder as child of Canvas Brief Reference folder
+        const existingDateFolder = allFolders.data?.find((f: any) =>
+          f.name === dateFolder && f.parent_id === canvasFolderId
+        );
+
+        if (existingDateFolder) {
+          dateFolderId = existingDateFolder.id;
+        } else {
+          // Create date folder
+          const createDateFolderResponse = await fetch(`${API_BASE_URL}/folders`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              name: dateFolder,
+              parent_id: canvasFolderId
+            })
+          });
+          const createdDateFolder = await createDateFolderResponse.json();
+          dateFolderId = createdDateFolder.data.id;
+        }
 
         for (let i = 0; i < files.length; i++) {
           const file = files[i];
@@ -745,9 +774,8 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
           const formData = new FormData();
           formData.append('file', file);
           formData.append('editor_id', editorId);
-          formData.append('folder_id', canvasFolderId);
-          formData.append('folder_path', folderPath);  // Use folder_path for S3 structure
-          formData.append('description', `Canvas Brief Sample - ${requestName}: ${instruction}`);
+          formData.append('folder_id', dateFolderId);  // Upload to date folder
+          formData.append('description', `Canvas Brief - ${request?.title || 'Request'}: ${instruction}`);
           formData.append('tags', JSON.stringify(['canvas-brief', `request-${requestId}`, dateFolder]));
 
           const uploadResponse = await fetch(`${API_BASE_URL}/media/upload`, {
