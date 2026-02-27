@@ -253,12 +253,19 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
       // Try to load canvas
       try {
         const canvasResponse = await fileRequestApi.canvas.get(requestId);
+        console.log('[Canvas Debug] Canvas API response:', canvasResponse.data);
         if (canvasResponse.data.canvas && !canvasResponse.data.isTemplate) {
+          console.log('[Canvas Debug] Setting canvas state:', canvasResponse.data.canvas);
           setCanvas(canvasResponse.data.canvas);
+        } else {
+          console.log('[Canvas Debug] Not setting canvas - isTemplate:', canvasResponse.data.isTemplate);
+          setCanvas(null); // Explicitly set to null if no canvas exists
         }
-      } catch (canvasError) {
+      } catch (canvasError: any) {
         // Canvas is optional, ignore error
-        console.log('No canvas found for this request');
+        console.log('[Canvas Debug] Canvas fetch error:', canvasError);
+        console.log('[Canvas Debug] Error response:', canvasError.response?.data);
+        setCanvas(null);
       }
     } catch (error: any) {
       console.error('Failed to fetch request details:', error);
@@ -653,8 +660,10 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
       const API_BASE_URL = (process.env.REACT_APP_API_URL || 'http://localhost:3001/api');
       const token = localStorage.getItem('token');
 
+      console.log('[Canvas Debug] Saving canvas content:', content);
+
       // Step 1: Save the canvas brief metadata
-      await fetch(`${API_BASE_URL}/file-requests/${requestId}/canvas`, {
+      const canvasSaveResponse = await fetch(`${API_BASE_URL}/file-requests/${requestId}/canvas`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -662,6 +671,14 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
         },
         body: JSON.stringify({ content })
       });
+
+      console.log('[Canvas Debug] Canvas save response status:', canvasSaveResponse.status);
+      const canvasSaveData = await canvasSaveResponse.json();
+      console.log('[Canvas Debug] Canvas save response data:', canvasSaveData);
+
+      if (!canvasSaveResponse.ok) {
+        throw new Error(canvasSaveData.error || 'Failed to save canvas');
+      }
 
       // Step 2: Upload reference files to "canvas brief reference" folder
       if (files.length > 0) {
