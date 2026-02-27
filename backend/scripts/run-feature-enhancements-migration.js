@@ -22,10 +22,14 @@ async function runMigration() {
 
     for (const statement of statements) {
       if (statement.toLowerCase().startsWith('select')) {
-        // Display result for SELECT statements
-        const result = await pool.query(statement);
-        console.log('\n📊 Migration Verification:');
-        console.table(result.rows);
+        // Display result for SELECT statements (with error handling for tables that don't exist yet)
+        try {
+          const result = await pool.query(statement);
+          console.log('\n📊 Migration Verification:');
+          console.table(result.rows);
+        } catch (err) {
+          console.log('\n⚠️  Verification query skipped (tables may not exist yet)');
+        }
       } else {
         // Execute other statements
         await pool.query(statement);

@@ -486,7 +486,7 @@ export function MediaLibraryPage() {
 
   const handleFileStar = () => {
     if (!contextMenuFile) return;
-    handleToggleStar(contextMenuFile);
+    handleToggleStar(contextMenuFile.id, !contextMenuFile.is_starred);
   };
 
   const handleFileRename = () => {
@@ -602,16 +602,6 @@ export function MediaLibraryPage() {
     } catch (error: any) {
       console.error('Delete failed:', error);
       alert(error.response?.data?.error || 'Failed to delete file');
-    }
-  };
-
-  const handleToggleStar = async (file: MediaFile) => {
-    try {
-      await starredApi.toggleStarred(file.id, !file.is_starred);
-      fetchData();
-    } catch (error: any) {
-      console.error('Failed to toggle star:', error);
-      alert(error.response?.data?.error || 'Failed to toggle star');
     }
   };
 
@@ -1175,7 +1165,7 @@ export function MediaLibraryPage() {
                                     variant="outline"
                                     size="sm"
                                     className="flex-1"
-                                    onClick={() => handleToggleStar(file)}
+                                    onClick={() => handleToggleStar(file.id, !file.is_starred)}
                                     title={file.is_starred ? 'Remove from starred' : 'Add to starred'}
                                   >
                                     <Star className={`w-4 h-4 mr-1 ${file.is_starred ? 'fill-yellow-500 text-yellow-500' : 'text-gray-400'}`} />

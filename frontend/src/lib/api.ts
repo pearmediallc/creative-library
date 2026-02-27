@@ -624,6 +624,7 @@ export const fileRequestApi = {
     note?: string;         // Legacy reassignment note
     reason?: string;       // 🆕 New reassignment reason field
     editor_distribution?: Array<{ editor_id: string; num_creatives: number }>;  // 🆕 Creative distribution
+    editor_notes?: Record<string, string>;  // 🆕 Per-editor reassignment notes
   }) => api.post(`/file-requests/${id}/reassign`, data),
 
   // Get reassignment history

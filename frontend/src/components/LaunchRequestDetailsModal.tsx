@@ -77,6 +77,8 @@ interface LaunchRequest {
   launched_at?: string;
   closed_at?: string;
   reopened_at?: string;
+  scheduled_close_at?: string;
+  auto_close_enabled?: boolean;
 }
 
 interface Props {
