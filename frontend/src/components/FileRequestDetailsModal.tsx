@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { X, Copy, Calendar, Folder, Mail, CheckCircle, Clock, FileText, Upload as UploadIcon, Rocket, XCircle, RotateCcw, UserPlus, Edit2 } from 'lucide-react';
+import { X, Copy, Calendar, Folder, Mail, CheckCircle, Clock, FileText, Upload as UploadIcon, Rocket, XCircle, RotateCcw, UserPlus, Edit2, ChevronDown, ChevronRight } from 'lucide-react';
 import { Button } from './ui/Button';
 import { fileRequestApi, mediaApi } from '../lib/api';
 import { formatDate } from '../lib/utils';
@@ -154,6 +154,7 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
   // Reassignment state
   const [showReassignModal, setShowReassignModal] = useState(false);
   const [reassignments, setReassignments] = useState<any[]>([]);
+  const [expandedReassignments, setExpandedReassignments] = useState<Set<string>>(new Set());
 
   // Edit history state
   const [editHistory, setEditHistory] = useState<any[]>([]);
@@ -382,6 +383,16 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
       newSelected.add(uploadId);
     }
     setSelectedUploads(newSelected);
+  };
+
+  const toggleReassignment = (reassignmentId: string) => {
+    const newExpanded = new Set(expandedReassignments);
+    if (newExpanded.has(reassignmentId)) {
+      newExpanded.delete(reassignmentId);
+    } else {
+      newExpanded.add(reassignmentId);
+    }
+    setExpandedReassignments(newExpanded);
   };
 
   const toggleSelectAll = () => {
@@ -1246,37 +1257,54 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
                 </div>
               )}
 
-              {/* History Timeline */}
+              {/* History Timeline - Accordion Style */}
               <div className="space-y-2">
-                {reassignments.map((r: any, index: number) => (
-                  <div key={r.id} className="bg-gray-50 dark:bg-gray-700/50 rounded-md p-3 relative">
-                    {/* Timeline connector */}
-                    {index < reassignments.length - 1 && (
-                      <div className="absolute left-3 top-full h-2 w-0.5 bg-gray-300 dark:bg-gray-600" />
-                    )}
+                {reassignments.map((r: any, index: number) => {
+                  const isExpanded = expandedReassignments.has(r.id);
 
-                    <div className="flex items-start gap-2">
-                      <div className="flex-shrink-0 w-2 h-2 rounded-full bg-blue-500 mt-1.5" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm text-gray-700 dark:text-gray-200">
-                          <strong className="text-gray-900 dark:text-white">{r.from_name}</strong>
-                          <span className="text-gray-500 dark:text-gray-400"> → </span>
-                          <strong className="text-blue-600 dark:text-blue-400">{r.to_name}</strong>
-                        </p>
-                        {r.reassignment_note && (
-                          <div className="mt-1.5 text-xs text-gray-600 dark:text-gray-400 bg-white dark:bg-gray-800 rounded px-2 py-1 border border-gray-200 dark:border-gray-700">
-                            <span className="font-medium">Note: </span>
-                            <span className="italic whitespace-pre-wrap">{r.reassignment_note}</span>
+                  return (
+                    <div
+                      key={r.id}
+                      className="border rounded-lg overflow-hidden transition-colors border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800"
+                    >
+                      {/* Accordion Header - Always visible */}
+                      <button
+                        onClick={() => toggleReassignment(r.id)}
+                        className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                      >
+                        <div className="flex items-center gap-3">
+                          {/* Expand/Collapse Icon */}
+                          {isExpanded ? (
+                            <ChevronDown className="w-4 h-4 text-gray-400" />
+                          ) : (
+                            <ChevronRight className="w-4 h-4 text-gray-400" />
+                          )}
+
+                          {/* Reassignment Summary */}
+                          <div className="flex items-center gap-2 text-sm">
+                            <span className="text-gray-700 dark:text-gray-300">{r.from_name}</span>
+                            <span className="text-gray-500 dark:text-gray-400">→</span>
+                            <span className="font-medium text-blue-600 dark:text-blue-400">{r.to_name}</span>
                           </div>
-                        )}
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1.5 flex items-center gap-1">
-                          <Clock className="w-3 h-3" />
+                        </div>
+
+                        <span className="text-xs text-gray-500 dark:text-gray-400">
                           {formatDate(r.created_at)}
-                        </p>
-                      </div>
+                        </span>
+                      </button>
+
+                      {/* Accordion Content - Expandable */}
+                      {isExpanded && r.reassignment_note && (
+                        <div className="px-4 pb-4 pt-2 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
+                          <div className="text-xs text-gray-600 dark:text-gray-400 bg-white dark:bg-gray-800 rounded px-3 py-2 border border-gray-200 dark:border-gray-700">
+                            <span className="font-medium text-gray-700 dark:text-gray-300">Note: </span>
+                            <span className="whitespace-pre-wrap">{r.reassignment_note}</span>
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
