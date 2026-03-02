@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { Download, Eye, Plus, Play, X } from 'lucide-react';
+import { Download, Eye, Plus, Play, X, Edit2, Check, XCircle } from 'lucide-react';
 import { Button } from './ui/Button';
 import { formatBytes, formatDate } from '../lib/utils';
 import { VideoPlayer } from './VideoPlayer';
@@ -28,11 +28,15 @@ interface UploadedFileCardProps {
   onDownload: (upload: FileUpload) => void;
   onAddToLibrary?: (upload: FileUpload) => void;
   onRemoveFromRequest?: (upload: FileUpload) => Promise<void> | void;
+  onRename?: (upload: FileUpload, newFilename: string) => Promise<void> | void;
 }
 
-export function UploadedFileCard({ upload, onDownload, onAddToLibrary, onRemoveFromRequest }: UploadedFileCardProps) {
+export function UploadedFileCard({ upload, onDownload, onAddToLibrary, onRemoveFromRequest, onRename }: UploadedFileCardProps) {
   const [showPreview, setShowPreview] = useState(false);
   const [adding, setAdding] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [newFilename, setNewFilename] = useState(upload.original_filename);
+  const [renaming, setRenaming] = useState(false);
 
   const isVideo = upload.file_type.startsWith('video/') ||
                   upload.original_filename.match(/\.(mp4|mov|avi|webm|mkv)$/i);
@@ -54,6 +58,34 @@ export function UploadedFileCard({ upload, onDownload, onAddToLibrary, onRemoveF
   const handleRemoveFromRequest = async () => {
     if (!onRemoveFromRequest) return;
     await onRemoveFromRequest(upload);
+  };
+
+  const handleStartEdit = () => {
+    setIsEditing(true);
+    setNewFilename(upload.original_filename);
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditing(false);
+    setNewFilename(upload.original_filename);
+  };
+
+  const handleSaveRename = async () => {
+    if (!onRename || !newFilename.trim() || newFilename === upload.original_filename) {
+      setIsEditing(false);
+      return;
+    }
+
+    setRenaming(true);
+    try {
+      await onRename(upload, newFilename.trim());
+      setIsEditing(false);
+    } catch (error) {
+      console.error('Failed to rename file:', error);
+      alert('Failed to rename file. Please try again.');
+    } finally {
+      setRenaming(false);
+    }
   };
 
   return (
@@ -92,9 +124,54 @@ export function UploadedFileCard({ upload, onDownload, onAddToLibrary, onRemoveF
 
         {/* File Info */}
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-            {upload.original_filename}
-          </p>
+          {isEditing ? (
+            <div className="flex items-center gap-2 mb-1">
+              <input
+                type="text"
+                value={newFilename}
+                onChange={(e) => setNewFilename(e.target.value)}
+                className="flex-1 px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
+                placeholder="Enter filename"
+                disabled={renaming}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleSaveRename();
+                  if (e.key === 'Escape') handleCancelEdit();
+                }}
+                autoFocus
+              />
+              <button
+                onClick={handleSaveRename}
+                disabled={renaming}
+                className="p-1 text-green-600 hover:bg-green-100 dark:hover:bg-green-900/20 rounded disabled:opacity-50"
+                title="Save"
+              >
+                <Check className="w-4 h-4" />
+              </button>
+              <button
+                onClick={handleCancelEdit}
+                disabled={renaming}
+                className="p-1 text-red-600 hover:bg-red-100 dark:hover:bg-red-900/20 rounded disabled:opacity-50"
+                title="Cancel"
+              >
+                <XCircle className="w-4 h-4" />
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 group">
+              <p className="text-sm font-medium text-gray-900 dark:text-white truncate flex-1">
+                {upload.original_filename}
+              </p>
+              {onRename && (
+                <button
+                  onClick={handleStartEdit}
+                  className="opacity-0 group-hover:opacity-100 p-1 text-gray-500 hover:text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/20 rounded transition-opacity"
+                  title="Rename file"
+                >
+                  <Edit2 className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+          )}
           <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400 mt-1">
             <span>{formatBytes(upload.file_size)}</span>
             <span>•</span>

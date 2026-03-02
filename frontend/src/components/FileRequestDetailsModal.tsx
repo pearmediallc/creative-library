@@ -361,6 +361,17 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
     }
   };
 
+  const handleRename = async (upload: FileUpload, newFilename: string) => {
+    try {
+      await mediaApi.rename(upload.file_id, newFilename);
+      // Refresh the request details to show updated filename everywhere
+      await fetchRequestDetails();
+    } catch (error: any) {
+      console.error('Failed to rename file:', error);
+      throw new Error(error.response?.data?.error || 'Failed to rename file');
+    }
+  };
+
   // Bulk selection handlers
   const toggleSelectUpload = (uploadId: string) => {
     const newSelected = new Set(selectedUploads);
@@ -1850,6 +1861,7 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
                         onDownload={handleDownload}
                         onAddToLibrary={user?.role !== 'creative' ? handleAddToLibrary : undefined}
                         onRemoveFromRequest={user?.role === 'creative' ? handleRemoveFromRequest : undefined}
+                        onRename={handleRename}
                       />
                     </div>
                   </div>
