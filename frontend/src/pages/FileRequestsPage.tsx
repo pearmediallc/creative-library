@@ -502,8 +502,33 @@ export function FileRequestsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredRequests.map((request) => (
-                    <tr key={request.id} className="border-b hover:bg-muted/50">
+                  {filteredRequests.map((request) => {
+                    // Calculate progress for row color
+                    const total = user?.role === 'creative'
+                      ? (request.my_creatives_assigned && request.my_creatives_assigned > 0
+                          ? request.my_creatives_assigned
+                          : request.num_creatives)
+                      : request.num_creatives;
+                    const uploaded = user?.role === 'creative'
+                      ? Number(request.my_uploaded_files_count ?? 0)
+                      : (request.upload_count ?? 0);
+                    const pct = total > 0 ? Math.min(100, Math.round((uploaded / total) * 100)) : 0;
+                    const status = request.status || (request.is_active ? 'open' : 'closed');
+
+                    // Determine row background color (using lightest shades)
+                    let rowBgClass = '';
+                    if (status === 'closed' || !request.is_active) {
+                      rowBgClass = 'bg-gray-50 dark:bg-gray-800/30';
+                    } else if (pct === 100) {
+                      rowBgClass = 'bg-green-50 dark:bg-green-900/10';
+                    } else if (pct > 0) {
+                      rowBgClass = 'bg-yellow-50 dark:bg-yellow-900/10';
+                    } else {
+                      rowBgClass = 'bg-red-50 dark:bg-red-900/10';
+                    }
+
+                    return (
+                    <tr key={request.id} className={`border-b hover:bg-opacity-70 hover:brightness-95 ${rowBgClass}`}>
                       <td className="p-4 text-sm">{formatDateTime(request.created_at)}</td>
                       <td className="p-4 text-sm">
                         {request.buyer_name || request.created_by_name || '-'}
@@ -649,15 +674,35 @@ export function FileRequestsPage() {
                         </div>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
           ) : (
             /* Grid View */
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredRequests.map((request) => (
-                <Card key={request.id} className="p-6">
+              {filteredRequests.map((request) => {
+                // Calculate progress for card color
+                const total = request.num_creatives;
+                const uploaded = request.upload_count ?? 0;
+                const pct = total > 0 ? Math.min(100, Math.round((uploaded / total) * 100)) : 0;
+                const status = request.status || (request.is_active ? 'open' : 'closed');
+
+                // Determine card background color (using lightest shades)
+                let cardBgClass = '';
+                if (status === 'closed' || !request.is_active) {
+                  cardBgClass = 'bg-gray-50 dark:bg-gray-800/30';
+                } else if (pct === 100) {
+                  cardBgClass = 'bg-green-50 dark:bg-green-900/10';
+                } else if (pct > 0) {
+                  cardBgClass = 'bg-yellow-50 dark:bg-yellow-900/10';
+                } else {
+                  cardBgClass = 'bg-red-50 dark:bg-red-900/10';
+                }
+
+                return (
+                <Card key={request.id} className={`p-6 ${cardBgClass}`}>
                   <div className="space-y-4">
                     {/* Status Badge */}
                     <div className="flex items-center justify-between">
@@ -821,7 +866,8 @@ export function FileRequestsPage() {
                     </div>
                   </div>
                 </Card>
-              ))}
+                );
+              })}
             </div>
           )
         ) : (
