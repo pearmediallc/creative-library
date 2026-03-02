@@ -59,6 +59,7 @@ interface AssignedEditor {
   assigned_by_name?: string;
   num_creatives_assigned?: number;  // 🆕 Creative distribution
   creatives_completed?: number;     // 🆕 Creative completion tracking
+  reassignment_notes?: string;      // 🆕 Per-editor notes
 }
 
 interface FileRequestDetails {

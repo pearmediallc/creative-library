@@ -512,7 +512,7 @@ export function FileRequestsPage() {
                     const uploaded = user?.role === 'creative'
                       ? Number(request.my_uploaded_files_count ?? 0)
                       : (request.upload_count ?? 0);
-                    const pct = total > 0 ? Math.min(100, Math.round((uploaded / total) * 100)) : 0;
+                    const pct = (total && total > 0) ? Math.min(100, Math.round((uploaded / total) * 100)) : 0;
                     const status = request.status || (request.is_active ? 'open' : 'closed');
 
                     // Determine row background color (using lightest shades)
@@ -686,7 +686,7 @@ export function FileRequestsPage() {
                 // Calculate progress for card color
                 const total = request.num_creatives;
                 const uploaded = request.upload_count ?? 0;
-                const pct = total > 0 ? Math.min(100, Math.round((uploaded / total) * 100)) : 0;
+                const pct = (total && total > 0) ? Math.min(100, Math.round((uploaded / total) * 100)) : 0;
                 const status = request.status || (request.is_active ? 'open' : 'closed');
 
                 // Determine card background color (using lightest shades)
