@@ -1211,21 +1211,58 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
           {/* Reassignment History */}
           {reassignments.length > 0 && (
             <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
-              <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">Reassignment History</h4>
+              <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">
+                Reassignment History ({reassignments.length} {reassignments.length === 1 ? 'change' : 'changes'})
+              </h4>
+
+              {/* Current Assignments Section */}
+              {request.assigned_editors && request.assigned_editors.length > 0 && (
+                <div className="mb-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-md p-3">
+                  <p className="text-xs font-semibold text-blue-900 dark:text-blue-100 mb-2">
+                    Currently Assigned:
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {request.assigned_editors.map((editor: any) => (
+                      <span
+                        key={editor.id}
+                        className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-800 text-blue-800 dark:text-blue-100"
+                      >
+                        {editor.display_name || editor.name}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* History Timeline */}
               <div className="space-y-2">
-                {reassignments.map((r: any) => (
-                  <div key={r.id} className="bg-gray-50 dark:bg-gray-700/50 rounded-md p-3">
-                    <p className="text-sm text-gray-700 dark:text-gray-200">
-                      <strong>{r.from_name}</strong> reassigned to <strong>{r.to_name}</strong>
-                    </p>
-                    {r.reassignment_note && (
-                      <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 italic">
-                        "{r.reassignment_note}"
-                      </p>
+                {reassignments.map((r: any, index: number) => (
+                  <div key={r.id} className="bg-gray-50 dark:bg-gray-700/50 rounded-md p-3 relative">
+                    {/* Timeline connector */}
+                    {index < reassignments.length - 1 && (
+                      <div className="absolute left-3 top-full h-2 w-0.5 bg-gray-300 dark:bg-gray-600" />
                     )}
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                      {formatDate(r.created_at)}
-                    </p>
+
+                    <div className="flex items-start gap-2">
+                      <div className="flex-shrink-0 w-2 h-2 rounded-full bg-blue-500 mt-1.5" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-gray-700 dark:text-gray-200">
+                          <strong className="text-gray-900 dark:text-white">{r.from_name}</strong>
+                          <span className="text-gray-500 dark:text-gray-400"> → </span>
+                          <strong className="text-blue-600 dark:text-blue-400">{r.to_name}</strong>
+                        </p>
+                        {r.reassignment_note && (
+                          <div className="mt-1.5 text-xs text-gray-600 dark:text-gray-400 bg-white dark:bg-gray-800 rounded px-2 py-1 border border-gray-200 dark:border-gray-700">
+                            <span className="font-medium">Note: </span>
+                            <span className="italic whitespace-pre-wrap">{r.reassignment_note}</span>
+                          </div>
+                        )}
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1.5 flex items-center gap-1">
+                          <Clock className="w-3 h-3" />
+                          {formatDate(r.created_at)}
+                        </p>
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -1345,7 +1382,7 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
                     placeholder="Enter request description..."
                   />
                 ) : (
-                  <p className="text-sm text-gray-600 dark:text-gray-400">{request.description}</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap">{request.description}</p>
                 )}
               </div>
             )}
@@ -1355,7 +1392,7 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
                 <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Custom Message
                 </h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400">{request.custom_message}</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap">{request.custom_message}</p>
               </div>
             )}
 
@@ -1404,6 +1441,15 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
                                 <span>Not Started</span>
                               )}
                             </div>
+                          </div>
+                        )}
+                        {/* Per-Editor Notes */}
+                        {editor.reassignment_notes && (
+                          <div className="mt-2 text-xs">
+                            <span className="font-medium text-gray-700 dark:text-gray-300">Notes: </span>
+                            <span className="text-gray-600 dark:text-gray-400 italic whitespace-pre-wrap">
+                              {editor.reassignment_notes}
+                            </span>
                           </div>
                         )}
                       </div>

@@ -1344,8 +1344,8 @@ class FileRequestController {
           fru.comments,
           fru.editor_id,
           fru.created_at as upload_created_at
-        FROM media_files mf
-        LEFT JOIN file_request_uploads fru
+        FROM file_request_uploads fru
+        JOIN media_files mf
           ON (
             (mf.upload_session_id = fru.id)
             OR (fru.file_id IS NOT NULL AND fru.file_id = mf.id)
