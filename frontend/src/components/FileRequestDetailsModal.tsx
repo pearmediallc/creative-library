@@ -775,39 +775,39 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
           }
         }
 
-        // Create folder structure: Canvas Brief Reference / [Date] only
-        const now = new Date();
-        const dateFolder = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+        // Create folder structure: Canvas Brief Reference / [Request Title]
+        // Similar to file requests, each request gets its own subfolder
+        const requestFolderName = request?.title || `Request ${requestId.slice(0, 8)}`;
 
-        // Create dated subfolder under Canvas Brief Reference
-        let dateFolderId = canvasFolderId;
-        const dateFoldersResponse = await fetch(`${API_BASE_URL}/folders`, {
+        // Fetch all folders to find existing request folder
+        const allFoldersResponse = await fetch(`${API_BASE_URL}/folders`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
-        const allFolders = await dateFoldersResponse.json();
+        const allFolders = await allFoldersResponse.json();
 
-        // Find or create date folder as child of Canvas Brief Reference folder
-        const existingDateFolder = allFolders.data?.find((f: any) =>
-          f.name === dateFolder && f.parent_id === canvasFolderId
+        // Find or create request-specific folder as child of Canvas Brief Reference folder
+        const existingRequestFolder = allFolders.data?.find((f: any) =>
+          f.name === requestFolderName && f.parent_id === canvasFolderId
         );
 
-        if (existingDateFolder) {
-          dateFolderId = existingDateFolder.id;
+        let requestFolderId: string;
+        if (existingRequestFolder) {
+          requestFolderId = existingRequestFolder.id;
         } else {
-          // Create date folder
-          const createDateFolderResponse = await fetch(`${API_BASE_URL}/folders`, {
+          // Create request folder
+          const createRequestFolderResponse = await fetch(`${API_BASE_URL}/folders`, {
             method: 'POST',
             headers: {
               'Authorization': `Bearer ${token}`,
               'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-              name: dateFolder,
+              name: requestFolderName,
               parent_id: canvasFolderId
             })
           });
-          const createdDateFolder = await createDateFolderResponse.json();
-          dateFolderId = createdDateFolder.data.id;
+          const createdRequestFolder = await createRequestFolderResponse.json();
+          requestFolderId = createdRequestFolder.data.id;
         }
 
         // Upload files and collect their IDs
@@ -820,9 +820,9 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
           const formData = new FormData();
           formData.append('file', file);
           formData.append('editor_id', editorId);
-          formData.append('folder_id', dateFolderId);  // Upload to date folder
+          formData.append('folder_id', requestFolderId);  // Upload to request folder
           formData.append('description', `Canvas Brief - ${request?.title || 'Request'}: ${instruction}`);
-          formData.append('tags', JSON.stringify(['canvas-brief', `request-${requestId}`, dateFolder]));
+          formData.append('tags', JSON.stringify(['canvas-brief', `request-${requestId}`]));
 
           const uploadResponse = await fetch(`${API_BASE_URL}/media/upload`, {
             method: 'POST',
