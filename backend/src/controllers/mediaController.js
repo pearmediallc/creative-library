@@ -174,7 +174,24 @@ class MediaController {
       const mediaFile = await mediaService.getMediaFile(req.params.id);
 
       // Check permission (owner or admin)
-      if (mediaFile.uploaded_by !== req.user.id && req.user.role !== 'admin') {
+      const isOwner = mediaFile.uploaded_by === req.user.id;
+      const isAdmin = req.user.role === 'admin';
+
+      // 🆕 Canvas Brief Access: Check if user is assigned to the file request
+      let isAssignedCreative = false;
+      if (mediaFile.tags && mediaFile.tags.includes('canvas-brief')) {
+        // Check if this creative is assigned to the file request
+        const assignmentCheck = await query(
+          `SELECT 1 FROM file_request_uploads fru
+           JOIN file_request_editors fre ON fre.file_request_id = fru.file_request_id
+           WHERE fru.file_id = $1 AND fre.editor_id = $2
+           LIMIT 1`,
+          [req.params.id, req.user.id]
+        );
+        isAssignedCreative = assignmentCheck.rows.length > 0;
+      }
+
+      if (!isOwner && !isAdmin && !isAssignedCreative) {
         return res.status(403).json({
           success: false,
           error: 'Permission denied'
@@ -412,7 +429,20 @@ class MediaController {
         'download'
       );
 
-      if (!isOwner && !isAdmin && !isBuyer && !hasDownloadPermission) {
+      // 🆕 Canvas Brief Access: Check if user is assigned to the file request
+      let isAssignedCreative = false;
+      if (file.tags && file.tags.includes('canvas-brief')) {
+        const assignmentCheck = await query(
+          `SELECT 1 FROM file_request_uploads fru
+           JOIN file_request_editors fre ON fre.file_request_id = fru.file_request_id
+           WHERE fru.file_id = $1 AND fre.editor_id = $2
+           LIMIT 1`,
+          [id, userId]
+        );
+        isAssignedCreative = assignmentCheck.rows.length > 0;
+      }
+
+      if (!isOwner && !isAdmin && !isBuyer && !hasDownloadPermission && !isAssignedCreative) {
         console.log('🚫 Permission denied for user:', userId);
         return res.status(403).json({
           success: false,

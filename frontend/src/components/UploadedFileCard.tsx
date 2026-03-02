@@ -164,7 +164,7 @@ export function UploadedFileCard({ upload, onDownload, onAddToLibrary, onRemoveF
               {onRename && (
                 <button
                   onClick={handleStartEdit}
-                  className="opacity-0 group-hover:opacity-100 p-1 text-gray-500 hover:text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/20 rounded transition-opacity"
+                  className="p-1 text-gray-500 hover:text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/20 rounded transition-colors"
                   title="Rename file"
                 >
                   <Edit2 className="w-3 h-3" />
