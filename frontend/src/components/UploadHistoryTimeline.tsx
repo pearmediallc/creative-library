@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Upload, FileText, Clock, User } from 'lucide-react';
+import { Upload, FileText, Clock, User, ChevronDown, ChevronRight } from 'lucide-react';
 import { fileRequestApi } from '../lib/api';
 import { formatDateTime } from '../lib/utils';
 
@@ -24,6 +24,17 @@ interface UploadHistoryTimelineProps {
 export function UploadHistoryTimeline({ requestId }: UploadHistoryTimelineProps) {
   const [uploadSessions, setUploadSessions] = useState<UploadSession[]>([]);
   const [loading, setLoading] = useState(true);
+  const [expandedSessions, setExpandedSessions] = useState<Set<string>>(new Set());
+
+  const toggleSession = (sessionId: string) => {
+    const newExpanded = new Set(expandedSessions);
+    if (newExpanded.has(sessionId)) {
+      newExpanded.delete(sessionId);
+    } else {
+      newExpanded.add(sessionId);
+    }
+    setExpandedSessions(newExpanded);
+  };
 
   useEffect(() => {
     fetchUploadHistory();
@@ -68,37 +79,49 @@ export function UploadHistoryTimeline({ requestId }: UploadHistoryTimelineProps)
   }
 
   return (
-    <div className="space-y-4">
-      <div className="relative">
-        {/* Timeline line */}
-        <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-gray-200 dark:bg-gray-700" />
+    <div className="space-y-2">
+      {uploadSessions.map((session, index) => {
+        const isExpanded = expandedSessions.has(session.id);
 
-        {/* Timeline items */}
-        {uploadSessions.map((session, index) => (
-          <div key={session.id} className="relative pl-10 pb-8 last:pb-0">
-            {/* Timeline dot */}
-            <div className={`absolute left-2.5 w-3 h-3 rounded-full ${
+        return (
+          <div
+            key={session.id}
+            className={`border rounded-lg overflow-hidden transition-colors ${
               session.is_deleted
-                ? 'bg-red-400 dark:bg-red-600'
-                : 'bg-blue-500 dark:bg-blue-400'
-            }`} />
+                ? 'border-red-200 dark:border-red-800 bg-red-50/50 dark:bg-red-900/10'
+                : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800'
+            }`}
+          >
+            {/* Accordion Header - Always visible */}
+            <button
+              onClick={() => toggleSession(session.id)}
+              className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                {/* Expand/Collapse Icon */}
+                {isExpanded ? (
+                  <ChevronDown className="w-4 h-4 text-gray-400" />
+                ) : (
+                  <ChevronRight className="w-4 h-4 text-gray-400" />
+                )}
 
-            {/* Content card */}
-            <div className={`bg-white dark:bg-gray-800 border rounded-lg p-4 shadow-sm ${
-              session.is_deleted
-                ? 'border-red-200 dark:border-red-800 opacity-60'
-                : 'border-gray-200 dark:border-gray-700'
-            }`}>
-              {/* Header */}
-              <div className="flex items-start justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  {session.upload_type === 'folder' ? (
-                    <FileText className="w-4 h-4 text-blue-500" />
-                  ) : (
-                    <Upload className="w-4 h-4 text-blue-500" />
-                  )}
+                {/* Upload Type Icon */}
+                {session.upload_type === 'folder' ? (
+                  <FileText className="w-4 h-4 text-blue-500" />
+                ) : (
+                  <Upload className="w-4 h-4 text-blue-500" />
+                )}
+
+                {/* Summary Info */}
+                <div className="flex items-center gap-3 text-sm">
                   <span className="font-medium text-gray-900 dark:text-white">
                     {session.upload_type === 'folder' ? 'Folder Upload' : 'File Upload'}
+                  </span>
+                  <span className="text-gray-600 dark:text-gray-300">
+                    {session.file_count} {session.file_count === 1 ? 'file' : 'files'}
+                  </span>
+                  <span className="text-gray-500 dark:text-gray-400">
+                    {formatFileSize(session.total_size_bytes)}
                   </span>
                   {session.is_deleted && (
                     <span className="text-xs px-2 py-0.5 bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300 rounded">
@@ -106,45 +129,47 @@ export function UploadHistoryTimeline({ requestId }: UploadHistoryTimelineProps)
                     </span>
                   )}
                 </div>
-                <span className="text-xs text-gray-500 dark:text-gray-400">
-                  {formatDateTime(session.created_at)}
-                </span>
               </div>
 
-              {/* Details */}
-              <div className="space-y-1 text-sm text-gray-600 dark:text-gray-300">
-                {session.uploader_name && (
-                  <div className="flex items-center gap-2">
-                    <User className="w-3 h-3" />
-                    <span>{session.uploader_name}</span>
-                  </div>
-                )}
+              <span className="text-xs text-gray-500 dark:text-gray-400">
+                {formatDateTime(session.created_at)}
+              </span>
+            </button>
 
-                {session.folder_name && (
-                  <div className="text-gray-700 dark:text-gray-200">
-                    <strong>Folder:</strong> {session.folder_name}
-                  </div>
-                )}
+            {/* Accordion Content - Expandable */}
+            {isExpanded && (
+              <div className="px-4 pb-4 pt-2 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
+                <div className="space-y-2 text-sm">
+                  {session.uploader_name && (
+                    <div className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
+                      <User className="w-3 h-3" />
+                      <span className="font-medium">Uploaded by:</span>
+                      <span>{session.uploader_name}</span>
+                    </div>
+                  )}
 
-                {session.folder_path && (
-                  <div className="text-xs text-gray-500 dark:text-gray-400">
-                    Path: {session.folder_path}
-                  </div>
-                )}
+                  {session.folder_name && (
+                    <div className="text-gray-700 dark:text-gray-300">
+                      <span className="font-medium">Folder:</span> {session.folder_name}
+                    </div>
+                  )}
 
-                <div className="flex gap-4 mt-2 text-xs">
-                  <span>
-                    <strong>{session.file_count}</strong> {session.file_count === 1 ? 'file' : 'files'}
-                  </span>
-                  <span>
-                    <strong>{formatFileSize(session.total_size_bytes)}</strong> total
-                  </span>
+                  {session.folder_path && (
+                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                      <span className="font-medium">Path:</span> {session.folder_path}
+                    </div>
+                  )}
+
+                  <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400 text-xs">
+                    <Clock className="w-3 h-3" />
+                    <span>Upload session ID: {session.id.slice(0, 8)}...</span>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
           </div>
-        ))}
-      </div>
+        );
+      })}
     </div>
   );
 }
