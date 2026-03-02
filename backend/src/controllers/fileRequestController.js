@@ -1372,6 +1372,7 @@ class FileRequestController {
             e.id,
             e.name,
             e.display_name,
+            e.is_active,
             fre.status,
             fre.num_creatives_assigned,
             fre.creatives_completed,
@@ -1385,6 +1386,8 @@ class FileRequestController {
           FROM file_request_editors fre
           JOIN editors e ON fre.editor_id = e.id
           WHERE fre.request_id = $1
+            AND e.is_active = TRUE
+            AND COALESCE(e.is_deleted, FALSE) = FALSE
           ORDER BY fre.created_at ASC`,
           [id]
         );
