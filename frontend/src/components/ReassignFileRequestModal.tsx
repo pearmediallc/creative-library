@@ -236,7 +236,8 @@ export function ReassignFileRequestModal({
                             type="checkbox"
                             checked={selectedEditorIds.includes(editor.id)}
                             onChange={() => toggleEditor(editor.id)}
-                            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 mt-1"
+                            disabled={loading}
+                            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 mt-1 disabled:opacity-50 disabled:cursor-not-allowed"
                           />
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2">
@@ -300,8 +301,9 @@ export function ReassignFileRequestModal({
                         <textarea
                           value={editorNotes[editorId] || ''}
                           onChange={(e) => setEditorNotes({ ...editorNotes, [editorId]: e.target.value })}
+                          disabled={loading}
                           placeholder={`Notes for ${editor.display_name || editor.name} (e.g., "Focus on quality", "Increase speed")`}
-                          className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
                           rows={2}
                         />
                       </div>
@@ -342,9 +344,10 @@ export function ReassignFileRequestModal({
               <textarea
                 value={reassignReason}
                 onChange={(e) => setReassignReason(e.target.value)}
+                disabled={loading}
                 placeholder="Add notes for the reassigned editors..."
                 rows={4}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none disabled:opacity-50 disabled:cursor-not-allowed"
                 required
               />
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
