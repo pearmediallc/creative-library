@@ -17,11 +17,11 @@ class AutoCloseService {
     try {
       // Track job execution in scheduled_jobs table
       await query(
-        `INSERT INTO scheduled_jobs (job_name, job_type, status, started_at)
-         VALUES ($1, $2, $3, $4)
+        `INSERT INTO scheduled_jobs (job_name, job_type, last_run_at, last_status, is_active)
+         VALUES ($1, $2, $3, $4, TRUE)
          ON CONFLICT (job_name) DO UPDATE
-         SET status = $2, started_at = $3, last_error = NULL`,
-        ['auto_close_requests', 'running', 'running', jobStartTime]
+         SET last_status = $4, last_run_at = $3`,
+        ['auto_close_requests', 'hourly', jobStartTime, 'running']
       );
 
       let totalClosed = 0;
@@ -40,18 +40,11 @@ class AutoCloseService {
       // Update job status to completed
       await query(
         `UPDATE scheduled_jobs
-         SET status = $1,
-             completed_at = $2,
+         SET last_status = $1,
              last_run_at = $2,
-             next_run_at = $2 + INTERVAL '1 hour',
-             metadata = jsonb_build_object(
-               'file_requests_closed', $3,
-               'launch_requests_closed', $4,
-               'total_closed', $5,
-               'duration_ms', $6
-             )
-         WHERE job_name = $7`,
-        ['completed', jobEndTime, fileRequestsClosed, launchRequestsClosed, totalClosed, duration, 'auto_close_requests']
+             next_run_at = $2 + INTERVAL '1 hour'
+         WHERE job_name = $3`,
+        ['success', jobEndTime, 'auto_close_requests']
       );
 
       logger.info('Auto-close job completed', {
@@ -69,11 +62,10 @@ class AutoCloseService {
       // Update job status to failed
       await query(
         `UPDATE scheduled_jobs
-         SET status = $1,
-             completed_at = NOW(),
-             last_error = $2
-         WHERE job_name = $3`,
-        ['failed', error.message, 'auto_close_requests']
+         SET last_status = $1,
+             last_run_at = NOW()
+         WHERE job_name = $2`,
+        ['failed', 'auto_close_requests']
       ).catch(err => logger.error('Failed to update job status', { error: err.message }));
 
       throw error;
