@@ -95,11 +95,6 @@ export function ReassignFileRequestModal({
       return;
     }
 
-    if (!reassignReason.trim()) {
-      setError('Please provide a reason for reassignment');
-      return;
-    }
-
     try {
       setLoading(true);
       setError('');
@@ -339,7 +334,7 @@ export function ReassignFileRequestModal({
             {/* Reassignment Notes */}
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Reassignment Notes <span className="text-red-500">*</span>
+                Reassignment Notes (Optional)
               </label>
               <textarea
                 value={reassignReason}
@@ -348,7 +343,6 @@ export function ReassignFileRequestModal({
                 placeholder="Add notes for the reassigned editors..."
                 rows={4}
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none disabled:opacity-50 disabled:cursor-not-allowed"
-                required
               />
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                 These notes will be visible to all reassigned editors
@@ -367,7 +361,7 @@ export function ReassignFileRequestModal({
               </Button>
               <Button
                 type="submit"
-                disabled={loading || selectedEditorIds.length === 0 || !reassignReason.trim()}
+                disabled={loading || selectedEditorIds.length === 0}
               >
                 {loading ? 'Reassigning...' : 'Reassign Request'}
               </Button>

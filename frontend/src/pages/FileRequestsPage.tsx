@@ -39,6 +39,8 @@ interface FileRequest {
   assigned_editors?: string; // STRING_AGG returns a comma-separated string
   completed_editors_count?: number;
   total_editors_count?: number;
+  in_progress_editors_count?: number;
+  pending_editors_count?: number;
   uploaded_files_count?: number;
   my_uploaded_files_count?: number;
   my_creatives_assigned?: number;
@@ -503,15 +505,9 @@ export function FileRequestsPage() {
                 </thead>
                 <tbody>
                   {filteredRequests.map((request) => {
-                    // Calculate progress for row color
-                    const total = user?.role === 'creative'
-                      ? (request.my_creatives_assigned && request.my_creatives_assigned > 0
-                          ? request.my_creatives_assigned
-                          : request.num_creatives)
-                      : request.num_creatives;
-                    const uploaded = user?.role === 'creative'
-                      ? Number(request.my_uploaded_files_count ?? 0)
-                      : (request.upload_count ?? 0);
+                    // Calculate progress for row color (always use global progress)
+                    const total = request.num_creatives || 0;
+                    const uploaded = request.upload_count ?? 0;
                     const pct = (total && total > 0) ? Math.min(100, Math.round((uploaded / total) * 100)) : 0;
                     const status = request.status || (request.is_active ? 'open' : 'closed');
 
@@ -548,29 +544,36 @@ export function FileRequestsPage() {
                       </td>
                       <td className="p-4 text-sm">
                         {(() => {
-                          const total = user?.role === 'creative'
+                          const globalTotal = request.num_creatives || 0;
+                          const globalUploaded = request.upload_count ?? 0;
+                          const myTotal = user?.role === 'creative'
                             ? (request.my_creatives_assigned && request.my_creatives_assigned > 0
                                 ? request.my_creatives_assigned
-                                : request.num_creatives)
-                            : request.num_creatives;
-                          const uploaded = user?.role === 'creative'
+                                : globalTotal)
+                            : globalTotal;
+                          const myUploaded = user?.role === 'creative'
                             ? Number(request.my_uploaded_files_count ?? 0)
-                            : (request.upload_count ?? 0);
-                          if (!total) return <span className="text-muted-foreground">-</span>;
-                          const pct = Math.min(100, Math.round((uploaded / total) * 100));
-                          const barColor = pct >= 100 ? 'bg-green-500' : pct >= 60 ? 'bg-yellow-400' : 'bg-blue-500';
+                            : globalUploaded;
+                          if (!globalTotal) return <span className="text-muted-foreground">-</span>;
+                          const globalPct = Math.min(100, Math.round((globalUploaded / globalTotal) * 100));
+                          const barColor = globalPct >= 100 ? 'bg-green-500' : globalPct >= 60 ? 'bg-yellow-400' : 'bg-blue-500';
                           return (
-                            <div className="min-w-[80px]" title={`${uploaded} / ${total} uploaded`}>
+                            <div className="min-w-[80px]" title={`Total: ${globalUploaded}/${globalTotal} uploaded`}>
                               <div className="flex items-center justify-between text-xs mb-0.5">
-                                <span>{uploaded}/{total}</span>
-                                <span className="font-medium">{pct}%</span>
+                                <span>{globalUploaded}/{globalTotal}</span>
+                                <span className="font-medium">{globalPct}%</span>
                               </div>
                               <div className="w-full bg-muted rounded-full h-1.5">
                                 <div
                                   className={`${barColor} h-1.5 rounded-full transition-all`}
-                                  style={{ width: `${pct}%` }}
+                                  style={{ width: `${globalPct}%` }}
                                 />
                               </div>
+                              {user?.role === 'creative' && myTotal !== globalTotal && (
+                                <div className="text-xs text-gray-500 mt-0.5">
+                                  You: {myUploaded}/{myTotal}
+                                </div>
+                              )}
                             </div>
                           );
                         })()}

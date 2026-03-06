@@ -410,22 +410,14 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
     try {
       const uploadsToDownload = request.uploads.filter(u => selectedUploads.has(u.id));
 
-      // Download each file using backend download endpoint
-      const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
+      // Download each file using authenticated fetch (same as single download)
       for (const upload of uploadsToDownload) {
-        const downloadUrl = `${API_BASE}/media/${upload.file_id}/download`;
-        const link = document.createElement('a');
-        link.href = downloadUrl;
-        link.download = upload.original_filename;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-
+        await handleDownload(upload);
         // Small delay between downloads to avoid browser blocking
         await new Promise(resolve => setTimeout(resolve, 300));
       }
 
-      alert(`Successfully initiated download for ${uploadsToDownload.length} file(s)!`);
+      alert(`Successfully downloaded ${uploadsToDownload.length} file(s)!`);
     } catch (error) {
       console.error('Bulk download error:', error);
       alert('Failed to download files. Please try again.');
@@ -940,6 +932,16 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
     request.auto_assigned_head === user.id
   );
 
+  // 3-hour edit lock for buyers - admins can always edit
+  const isEditLocked = (() => {
+    if (!request || !user) return false;
+    if (user.role === 'admin') return false;
+    if (user.role !== 'buyer') return true;
+    const createdAt = new Date(request.created_at);
+    const threeHoursLater = new Date(createdAt.getTime() + 3 * 60 * 60 * 1000);
+    return new Date() > threeHoursLater;
+  })();
+
   if (loading) {
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -1011,16 +1013,25 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
               </>
             ) : (
               <>
-                {/* Edit Button - Only for buyers and admins */}
+                {/* Edit Button - Only for buyers (within 3hrs) and admins */}
                 {(user?.role === 'buyer' || user?.role === 'admin') &&
                  request.status !== 'closed' && request.status !== 'launched' && (
-                  <button
-                    onClick={() => handleEditRequest()}
-                    className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
-                    title="Edit Request"
-                  >
-                    <Edit2 className="w-4 h-4" />
-                  </button>
+                  isEditLocked ? (
+                    <span
+                      className="p-2 text-gray-400 cursor-not-allowed rounded-lg"
+                      title="Editing locked after 3 hours. Contact admin to edit."
+                    >
+                      <Edit2 className="w-4 h-4" />
+                    </span>
+                  ) : (
+                    <button
+                      onClick={() => handleEditRequest()}
+                      className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                      title="Edit Request"
+                    >
+                      <Edit2 className="w-4 h-4" />
+                    </button>
+                  )
                 )}
 
                 {/* Duplicate Button - Only for buyers and admins */}
@@ -1294,12 +1305,20 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
                       </button>
 
                       {/* Accordion Content - Expandable */}
-                      {isExpanded && r.reassignment_note && (
-                        <div className="px-4 pb-4 pt-2 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
-                          <div className="text-xs text-gray-600 dark:text-gray-400 bg-white dark:bg-gray-800 rounded px-3 py-2 border border-gray-200 dark:border-gray-700">
-                            <span className="font-medium text-gray-700 dark:text-gray-300">Note: </span>
-                            <span className="whitespace-pre-wrap">{r.reassignment_note}</span>
-                          </div>
+                      {isExpanded && (r.reassignment_note || r.editor_note) && (
+                        <div className="px-4 pb-4 pt-2 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 space-y-2">
+                          {r.reassignment_note && (
+                            <div className="text-xs text-gray-600 dark:text-gray-400 bg-white dark:bg-gray-800 rounded px-3 py-2 border border-gray-200 dark:border-gray-700">
+                              <span className="font-medium text-gray-700 dark:text-gray-300">Note: </span>
+                              <span className="whitespace-pre-wrap">{r.reassignment_note}</span>
+                            </div>
+                          )}
+                          {r.editor_note && (
+                            <div className="text-xs text-gray-600 dark:text-gray-400 bg-white dark:bg-gray-800 rounded px-3 py-2 border border-blue-200 dark:border-blue-700">
+                              <span className="font-medium text-blue-700 dark:text-blue-300">Per-Editor Note: </span>
+                              <span className="whitespace-pre-wrap">{r.editor_note}</span>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
@@ -1520,6 +1539,13 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
                 <span className="text-gray-700 dark:text-gray-300">
                   Created: {formatDate(request.created_at)}
                 </span>
+                {user?.role === 'buyer' && (
+                  isEditLocked ? (
+                    <span className="text-xs text-red-500 font-medium" title="Editing locked after 3 hours of creation">Editing Locked</span>
+                  ) : (
+                    <span className="text-xs text-green-600 font-medium">Editable</span>
+                  )
+                )}
               </div>
 
               {request.request_type && (

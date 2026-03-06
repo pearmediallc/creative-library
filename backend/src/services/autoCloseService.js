@@ -42,7 +42,7 @@ class AutoCloseService {
         `UPDATE scheduled_jobs
          SET last_status = $1,
              last_run_at = $2,
-             next_run_at = $2 + INTERVAL '1 hour'
+             next_run_at = $2::timestamp + INTERVAL '1 hour'
          WHERE job_name = $3`,
         ['success', jobEndTime, 'auto_close_requests']
       );

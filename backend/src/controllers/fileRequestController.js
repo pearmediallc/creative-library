@@ -656,6 +656,18 @@ class FileRequestController {
         });
       }
 
+      // 3-hour edit lock for non-admin users
+      if (!isAdmin) {
+        const createdAt = new Date(existingRequest.created_at);
+        const threeHoursLater = new Date(createdAt.getTime() + 3 * 60 * 60 * 1000);
+        if (new Date() > threeHoursLater) {
+          return res.status(403).json({
+            success: false,
+            error: 'Editing is locked after 3 hours of creation. Contact an admin to make changes.'
+          });
+        }
+      }
+
       const {
         title,
         concept_notes,
@@ -1079,6 +1091,10 @@ class FileRequestController {
             buyer.email as buyer_email,
             creator.name as created_by_name,
             STRING_AGG(DISTINCT e.display_name, ', ') as assigned_editors,
+            COUNT(DISTINCT fre_all.editor_id) as total_editors_count,
+            COUNT(DISTINCT fre_all.editor_id) FILTER (WHERE fre_all.status = 'completed') as completed_editors_count,
+            COUNT(DISTINCT fre_all.editor_id) FILTER (WHERE fre_all.status IN ('in_progress', 'picked_up')) as in_progress_editors_count,
+            COUNT(DISTINCT fre_all.editor_id) FILTER (WHERE fre_all.status = 'pending') as pending_editors_count,
             ${platformVerticalQuery}
           FROM file_request_editors fre
           JOIN file_requests fr ON fre.request_id = fr.id
@@ -1087,7 +1103,7 @@ class FileRequestController {
           LEFT JOIN media_files mf ON mf.upload_session_id = fru.id
           LEFT JOIN users buyer ON fr.assigned_buyer_id = buyer.id
           LEFT JOIN users creator ON fr.created_by = creator.id
-          LEFT JOIN file_request_editors fre_all ON fr.id = fre_all.request_id
+          LEFT JOIN file_request_editors fre_all ON fr.id = fre_all.request_id AND fre_all.status != 'reassigned'
           LEFT JOIN editors e ON fre_all.editor_id = e.id
           ${whereClause}
           GROUP BY fr.id, f.id, f.name, fre.status, fre.num_creatives_assigned, fre.creatives_completed, fre.created_at, buyer.id, buyer.name, buyer.email, creator.id, creator.name
@@ -1168,8 +1184,10 @@ class FileRequestController {
             buyer.email as buyer_email,
             creator.name as created_by_name,
             STRING_AGG(DISTINCT e.display_name, ', ') as assigned_editors,
-            COUNT(DISTINCT fre.editor_id) as total_editors_count,
+            COUNT(DISTINCT fre.editor_id) FILTER (WHERE fre.status != 'reassigned') as total_editors_count,
             COUNT(DISTINCT fre.editor_id) FILTER (WHERE fre.status = 'completed') as completed_editors_count,
+            COUNT(DISTINCT fre.editor_id) FILTER (WHERE fre.status IN ('in_progress', 'picked_up')) as in_progress_editors_count,
+            COUNT(DISTINCT fre.editor_id) FILTER (WHERE fre.status = 'pending') as pending_editors_count,
             ${platformVerticalQuery2}
           FROM file_requests fr
           LEFT JOIN folders f ON fr.folder_id = f.id
@@ -1382,7 +1400,8 @@ class FileRequestController {
             fre.completed_at,
             fre.deliverables_quota,
             fre.deliverables_uploaded,
-            fre.deliverables_completed_at
+            fre.deliverables_completed_at,
+            fre.reassignment_notes
           FROM file_request_editors fre
           JOIN editors e ON fre.editor_id = e.id
           WHERE fre.request_id = $1
@@ -3849,7 +3868,7 @@ class FileRequestController {
 
       const fileRequest = requestResult.rows[0];
 
-      // Check access (creator, assigned buyer, assigned editor, admin)
+      // Check access (creator, assigned buyer, assigned editor, vertical head, admin)
       let isAssignedEditor = false;
       if (req.user.role !== 'admin') {
         const assignedEditorCheck = await query(
@@ -3864,10 +3883,21 @@ class FileRequestController {
         isAssignedEditor = assignedEditorCheck.rows.length > 0;
       }
 
+      // Also allow vertical heads
+      let isVerticalHead = false;
+      try {
+        const vhCheck = await query(
+          'SELECT 1 FROM vertical_heads WHERE head_editor_id = $1 LIMIT 1',
+          [userId]
+        );
+        isVerticalHead = vhCheck.rows.length > 0;
+      } catch (_) { /* vertical_heads table may not exist */ }
+
       const hasAccess = req.user.role === 'admin' ||
                        fileRequest.created_by === userId ||
                        fileRequest.assigned_buyer_id === userId ||
-                       isAssignedEditor;
+                       isAssignedEditor ||
+                       isVerticalHead;
 
       if (!hasAccess) {
         return res.status(403).json({
@@ -3876,14 +3906,22 @@ class FileRequestController {
         });
       }
 
-      // Get reassignment history
+      // Get reassignment history with per-editor notes
       const reassignments = await query(
         `SELECT
           rr.*,
           uf.name as from_name,
           uf.email as from_email,
           ut.name as to_name,
-          ut.email as to_email
+          ut.email as to_email,
+          (SELECT fre.reassignment_notes
+           FROM file_request_editors fre
+           JOIN editors e ON fre.editor_id = e.id
+           WHERE fre.request_id = rr.file_request_id
+             AND e.user_id = rr.reassigned_to
+           ORDER BY fre.last_reassigned_at DESC NULLS LAST
+           LIMIT 1
+          ) as editor_note
          FROM request_reassignments rr
          JOIN users uf ON rr.reassigned_from = uf.id
          JOIN users ut ON rr.reassigned_to = ut.id
