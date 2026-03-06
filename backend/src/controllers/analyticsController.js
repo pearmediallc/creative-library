@@ -416,7 +416,7 @@ class AnalyticsController {
           COALESCE(SUM(fre.creatives_completed), 0) as completed_creatives
         FROM file_request_verticals frv
         JOIN file_requests fr ON fr.id = frv.file_request_id
-        LEFT JOIN file_request_editors fre ON fre.request_id = fr.id AND fre.status IN ('pending', 'accepted', 'in_progress')
+        LEFT JOIN file_request_editors fre ON fre.request_id = fr.id AND fre.status NOT IN ('reassigned', 'removed')
         LEFT JOIN editors e ON e.id = fre.editor_id
         WHERE fr.is_active = TRUE
         ${verticalFilter}
@@ -440,7 +440,7 @@ class AnalyticsController {
           COALESCE(SUM(lre.creatives_completed), 0) as completed_creatives
         FROM launch_request_verticals lrv
         JOIN launch_requests lr ON lr.id = lrv.launch_request_id
-        LEFT JOIN launch_request_editors lre ON lre.launch_request_id = lr.id AND lre.status IN ('pending', 'in_progress')
+        LEFT JOIN launch_request_editors lre ON lre.launch_request_id = lr.id AND lre.status NOT IN ('reassigned', 'removed')
         LEFT JOIN editors e ON e.id = lre.editor_id
         WHERE 1=1
         ${verticalFilter.replace('frv.vertical', 'lrv.vertical')}
@@ -645,7 +645,7 @@ class AnalyticsController {
         JOIN launch_requests lr ON lr.id = lrv.launch_request_id
         LEFT JOIN users u_creator ON u_creator.id = lr.created_by
         LEFT JOIN users u_buyer_head ON u_buyer_head.id = lr.buyer_head_id
-        LEFT JOIN launch_request_editors lre ON lre.launch_request_id = lr.id AND lre.status IN ('pending', 'in_progress')
+        LEFT JOIN launch_request_editors lre ON lre.launch_request_id = lr.id AND lre.status NOT IN ('reassigned', 'removed')
         LEFT JOIN editors e ON e.id = lre.editor_id
         WHERE lrv.vertical = $1
         GROUP BY lr.id, u_creator.name, u_buyer_head.name
