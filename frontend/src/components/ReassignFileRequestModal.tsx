@@ -8,7 +8,7 @@ interface ReassignFileRequestModalProps {
   requestId: string;
   requestTitle: string;
   currentEditors: Array<{ id: string; name: string }>;
-  numCreatives?: number; // 🆕 Total creatives for distribution
+  numCreatives?: number;
   onClose: () => void;
   onSuccess: () => void;
 }
@@ -29,6 +29,16 @@ interface EditorWorkload {
   isAvailable: boolean;
 }
 
+interface ExistingAssignment {
+  editor_id: string;
+  editor_name: string;
+  editor_display_name: string;
+  status: string;
+  num_creatives_assigned: number;
+  reassignment_notes: string | null;
+  deliverables_quota: number | null;
+}
+
 export function ReassignFileRequestModal({
   requestId,
   requestTitle,
@@ -38,20 +48,21 @@ export function ReassignFileRequestModal({
   onSuccess
 }: ReassignFileRequestModalProps) {
   const [allEditors, setAllEditors] = useState<Editor[]>([]);
-  const [selectedEditorIds, setSelectedEditorIds] = useState<string[]>(
-    currentEditors.map(e => e.id)
-  );
+  const [selectedEditorIds, setSelectedEditorIds] = useState<string[]>([]);
   const [reassignReason, setReassignReason] = useState('');
   const [editorQuotas, setEditorQuotas] = useState<Record<string, string>>({});
   const [editorNotes, setEditorNotes] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
+  const [loadingExisting, setLoadingExisting] = useState(true);
   const [error, setError] = useState('');
   const [workloadData, setWorkloadData] = useState<Map<string, EditorWorkload>>(new Map());
   const [editorDistribution, setEditorDistribution] = useState<Array<{ editor_id: string; num_creatives: number }>>([]);
+  const [existingAssignments, setExistingAssignments] = useState<ExistingAssignment[]>([]);
 
   useEffect(() => {
     fetchEditors();
     fetchWorkloadData();
+    fetchExistingAssignments();
   }, []);
 
   const fetchEditors = async () => {
@@ -83,7 +94,49 @@ export function ReassignFileRequestModal({
       setWorkloadData(workloadMap);
     } catch (err: any) {
       console.error('Failed to fetch workload data:', err);
-      // Don't set error - workload is optional info
+    }
+  };
+
+  const fetchExistingAssignments = async () => {
+    try {
+      setLoadingExisting(true);
+      const response = await fileRequestApi.getAssignedEditors(requestId);
+      const assignments: ExistingAssignment[] = response.data.data || [];
+      setExistingAssignments(assignments);
+
+      // Pre-select editors that are actively assigned (not reassigned/removed)
+      const activeAssignments = assignments.filter(
+        a => a.status && !['reassigned', 'removed'].includes(a.status)
+      );
+      if (activeAssignments.length > 0) {
+        setSelectedEditorIds(activeAssignments.map(a => a.editor_id));
+
+        // Pre-populate per-editor notes from existing assignments
+        const notes: Record<string, string> = {};
+        const quotas: Record<string, string> = {};
+        const dist: Array<{ editor_id: string; num_creatives: number }> = [];
+
+        activeAssignments.forEach(a => {
+          if (a.reassignment_notes) notes[a.editor_id] = a.reassignment_notes;
+          if (a.deliverables_quota) quotas[a.editor_id] = String(a.deliverables_quota);
+          if (a.num_creatives_assigned > 0) {
+            dist.push({ editor_id: a.editor_id, num_creatives: a.num_creatives_assigned });
+          }
+        });
+
+        setEditorNotes(notes);
+        setEditorQuotas(quotas);
+        if (dist.length > 0) setEditorDistribution(dist);
+      } else if (currentEditors.length > 0) {
+        // Fallback to prop-based IDs if no active assignments found
+        setSelectedEditorIds(currentEditors.map(e => e.id));
+      }
+    } catch (err: any) {
+      console.error('Failed to fetch existing assignments:', err);
+      // Fallback to prop-based selection
+      setSelectedEditorIds(currentEditors.map(e => e.id));
+    } finally {
+      setLoadingExisting(false);
     }
   };
 
@@ -170,7 +223,9 @@ export function ReassignFileRequestModal({
             <UserPlus className="w-5 h-5 text-blue-500" />
             <div>
               <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-                Reassign File Request
+                {existingAssignments.filter(a => !['reassigned', 'removed'].includes(a.status)).length > 0
+                  ? 'Update Assignment'
+                  : 'Assign File Request'}
               </h2>
               <p className="text-sm text-gray-600 dark:text-gray-400">{requestTitle}</p>
             </div>
@@ -197,7 +252,34 @@ export function ReassignFileRequestModal({
             )}
 
             {/* Current Assignment */}
-            {currentEditors.length > 0 && (
+            {loadingExisting ? (
+              <div className="bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg p-4">
+                <p className="text-sm text-gray-500 dark:text-gray-400">Loading existing assignments...</p>
+              </div>
+            ) : existingAssignments.filter(a => !['reassigned', 'removed'].includes(a.status)).length > 0 ? (
+              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                <p className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2">
+                  Currently assigned to:
+                </p>
+                <ul className="text-sm text-blue-800 dark:text-blue-200 space-y-1">
+                  {existingAssignments
+                    .filter(a => !['reassigned', 'removed'].includes(a.status))
+                    .map(a => (
+                      <li key={a.editor_id} className="flex items-center gap-2">
+                        <span>• {a.editor_display_name || a.editor_name}</span>
+                        <span className="text-xs bg-blue-200 dark:bg-blue-800 px-1.5 py-0.5 rounded">
+                          {a.status}
+                        </span>
+                        {a.num_creatives_assigned > 0 && (
+                          <span className="text-xs text-blue-600 dark:text-blue-300">
+                            ({a.num_creatives_assigned} creatives)
+                          </span>
+                        )}
+                      </li>
+                    ))}
+                </ul>
+              </div>
+            ) : currentEditors.length > 0 ? (
               <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
                 <p className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2">
                   Currently assigned to:
@@ -208,7 +290,7 @@ export function ReassignFileRequestModal({
                   ))}
                 </ul>
               </div>
-            )}
+            ) : null}
 
             {/* Editor Selection */}
             <div>
@@ -363,7 +445,7 @@ export function ReassignFileRequestModal({
                 type="submit"
                 disabled={loading || selectedEditorIds.length === 0}
               >
-                {loading ? 'Reassigning...' : 'Reassign Request'}
+                {loading ? 'Updating...' : existingAssignments.filter(a => !['reassigned', 'removed'].includes(a.status)).length > 0 ? 'Update Assignment' : 'Assign Editors'}
               </Button>
             </div>
           </form>

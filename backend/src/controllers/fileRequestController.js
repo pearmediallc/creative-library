@@ -3743,14 +3743,26 @@ class FileRequestController {
         }
       }
 
-      // Mark existing active/pending assignments as reassigned (keeps history)
-      await query(
-        `UPDATE file_request_editors
-         SET status = 'reassigned', updated_at = CURRENT_TIMESTAMP
-         WHERE request_id = $1
-           AND status IN ('pending', 'accepted', 'in_progress', 'picked_up')`,
-        [id]
-      );
+      // Only mark editors as 'reassigned' if they are NOT in the new target list
+      // This preserves the status/progress of editors who remain assigned
+      if (targetEditorIds.length > 0) {
+        await query(
+          `UPDATE file_request_editors
+           SET status = 'reassigned', updated_at = CURRENT_TIMESTAMP
+           WHERE request_id = $1
+             AND status IN ('pending', 'accepted', 'in_progress', 'picked_up')
+             AND editor_id != ALL($2::uuid[])`,
+          [id, targetEditorIds]
+        );
+      } else {
+        await query(
+          `UPDATE file_request_editors
+           SET status = 'reassigned', updated_at = CURRENT_TIMESTAMP
+           WHERE request_id = $1
+             AND status IN ('pending', 'accepted', 'in_progress', 'picked_up')`,
+          [id]
+        );
+      }
 
       // Ensure target editor assignments exist (set to pending) + optional quota + creative distribution
       const { editor_distribution } = req.body;
