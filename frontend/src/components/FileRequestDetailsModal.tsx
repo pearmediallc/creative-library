@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { X, Copy, Calendar, Folder, Mail, CheckCircle, Clock, FileText, Upload as UploadIcon, Rocket, XCircle, RotateCcw, UserPlus, Edit2, ChevronDown, ChevronRight } from 'lucide-react';
+import { X, Copy, Calendar, Folder, Mail, CheckCircle, Clock, FileText, Upload as UploadIcon, Rocket, XCircle, RotateCcw, UserPlus, Edit2, ChevronDown, ChevronRight, Download, Eye, Play } from 'lucide-react';
 import { Button } from './ui/Button';
 import { fileRequestApi, mediaApi } from '../lib/api';
 import { formatDate } from '../lib/utils';
@@ -7,6 +7,7 @@ import { CanvasBrief3Step } from './CanvasBrief3Step';
 import { UploadedFileCard } from './UploadedFileCard';
 import { UploadHistoryTimeline } from './UploadHistoryTimeline';
 import { ReassignFileRequestModal } from './ReassignFileRequestModal';
+import { VideoPlayer } from './VideoPlayer';
 import { useAuth } from '../contexts/AuthContext';
 import { getFileRequestStatusColor, getVerticalBadgeClasses } from '../constants/statusColors';
 
@@ -124,6 +125,159 @@ interface FileRequestDetails {
   verticals?: string[];
   platform?: string;  // Backward compatibility
   vertical?: string;  // Backward compatibility
+}
+
+// Canvas file preview card with thumbnail, preview modal, and download
+function CanvasFileCard({ file, isImage, isVideo, previewUrl, onDownload }: {
+  file: any;
+  isImage: boolean;
+  isVideo: boolean;
+  previewUrl: string | undefined;
+  onDownload: (f: any) => void;
+}) {
+  const [showPreview, setShowPreview] = useState(false);
+
+  const handlePreviewFile = async () => {
+    if (!file.file_id) return;
+    // For images/videos with a URL, open preview directly
+    if (previewUrl && (isImage || isVideo)) {
+      setShowPreview(true);
+      return;
+    }
+    // For images/videos without a direct URL, fetch via authenticated download and open in new tab
+    if (file.file_id && (isImage || isVideo)) {
+      const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:3001/api';
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE}/media/${file.file_id}/download`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        setShowPreview(true);
+        // Store blob URL for preview
+        file._blobUrl = url;
+      }
+    }
+  };
+
+  const displayUrl = file._blobUrl || previewUrl;
+
+  return (
+    <>
+      <div className="flex items-start gap-3 bg-white dark:bg-gray-800 rounded-lg p-3 border border-blue-200 dark:border-blue-700 hover:border-blue-400 dark:hover:border-blue-500 transition-colors">
+        {/* Thumbnail */}
+        <div className="flex-shrink-0">
+          {isVideo ? (
+            <div
+              className="w-14 h-14 bg-gray-800 rounded flex items-center justify-center cursor-pointer hover:bg-gray-700 transition-colors"
+              onClick={handlePreviewFile}
+            >
+              {file.thumbnail_url ? (
+                <div className="relative w-14 h-14">
+                  <img src={file.thumbnail_url} alt="" className="w-14 h-14 object-cover rounded" />
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/40 rounded">
+                    <Play className="w-6 h-6 text-white" />
+                  </div>
+                </div>
+              ) : (
+                <Play className="w-6 h-6 text-white" />
+              )}
+            </div>
+          ) : isImage && (file.thumbnail_url || previewUrl) ? (
+            <img
+              src={file.thumbnail_url || previewUrl}
+              alt={file.filename}
+              className="w-14 h-14 object-cover rounded cursor-pointer hover:opacity-80 transition-opacity"
+              onClick={handlePreviewFile}
+            />
+          ) : (
+            <div className="w-14 h-14 bg-blue-100 dark:bg-blue-900/40 rounded flex items-center justify-center">
+              <FileText className="w-6 h-6 text-blue-500" />
+            </div>
+          )}
+        </div>
+
+        {/* Info */}
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-medium text-gray-900 dark:text-white truncate">{file.filename}</p>
+          {file.instruction && (
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-2">{file.instruction}</p>
+          )}
+          <p className="text-xs text-blue-600 dark:text-blue-400 mt-0.5">
+            {file.type ? file.type.split('/')[1]?.toUpperCase() || file.type : 'File'}
+          </p>
+        </div>
+
+        {/* Actions */}
+        <div className="flex items-center gap-1 flex-shrink-0">
+          {(isImage || isVideo) && file.file_id && (
+            <button
+              onClick={handlePreviewFile}
+              className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded transition-colors"
+              title="Preview"
+            >
+              <Eye className="w-4 h-4" />
+            </button>
+          )}
+          {file.file_id && (
+            <button
+              onClick={() => onDownload({ file_id: file.file_id, original_filename: file.filename } as any)}
+              className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded transition-colors"
+              title="Download"
+            >
+              <Download className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Fullscreen Preview Modal */}
+      {showPreview && displayUrl && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-[100]"
+          onClick={() => setShowPreview(false)}
+        >
+          <div
+            className="relative w-full h-full flex items-center justify-center p-8"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => setShowPreview(false)}
+              className="absolute top-4 right-4 text-white hover:text-gray-300 z-20 bg-black/50 rounded-full p-2"
+            >
+              <X className="w-6 h-6" />
+            </button>
+
+            {isVideo ? (
+              <div className="w-full h-full max-w-[90vw] max-h-[80vh] flex items-center justify-center">
+                <VideoPlayer
+                  src={displayUrl}
+                  poster={file.thumbnail_url}
+                  autoPlay={true}
+                  className="w-full h-full"
+                />
+              </div>
+            ) : isImage ? (
+              <img
+                src={displayUrl}
+                alt={file.filename}
+                className="max-w-full max-h-full rounded-lg object-contain shadow-2xl"
+                style={{ maxHeight: '90vh', maxWidth: '90vw' }}
+              />
+            ) : null}
+
+            <div className="absolute bottom-4 left-4 right-4 bg-black/70 text-white p-4 rounded-lg max-w-2xl mx-auto">
+              <p className="font-medium truncate">{file.filename}</p>
+              {file.instruction && (
+                <p className="text-sm text-gray-300 mt-1">{file.instruction}</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
 }
 
 export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRequestDetailsModalProps) {
@@ -1376,53 +1530,79 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
                         <p className="text-sm text-blue-900 dark:text-blue-100 whitespace-pre-wrap">{content.script}</p>
                       </div>
                     )}
-                    {content.samples && content.samples.length > 0 && (
-                      <div>
-                        <h4 className="text-xs font-semibold text-blue-700 dark:text-blue-300 mb-2">REFERENCE SAMPLES ({content.samples.length})</h4>
-                        <div className="space-y-2">
-                          {content.samples.map((sample: any, idx: number) => (
-                            <div key={idx} className="flex items-center justify-between bg-white dark:bg-gray-800 rounded p-2 border border-blue-200 dark:border-blue-700">
-                              <div className="flex-1 min-w-0">
-                                <p className="text-xs font-medium text-gray-900 dark:text-white truncate">{sample.filename}</p>
-                                {sample.instruction && (
-                                  <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">{sample.instruction}</p>
-                                )}
-                              </div>
-                              {sample.file_id && (
-                                <button
-                                  onClick={() => handleDownload({ file_id: sample.file_id, original_filename: sample.filename } as FileUpload)}
-                                  className="ml-2 px-2 py-1 text-xs text-blue-600 hover:text-blue-800 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded"
-                                  title="Download reference file"
-                                >
-                                  Download
-                                </button>
-                              )}
-                            </div>
-                          ))}
+                    {/* Combined reference samples + attachments as rich file cards */}
+                    {(() => {
+                      // Merge samples and attachments into one list for unified display
+                      const allFiles: any[] = [];
+                      if (content.samples) {
+                        content.samples.forEach((s: any) => allFiles.push({
+                          file_id: s.file_id,
+                          filename: s.filename,
+                          instruction: s.instruction,
+                          type: s.type || '',
+                          file_url: s.file_url,
+                          thumbnail_url: s.thumbnail_url,
+                          source: 'sample',
+                        }));
+                      }
+                      if (canvas.attachments) {
+                        canvas.attachments.forEach((a: any) => {
+                          // Avoid duplicates if attachment file_id matches a sample
+                          const isDuplicate = allFiles.some(f => f.file_id && f.file_id === a.file_id);
+                          if (!isDuplicate) {
+                            allFiles.push({
+                              file_id: a.file_id,
+                              filename: a.file_name || a.filename || 'Attachment',
+                              type: a.file_type || '',
+                              file_url: a.file_url,
+                              thumbnail_url: a.thumbnail_url,
+                              source: 'attachment',
+                            });
+                          } else {
+                            // Merge thumbnail/url from attachment into existing sample
+                            const existing = allFiles.find(f => f.file_id === a.file_id);
+                            if (existing) {
+                              if (!existing.thumbnail_url && a.thumbnail_url) existing.thumbnail_url = a.thumbnail_url;
+                              if (!existing.file_url && a.file_url) existing.file_url = a.file_url;
+                              if (!existing.type && a.file_type) existing.type = a.file_type;
+                            }
+                          }
+                        });
+                      }
+
+                      if (allFiles.length === 0) return null;
+
+                      const isImageType = (type: string, name: string) =>
+                        type?.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp)$/i.test(name || '');
+                      const isVideoType = (type: string, name: string) =>
+                        type?.startsWith('video/') || /\.(mp4|mov|avi|webm|mkv)$/i.test(name || '');
+
+                      return (
+                        <div>
+                          <h4 className="text-xs font-semibold text-blue-700 dark:text-blue-300 mb-2">
+                            REFERENCE FILES ({allFiles.length})
+                          </h4>
+                          <div className="space-y-2">
+                            {allFiles.map((file: any, idx: number) => {
+                              const isImage = isImageType(file.type, file.filename);
+                              const isVideo = isVideoType(file.type, file.filename);
+                              const previewUrl = file.thumbnail_url || file.file_url;
+
+                              return (
+                                <CanvasFileCard
+                                  key={idx}
+                                  file={file}
+                                  isImage={isImage}
+                                  isVideo={isVideo}
+                                  previewUrl={previewUrl}
+                                  onDownload={handleDownload}
+                                />
+                              );
+                            })}
+                          </div>
                         </div>
-                      </div>
-                    )}
-                    {/* Canvas Attachments */}
-                    {canvas.attachments && canvas.attachments.length > 0 && (
-                      <div className="mt-3">
-                        <h4 className="text-xs font-semibold text-blue-700 dark:text-blue-300 mb-2">ATTACHMENTS ({canvas.attachments.length})</h4>
-                        <div className="space-y-1">
-                          {canvas.attachments.map((att: any, idx: number) => (
-                            <div key={idx} className="flex items-center justify-between bg-white dark:bg-gray-800 rounded p-2 border border-blue-200 dark:border-blue-700">
-                              <span className="text-xs text-gray-900 dark:text-white truncate flex-1">{att.file_name || att.filename || `Attachment ${idx + 1}`}</span>
-                              {att.file_id && (
-                                <button
-                                  onClick={() => handleDownload({ file_id: att.file_id, original_filename: att.file_name || att.filename } as FileUpload)}
-                                  className="ml-2 px-2 py-1 text-xs text-blue-600 hover:text-blue-800 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded"
-                                >
-                                  Download
-                                </button>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
+                      );
+                    })()}
                   </div>
                 );
               } catch (e) {
