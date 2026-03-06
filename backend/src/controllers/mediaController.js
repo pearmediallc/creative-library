@@ -431,15 +431,20 @@ class MediaController {
 
       // 🆕 Canvas Brief Access: Check if user is assigned to the file request
       let isAssignedCreative = false;
-      if (file.tags && file.tags.includes('canvas-brief')) {
-        const assignmentCheck = await query(
-          `SELECT 1 FROM file_request_uploads fru
-           JOIN file_request_editors fre ON fre.file_request_id = fru.file_request_id
-           WHERE fru.file_id = $1 AND fre.editor_id = $2
-           LIMIT 1`,
-          [id, userId]
-        );
-        isAssignedCreative = assignmentCheck.rows.length > 0;
+      if (file.tags && (file.tags.includes('canvas-brief') || file.tags.includes('canvas-attachment'))) {
+        // Extract request ID from tags (format: 'request-{uuid}')
+        const requestTag = file.tags.find(t => t.startsWith('request-'));
+        if (requestTag) {
+          const canvasRequestId = requestTag.replace('request-', '');
+          const assignmentCheck = await query(
+            `SELECT 1 FROM file_request_editors fre
+             JOIN editors e ON fre.editor_id = e.id
+             WHERE fre.request_id = $1 AND e.user_id = $2
+             LIMIT 1`,
+            [canvasRequestId, userId]
+          );
+          isAssignedCreative = assignmentCheck.rows.length > 0;
+        }
       }
 
       if (!isOwner && !isAdmin && !isBuyer && !hasDownloadPermission && !isAssignedCreative) {

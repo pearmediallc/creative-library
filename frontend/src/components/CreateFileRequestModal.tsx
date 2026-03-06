@@ -363,25 +363,46 @@ export function CreateFileRequestModal({ onClose, onSuccess, teamId }: CreateFil
         // Save inline canvas brief if toggled on and has content
         if (showCanvas && (canvasHeadline.trim() || canvasScript.trim() || canvasFiles.length > 0)) {
           try {
-            const canvasContent = {
+            const canvasSamples = canvasFiles.map((file, idx) => ({
+              filename: file.name,
+              instruction: canvasFileInstructions[idx] || '',
+              type: file.type,
+              size: file.size,
+            }));
+
+            const canvasContent: any = {
               headline: canvasHeadline.trim(),
               script: canvasScript.trim(),
-              samples: canvasFiles.map((file, idx) => ({
-                filename: file.name,
-                instruction: canvasFileInstructions[idx] || '',
-                type: file.type,
-                size: file.size,
-              })),
+              samples: canvasSamples,
             };
             await fileRequestApi.canvas.upsert(requestId, canvasContent);
             setHasCanvas(true);
 
-            // Upload reference files if any
-            for (const file of canvasFiles) {
-              try {
-                await fileRequestApi.canvas.uploadAttachment(requestId, file);
-              } catch (uploadErr: any) {
-                console.error('Failed to upload canvas attachment:', uploadErr);
+            // Upload reference files and link file_ids back to canvas samples
+            if (canvasFiles.length > 0) {
+              const uploadedFileIds: string[] = [];
+              for (const file of canvasFiles) {
+                try {
+                  const uploadRes = await fileRequestApi.canvas.uploadAttachment(requestId, file);
+                  const fileId = uploadRes?.data?.attachment?.file_id;
+                  uploadedFileIds.push(fileId || '');
+                } catch (uploadErr: any) {
+                  console.error('Failed to upload canvas attachment:', uploadErr);
+                  uploadedFileIds.push('');
+                }
+              }
+
+              // Update canvas content with file_ids so download buttons work
+              const hasFileIds = uploadedFileIds.some(id => id);
+              if (hasFileIds) {
+                const updatedSamples = canvasSamples.map((sample, idx) => ({
+                  ...sample,
+                  file_id: uploadedFileIds[idx] || undefined,
+                }));
+                await fileRequestApi.canvas.upsert(requestId, {
+                  ...canvasContent,
+                  samples: updatedSamples,
+                });
               }
             }
           } catch (canvasErr: any) {
