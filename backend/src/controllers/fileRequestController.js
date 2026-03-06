@@ -3710,8 +3710,9 @@ class FileRequestController {
       const resolvedTargets = [];
       for (const t of targets) {
         const editorCheck = await query(
-          `SELECT e.id as editor_id, e.user_id as user_id
+          `SELECT e.id as editor_id, e.user_id as user_id, u.id as verified_user_id
            FROM editors e
+           LEFT JOIN users u ON e.user_id = u.id
            WHERE e.is_active = TRUE
              AND (e.id = $1 OR e.user_id = $1)
            LIMIT 1`,
@@ -3720,19 +3721,26 @@ class FileRequestController {
         if (editorCheck.rows.length === 0) {
           return res.status(404).json({ success: false, error: 'Target editor not found', target: t });
         }
-        resolvedTargets.push({ editor_id: editorCheck.rows[0].editor_id, user_id: editorCheck.rows[0].user_id || editorCheck.rows[0].editor_id });
+        resolvedTargets.push({
+          editor_id: editorCheck.rows[0].editor_id,
+          user_id: editorCheck.rows[0].verified_user_id || editorCheck.rows[0].user_id
+        });
       }
 
       const targetEditorIds = resolvedTargets.map(r => r.editor_id);
 
       // Create reassignment records (store reassigned_to as USER id)
       for (const r of resolvedTargets) {
-        await query(
-          `INSERT INTO request_reassignments
-           (file_request_id, reassigned_from, reassigned_to, reassignment_note)
-           VALUES ($1, $2, $3, $4)`,
-          [id, userId, r.user_id, note || null]
-        );
+        if (r.user_id) {
+          await query(
+            `INSERT INTO request_reassignments
+             (file_request_id, reassigned_from, reassigned_to, reassignment_note)
+             VALUES ($1, $2, $3, $4)`,
+            [id, userId, r.user_id, note || null]
+          );
+        } else {
+          logger.warn('Skipping reassignment record: editor has no linked user', { editor_id: r.editor_id });
+        }
       }
 
       // Mark existing active/pending assignments as reassigned (keeps history)
