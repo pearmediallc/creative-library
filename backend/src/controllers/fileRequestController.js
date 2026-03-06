@@ -3796,26 +3796,25 @@ class FileRequestController {
       );
 
       // Send notification(s) to reassigned editor(s) with note
-      // (one per editor user)
-      // NOTE: fileRequest variable is available above
-      //
-      // For multiple targets, notify all
+      // Only notify editors that have a linked user account
       for (const r of resolvedTargets) {
-        await Notification.create({
-          userId: r.user_id,
-          type: 'file_request_reassigned',
-          title: 'File Request Reassigned to You',
-          message: `"${fileRequest.title}" has been reassigned to you by ${req.user.name || req.user.email}${note ? ': ' + note : ''}`,
-          referenceType: 'file_request',
-          referenceId: id,
-          metadata: {
-            request_title: fileRequest.title,
-            reassigned_from: req.user.name || req.user.email,
-            reassignment_note: note,
-            deadline: fileRequest.deadline,
-            editor_id: r.editor_id
-          }
-        });
+        if (r.user_id) {
+          await Notification.create({
+            userId: r.user_id,
+            type: 'file_request_reassigned',
+            title: 'File Request Reassigned to You',
+            message: `"${fileRequest.title}" has been reassigned to you by ${req.user.name || req.user.email}${note ? ': ' + note : ''}`,
+            referenceType: 'file_request',
+            referenceId: id,
+            metadata: {
+              request_title: fileRequest.title,
+              reassigned_from: req.user.name || req.user.email,
+              reassignment_note: note,
+              deadline: fileRequest.deadline,
+              editor_id: r.editor_id
+            }
+          });
+        }
       }
 
       // Log activity
