@@ -3720,7 +3720,7 @@ class FileRequestController {
         if (editorCheck.rows.length === 0) {
           return res.status(404).json({ success: false, error: 'Target editor not found', target: t });
         }
-        resolvedTargets.push({ editor_id: editorCheck.rows[0].editor_id, user_id: editorCheck.rows[0].user_id });
+        resolvedTargets.push({ editor_id: editorCheck.rows[0].editor_id, user_id: editorCheck.rows[0].user_id || editorCheck.rows[0].editor_id });
       }
 
       const targetEditorIds = resolvedTargets.map(r => r.editor_id);
