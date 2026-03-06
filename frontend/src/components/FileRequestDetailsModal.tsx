@@ -1334,61 +1334,36 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
               <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">
                 Canvas Brief
               </h3>
-              {canvas?.created_at && (
-                <span className="text-xs text-gray-500 dark:text-gray-400">
-                  Created: {formatDate(canvas.created_at)}
-                </span>
-              )}
-            </div>
-            <div className="flex gap-2">
-              {canvas ? (
-                <>
-                  {/* Edit Canvas - Only buyers and admins can edit */}
-                  {(user?.role === 'buyer' || user?.role === 'admin') && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setShow3StepCanvas(true)}
-                    >
-                      <FileText className="w-4 h-4 mr-2" />
-                      Edit Canvas
-                    </Button>
-                  )}
-                  {/* View-only for creatives */}
-                  {user?.role === 'creative' && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setShow3StepCanvas(true)}
-                    >
-                      <FileText className="w-4 h-4 mr-2" />
-                      View Canvas
-                    </Button>
-                  )}
-                </>
-              ) : (
-                <>
-                  {/* Create Canvas - Only buyers and admins can create */}
-                  {(user?.role === 'buyer' || user?.role === 'admin') && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setShow3StepCanvas(true)}
-                    >
-                      <FileText className="w-4 h-4 mr-2" />
-                      Create Canvas Brief
-                    </Button>
-                  )}
-                </>
-              )}
+              <div className="flex items-center gap-2">
+                {canvas?.created_at && (
+                  <span className="text-xs text-gray-500 dark:text-gray-400">
+                    Created: {formatDate(canvas.created_at)}
+                  </span>
+                )}
+                {canvas && (user?.role === 'buyer' || user?.role === 'admin') && (
+                  <Button variant="outline" size="sm" onClick={() => setShow3StepCanvas(true)}>
+                    <FileText className="w-4 h-4 mr-1" /> Edit
+                  </Button>
+                )}
+                {canvas && user?.role === 'creative' && (
+                  <Button variant="outline" size="sm" onClick={() => setShow3StepCanvas(true)}>
+                    <FileText className="w-4 h-4 mr-1" /> View Full
+                  </Button>
+                )}
+                {!canvas && (user?.role === 'buyer' || user?.role === 'admin') && (
+                  <Button variant="outline" size="sm" onClick={() => setShow3StepCanvas(true)}>
+                    <FileText className="w-4 h-4 mr-1" /> Create
+                  </Button>
+                )}
+              </div>
             </div>
 
-            {/* Canvas Brief Content Summary */}
+            {/* Canvas Brief Content - visible to ALL roles */}
             {canvas && (() => {
               try {
                 const content = typeof canvas.content === 'string' ? JSON.parse(canvas.content) : canvas.content;
                 return (
-                  <div className="mt-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                  <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
                     {content.headline && (
                       <div className="mb-3">
                         <h4 className="text-xs font-semibold text-blue-700 dark:text-blue-300 mb-1">HEADLINE</h4>
@@ -1406,10 +1381,42 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
                         <h4 className="text-xs font-semibold text-blue-700 dark:text-blue-300 mb-2">REFERENCE SAMPLES ({content.samples.length})</h4>
                         <div className="space-y-2">
                           {content.samples.map((sample: any, idx: number) => (
-                            <div key={idx} className="bg-white dark:bg-gray-800 rounded p-2 border border-blue-200 dark:border-blue-700">
-                              <p className="text-xs font-medium text-gray-900 dark:text-white">{sample.filename}</p>
-                              {sample.instruction && (
-                                <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">{sample.instruction}</p>
+                            <div key={idx} className="flex items-center justify-between bg-white dark:bg-gray-800 rounded p-2 border border-blue-200 dark:border-blue-700">
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs font-medium text-gray-900 dark:text-white truncate">{sample.filename}</p>
+                                {sample.instruction && (
+                                  <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">{sample.instruction}</p>
+                                )}
+                              </div>
+                              {sample.file_id && (
+                                <button
+                                  onClick={() => handleDownload({ file_id: sample.file_id, original_filename: sample.filename } as FileUpload)}
+                                  className="ml-2 px-2 py-1 text-xs text-blue-600 hover:text-blue-800 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded"
+                                  title="Download reference file"
+                                >
+                                  Download
+                                </button>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {/* Canvas Attachments */}
+                    {canvas.attachments && canvas.attachments.length > 0 && (
+                      <div className="mt-3">
+                        <h4 className="text-xs font-semibold text-blue-700 dark:text-blue-300 mb-2">ATTACHMENTS ({canvas.attachments.length})</h4>
+                        <div className="space-y-1">
+                          {canvas.attachments.map((att: any, idx: number) => (
+                            <div key={idx} className="flex items-center justify-between bg-white dark:bg-gray-800 rounded p-2 border border-blue-200 dark:border-blue-700">
+                              <span className="text-xs text-gray-900 dark:text-white truncate flex-1">{att.file_name || att.filename || `Attachment ${idx + 1}`}</span>
+                              {att.file_id && (
+                                <button
+                                  onClick={() => handleDownload({ file_id: att.file_id, original_filename: att.file_name || att.filename } as FileUpload)}
+                                  className="ml-2 px-2 py-1 text-xs text-blue-600 hover:text-blue-800 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded"
+                                >
+                                  Download
+                                </button>
                               )}
                             </div>
                           ))}

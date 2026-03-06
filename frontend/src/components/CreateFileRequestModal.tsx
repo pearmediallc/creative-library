@@ -7,7 +7,6 @@ import { fileRequestApi, folderApi, editorApi, authApi, teamApi } from '../lib/a
 import { FILE_REQUEST_TYPES } from '../constants/fileRequestTypes';
 import { PLATFORMS } from '../constants/platforms';
 import { VERTICALS } from '../constants/verticals';
-import { CanvasEditor } from './CanvasEditor';
 
 interface CreateFileRequestModalProps {
   onClose: () => void;
@@ -89,6 +88,12 @@ export function CreateFileRequestModal({ onClose, onSuccess, teamId }: CreateFil
   const [showCanvas, setShowCanvas] = useState(false);
   const [hasCanvas, setHasCanvas] = useState(false);
   const [createdRequestId, setCreatedRequestId] = useState<string | null>(null);
+
+  // Inline canvas brief fields
+  const [canvasHeadline, setCanvasHeadline] = useState('');
+  const [canvasScript, setCanvasScript] = useState('');
+  const [canvasFiles, setCanvasFiles] = useState<File[]>([]);
+  const [canvasFileInstructions, setCanvasFileInstructions] = useState<Record<number, string>>({});
 
   const fetchFolders = async () => {
     try {
@@ -355,12 +360,37 @@ export function CreateFileRequestModal({ onClose, onSuccess, teamId }: CreateFil
           }
         }
 
-        // Open Canvas Editor if user toggled it on, otherwise close modal
-        if (showCanvas) {
-          setError('');
-        } else {
-          onSuccess();
+        // Save inline canvas brief if toggled on and has content
+        if (showCanvas && (canvasHeadline.trim() || canvasScript.trim() || canvasFiles.length > 0)) {
+          try {
+            const canvasContent = {
+              headline: canvasHeadline.trim(),
+              script: canvasScript.trim(),
+              samples: canvasFiles.map((file, idx) => ({
+                filename: file.name,
+                instruction: canvasFileInstructions[idx] || '',
+                type: file.type,
+                size: file.size,
+              })),
+            };
+            await fileRequestApi.canvas.upsert(requestId, canvasContent);
+            setHasCanvas(true);
+
+            // Upload reference files if any
+            for (const file of canvasFiles) {
+              try {
+                await fileRequestApi.canvas.uploadAttachment(requestId, file);
+              } catch (uploadErr: any) {
+                console.error('Failed to upload canvas attachment:', uploadErr);
+              }
+            }
+          } catch (canvasErr: any) {
+            console.error('Failed to save canvas brief:', canvasErr);
+            // Non-fatal - request was created successfully
+          }
         }
+
+        onSuccess();
       } else {
         onSuccess();
       }
@@ -569,9 +599,77 @@ export function CreateFileRequestModal({ onClose, onSuccess, teamId }: CreateFil
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
               />
             ) : (
-              <p className="text-sm text-blue-600 dark:text-blue-400 italic">
-                Canvas Brief editor will open after you click "Create Request" below
-              </p>
+              <div className="space-y-3 border border-blue-200 dark:border-blue-800 rounded-lg p-4 bg-blue-50/50 dark:bg-blue-900/10">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Headline
+                  </label>
+                  <input
+                    value={canvasHeadline}
+                    onChange={(e) => setCanvasHeadline(e.target.value)}
+                    placeholder="Brief headline or title..."
+                    disabled={creating}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Script / Description
+                  </label>
+                  <textarea
+                    value={canvasScript}
+                    onChange={(e) => setCanvasScript(e.target.value)}
+                    placeholder="Detailed brief, script, or instructions..."
+                    rows={4}
+                    disabled={creating}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Reference Samples (optional)
+                  </label>
+                  <input
+                    type="file"
+                    multiple
+                    onChange={(e) => {
+                      const files = Array.from(e.target.files || []);
+                      setCanvasFiles(prev => [...prev, ...files]);
+                    }}
+                    disabled={creating}
+                    className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 dark:file:bg-blue-900/30 dark:file:text-blue-300"
+                  />
+                  {canvasFiles.length > 0 && (
+                    <div className="mt-2 space-y-2">
+                      {canvasFiles.map((file, idx) => (
+                        <div key={idx} className="flex items-center gap-2 bg-white dark:bg-gray-800 rounded p-2 border border-gray-200 dark:border-gray-700">
+                          <span className="text-xs text-gray-900 dark:text-white flex-1 truncate">{file.name}</span>
+                          <input
+                            value={canvasFileInstructions[idx] || ''}
+                            onChange={(e) => setCanvasFileInstructions(prev => ({ ...prev, [idx]: e.target.value }))}
+                            placeholder="Instruction for this file..."
+                            className="flex-1 text-xs px-2 py-1 border border-gray-200 dark:border-gray-600 rounded dark:bg-gray-700 dark:text-white"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setCanvasFiles(prev => prev.filter((_, i) => i !== idx));
+                              setCanvasFileInstructions(prev => {
+                                const next = { ...prev };
+                                delete next[idx];
+                                return next;
+                              });
+                            }}
+                            className="text-red-500 hover:text-red-700 text-xs"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
             )}
           </div>
 
@@ -788,31 +886,6 @@ export function CreateFileRequestModal({ onClose, onSuccess, teamId }: CreateFil
             </div>
           )}
 
-          {/* Success message with Canvas button */}
-          {createdRequestId && (
-            <div className="bg-gradient-to-r from-green-50 to-blue-50 dark:from-green-900/20 dark:to-blue-900/20 border-2 border-green-400 dark:border-green-600 rounded-lg p-5 shadow-md">
-              <div className="flex items-center gap-2 mb-3">
-                <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
-                  <span className="text-white text-lg font-bold">✓</span>
-                </div>
-                <p className="text-base font-bold text-green-900 dark:text-green-100">
-                  Request Created Successfully!
-                </p>
-              </div>
-              <p className="text-sm text-gray-700 dark:text-gray-300 mb-4">
-                Now add your Canvas brief with team members, requirements, and attachments.
-              </p>
-              <Button
-                type="button"
-                onClick={() => setShowCanvas(true)}
-                className="w-full py-3 text-base font-semibold bg-blue-600 hover:bg-blue-700 text-white"
-              >
-                <FileText className="w-5 h-5 mr-2" />
-                {hasCanvas ? '📝 Edit Canvas Brief' : '📋 Create Canvas Brief'}
-              </Button>
-            </div>
-          )}
-
           {/* Actions */}
           <div className="flex gap-2 justify-end pt-4 border-t border-gray-200 dark:border-gray-700">
             <Button
@@ -840,14 +913,6 @@ export function CreateFileRequestModal({ onClose, onSuccess, teamId }: CreateFil
         </form>
       </div>
 
-      {/* Canvas Editor Modal */}
-      {showCanvas && createdRequestId && (
-        <CanvasEditor
-          requestId={createdRequestId}
-          onClose={() => setShowCanvas(false)}
-          onSave={() => setHasCanvas(true)}
-        />
-      )}
     </div>
   );
 }
