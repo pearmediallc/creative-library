@@ -1326,6 +1326,16 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
                         <span className="text-sm text-blue-900 dark:text-blue-100">
                           {editor.display_name || editor.name}
                         </span>
+                        {editor.status && editor.status !== 'pending' && (
+                          <span className={`text-xs px-1.5 py-0.5 rounded ${
+                            editor.status === 'completed' ? 'bg-green-200 dark:bg-green-800 text-green-800 dark:text-green-200' :
+                            editor.status === 'in_progress' || editor.status === 'accepted' ? 'bg-yellow-200 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-200' :
+                            editor.status === 'reassigned' ? 'bg-orange-200 dark:bg-orange-800 text-orange-800 dark:text-orange-200' :
+                            'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                          }`}>
+                            {editor.status}
+                          </span>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -1413,9 +1423,16 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
                     {request.assigned_editors.map((editor: any) => (
                       <span
                         key={editor.id}
-                        className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-800 text-blue-800 dark:text-blue-100"
+                        className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                          editor.status === 'reassigned'
+                            ? 'bg-orange-100 dark:bg-orange-800 text-orange-800 dark:text-orange-100'
+                            : 'bg-blue-100 dark:bg-blue-800 text-blue-800 dark:text-blue-100'
+                        }`}
                       >
                         {editor.display_name || editor.name}
+                        {editor.status && (
+                          <span className="opacity-70">({editor.status})</span>
+                        )}
                       </span>
                     ))}
                   </div>

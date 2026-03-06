@@ -104,9 +104,9 @@ export function ReassignFileRequestModal({
       const assignments: ExistingAssignment[] = response.data.data || [];
       setExistingAssignments(assignments);
 
-      // Pre-select editors that are actively assigned (not reassigned/removed)
+      // Pre-select all editors that have any assignment record (except removed)
       const activeAssignments = assignments.filter(
-        a => a.status && !['reassigned', 'removed'].includes(a.status)
+        a => a.status && a.status !== 'removed'
       );
       if (activeAssignments.length > 0) {
         setSelectedEditorIds(activeAssignments.map(a => a.editor_id));
@@ -223,7 +223,7 @@ export function ReassignFileRequestModal({
             <UserPlus className="w-5 h-5 text-blue-500" />
             <div>
               <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-                {existingAssignments.filter(a => !['reassigned', 'removed'].includes(a.status)).length > 0
+                {existingAssignments.filter(a => a.status !== 'removed').length > 0
                   ? 'Update Assignment'
                   : 'Assign File Request'}
               </h2>
@@ -256,14 +256,14 @@ export function ReassignFileRequestModal({
               <div className="bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg p-4">
                 <p className="text-sm text-gray-500 dark:text-gray-400">Loading existing assignments...</p>
               </div>
-            ) : existingAssignments.filter(a => !['reassigned', 'removed'].includes(a.status)).length > 0 ? (
+            ) : existingAssignments.filter(a => a.status !== 'removed').length > 0 ? (
               <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
                 <p className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2">
                   Currently assigned to:
                 </p>
                 <ul className="text-sm text-blue-800 dark:text-blue-200 space-y-1">
                   {existingAssignments
-                    .filter(a => !['reassigned', 'removed'].includes(a.status))
+                    .filter(a => a.status !== 'removed')
                     .map(a => (
                       <li key={a.editor_id} className="flex items-center gap-2">
                         <span>• {a.editor_display_name || a.editor_name}</span>
@@ -445,7 +445,7 @@ export function ReassignFileRequestModal({
                 type="submit"
                 disabled={loading || selectedEditorIds.length === 0}
               >
-                {loading ? 'Updating...' : existingAssignments.filter(a => !['reassigned', 'removed'].includes(a.status)).length > 0 ? 'Update Assignment' : 'Assign Editors'}
+                {loading ? 'Updating...' : existingAssignments.filter(a => a.status !== 'removed').length > 0 ? 'Update Assignment' : 'Assign Editors'}
               </Button>
             </div>
           </form>
