@@ -213,10 +213,8 @@ export function FileRequestOrganizer({
     const [moved] = reordered.splice(fromIndex, 1);
     reordered.splice(dropIndex, 0, moved);
 
-    // Save new order
-    const orderedIds = reordered
-      .map(u => u.upload_session_id)
-      .filter((id): id is string => !!id);
+    // Save new order using media file IDs
+    const orderedIds = reordered.map(u => u.id);
 
     try {
       await fileRequestApi.reorderFiles(requestId, orderedIds);

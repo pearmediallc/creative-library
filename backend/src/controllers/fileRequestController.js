@@ -2877,15 +2877,15 @@ class FileRequestController {
   /**
    * Reorder files within a file request
    * PATCH /api/file-requests/:id/reorder
-   * Body: { ordered_upload_session_ids: string[] }
+   * Body: { ordered_file_ids: string[] } — media_files.id in desired order
    */
   async reorderFiles(req, res, next) {
     try {
       const { id } = req.params;
-      const { ordered_upload_session_ids } = req.body;
+      const { ordered_file_ids } = req.body;
 
-      if (!ordered_upload_session_ids || !Array.isArray(ordered_upload_session_ids)) {
-        return res.status(400).json({ success: false, error: 'ordered_upload_session_ids array is required' });
+      if (!ordered_file_ids || !Array.isArray(ordered_file_ids) || ordered_file_ids.length === 0) {
+        return res.status(400).json({ success: false, error: 'ordered_file_ids array is required' });
       }
 
       // Verify request exists
@@ -2901,11 +2901,17 @@ class FileRequestController {
         return res.status(403).json({ success: false, error: 'Not authorized to reorder files' });
       }
 
-      // Update sort_order for each upload session
-      for (let i = 0; i < ordered_upload_session_ids.length; i++) {
+      // Update sort_order on file_request_uploads by matching via media_files.upload_session_id
+      // Each media file maps to an upload session; we set sort_order on the upload row
+      for (let i = 0; i < ordered_file_ids.length; i++) {
         await query(
-          `UPDATE file_request_uploads SET sort_order = $1 WHERE id = $2 AND file_request_id = $3`,
-          [i, ordered_upload_session_ids[i], id]
+          `UPDATE file_request_uploads fru
+           SET sort_order = $1
+           FROM media_files mf
+           WHERE mf.id = $2
+             AND (mf.upload_session_id = fru.id OR (fru.file_id IS NOT NULL AND fru.file_id = mf.id))
+             AND fru.file_request_id = $3`,
+          [i, ordered_file_ids[i], id]
         );
       }
 
