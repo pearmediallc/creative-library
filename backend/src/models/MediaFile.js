@@ -112,19 +112,19 @@ class MediaFile extends BaseModel {
           )
           OR mf.folder_id IN (
             SELECT folder_id FROM file_requests
-            WHERE created_by = $${paramIndex}
+            WHERE (created_by = $${paramIndex}
+              OR assigned_buyer_id = $${paramIndex}
+              OR $${paramIndex} = ANY(assigned_buyer_ids))
             AND folder_id IS NOT NULL
           )
         )`;
         conditions.push(rbacCondition);
         params.push(filters.user_id);
 
-        const { query } = require('../config/database');
         const logger = require('../utils/logger');
         logger.info('🔒 RBAC Query for Buyer', {
           userId: filters.user_id,
           userRole: filters.user_role,
-          rbacCondition,
           paramIndex
         });
 
@@ -311,7 +311,9 @@ class MediaFile extends BaseModel {
           )
           OR mf.folder_id IN (
             SELECT folder_id FROM file_requests
-            WHERE created_by = $${paramIndex}
+            WHERE (created_by = $${paramIndex}
+              OR assigned_buyer_id = $${paramIndex}
+              OR $${paramIndex} = ANY(assigned_buyer_ids))
             AND folder_id IS NOT NULL
           )
         )`);

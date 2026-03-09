@@ -25,7 +25,7 @@ export interface UploadTask {
 class UploadQueueManager {
   private queue: UploadTask[] = [];
   private activeUploads = 0;
-  private maxConcurrent = 3; // Upload 3 files in parallel
+  private maxConcurrent = 1; // Upload 1 file at a time to prevent server OOM with large files
   private listeners: ((queue: UploadTask[]) => void)[] = [];
   private abortControllers: Map<string, AbortController> = new Map();
 

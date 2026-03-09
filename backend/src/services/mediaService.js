@@ -237,7 +237,7 @@ class MediaService {
         description: metadata.description || null,
         // ✨ NEW: Folder and buyer assignment
         folder_id: targetFolderId || null,
-        assigned_buyer_id: metadata.assigned_buyer_id || null,
+        assigned_buyer_id: metadata.assigned_buyer_id || (metadata.assigned_buyer_ids && metadata.assigned_buyer_ids[0]) || null,
         // ✨ File request uploads are NOT deleted - they should be visible!
         // The request creator and assigned buyer should be able to see and download them
         is_deleted: false,
