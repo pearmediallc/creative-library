@@ -1404,17 +1404,26 @@ class FileRequestController {
             e.is_active,
             fre.status,
             fre.num_creatives_assigned,
-            fre.creatives_completed,
+            COALESCE(uc.actual_uploads, 0) as creatives_completed,
             fre.created_at,
             fre.accepted_at,
             fre.started_at,
             fre.completed_at,
             fre.deliverables_quota,
-            fre.deliverables_uploaded,
+            COALESCE(uc.actual_uploads, 0) as deliverables_uploaded,
             fre.deliverables_completed_at,
             fre.reassignment_notes
           FROM file_request_editors fre
           JOIN editors e ON fre.editor_id = e.id
+          LEFT JOIN LATERAL (
+            SELECT COUNT(DISTINCT mf.id) as actual_uploads
+            FROM file_request_uploads fru
+            JOIN media_files mf ON mf.upload_session_id = fru.id
+            WHERE fru.file_request_id = $1
+              AND fru.editor_id = fre.editor_id
+              AND COALESCE(fru.is_deleted, FALSE) = FALSE
+              AND mf.is_deleted = FALSE
+          ) uc ON TRUE
           WHERE fre.request_id = $1
             AND e.is_active = TRUE
           ORDER BY fre.created_at ASC`,
@@ -2837,7 +2846,7 @@ class FileRequestController {
       // Move uploads to the folder
       const result = await query(
         `UPDATE file_request_uploads
-         SET folder_id = $1, updated_at = NOW()
+         SET folder_id = $1
          WHERE file_request_id = $2 AND id = ANY($3::uuid[])
          RETURNING id, folder_id`,
         [targetFolderId, id, upload_ids]
