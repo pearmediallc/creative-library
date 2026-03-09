@@ -197,7 +197,7 @@ class NotificationController {
         // Buyers: file requests assigned to them that are active
         const frResult = await query(
           `SELECT COUNT(*) as cnt FROM file_requests
-           WHERE assigned_buyer_id = $1 AND is_active = TRUE`,
+           WHERE (assigned_buyer_id = $1 OR $1 = ANY(assigned_buyer_ids)) AND is_active = TRUE`,
           [userId]
         );
         fileRequestCount = parseInt(frResult.rows[0]?.cnt || '0', 10);

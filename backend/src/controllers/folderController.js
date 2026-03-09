@@ -6,6 +6,7 @@
 const Folder = require('../models/Folder');
 const MediaFile = require('../models/MediaFile');
 const logger = require('../utils/logger');
+const { isAdminRole } = require('../middleware/auth');
 
 class FolderController {
   /**
@@ -82,7 +83,7 @@ class FolderController {
 
       const folders = await Folder.getTree(req.user.id, {
         parent_id: parent_id || null,
-        include_deleted: req.user.role === 'admin' && include_deleted === 'true'
+        include_deleted: isAdminRole(req.user.role) && include_deleted === 'true'
       });
 
       res.json({

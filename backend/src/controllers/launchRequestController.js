@@ -7,6 +7,7 @@ const { pool } = require('../config/database');
 const logger = require('../utils/logger');
 const Folder = require('../models/Folder');
 const mediaService = require('../services/mediaService');
+const { isAdminRole } = require('../middleware/auth');
 
 class LaunchRequestController {
 
@@ -45,7 +46,7 @@ class LaunchRequestController {
       const userName = req.user.name || '';
 
       // Only admin/strategist can create launch requests
-      if (userRole !== 'admin' && userRole !== 'buyer') {
+      if (!isAdminRole(userRole) && userRole !== 'buyer') {
         return res.status(403).json({ success: false, error: 'Only admins and buyers can create launch requests' });
       }
 
@@ -276,7 +277,7 @@ class LaunchRequestController {
       let paramIdx = 1;
 
       // Role-based visibility
-      if (userRole === 'admin') {
+      if (isAdminRole(userRole)) {
         // Admin/strategist sees all
       } else if (userRole === 'buyer') {
         // Buyers see requests where they are buyer_head OR assigned as a buyer
@@ -516,7 +517,7 @@ class LaunchRequestController {
         return res.status(404).json({ success: false, error: 'Not found' });
       }
 
-      if (userRole !== 'admin' && existing.rows[0].created_by !== userId) {
+      if (!isAdminRole(userRole) && existing.rows[0].created_by !== userId) {
         return res.status(403).json({ success: false, error: 'Not authorised' });
       }
 
@@ -1040,6 +1041,48 @@ class LaunchRequestController {
         `UPDATE launch_requests SET status = $1${setClause ? ', ' + setClause : ''}, updated_at = NOW() WHERE id = $${extraValues.length + 2}`,
         [newStatus, ...extraValues, id]
       );
+
+      // Slack: Notify relevant users about status change
+      try {
+        const slackService = require('../services/slackService');
+        const requestUrl = `${process.env.FRONTEND_URL || 'https://app.example.com'}/launch-requests`;
+        const changedByName = req.user.name || req.user.email;
+
+        // Get full request details for notifications
+        const fullReq = await pool.query(
+          `SELECT lr.*, u.name as creator_name
+           FROM launch_requests lr
+           LEFT JOIN users u ON lr.created_by = u.id
+           WHERE lr.id = $1`,
+          [id]
+        );
+        if (fullReq.rows.length > 0) {
+          const lr = fullReq.rows[0];
+
+          // Notify creator if different from status changer
+          if (lr.created_by && lr.created_by !== req.user.id) {
+            slackService.notifyLaunchRequestStatusChange(
+              lr.created_by, lr.title || lr.request_type, newStatus, changedByName, requestUrl
+            ).catch(err => logger.error('Slack launch status notify failed', { error: err.message }));
+          }
+
+          // Notify assigned editors
+          const editors = await pool.query(
+            `SELECT DISTINCT e.user_id FROM launch_request_editors lre
+             JOIN editors e ON lre.editor_id = e.id
+             WHERE lre.launch_request_id = $1 AND lre.status NOT IN ('reassigned', 'removed')
+             AND e.user_id IS NOT NULL AND e.user_id != $2`,
+            [id, req.user.id]
+          );
+          for (const editor of editors.rows) {
+            slackService.notifyLaunchRequestStatusChange(
+              editor.user_id, lr.title || lr.request_type, newStatus, changedByName, requestUrl
+            ).catch(err => logger.error('Slack launch status notify editor failed', { error: err.message }));
+          }
+        }
+      } catch (slackErr) {
+        logger.error('Slack launch status change notification error', { error: slackErr.message });
+      }
 
       return res.json({ success: true, status: newStatus });
 

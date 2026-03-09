@@ -6,7 +6,7 @@ import { mediaApi } from '../lib/api';
 import { MediaFile } from '../types';
 import { formatBytes, formatDate } from '../lib/utils';
 import { Image as ImageIcon, Video, RotateCcw, Trash2, AlertTriangle, FileText, File } from 'lucide-react';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth, isAdminRole } from '../contexts/AuthContext';
 
 export function DeletedFilesPage() {
   const { user } = useAuth();
@@ -17,7 +17,7 @@ export function DeletedFilesPage() {
   const [emptyingTrash, setEmptyingTrash] = useState(false);
   const [showEmptyTrashConfirm, setShowEmptyTrashConfirm] = useState(false);
 
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = isAdminRole(user?.role);
 
   useEffect(() => {
     fetchDeletedFiles();

@@ -69,7 +69,7 @@ export function CreateFileRequestModal({ onClose, onSuccess, teamId }: CreateFil
   const [requireEmail, setRequireEmail] = useState(false);
   const [customMessage, setCustomMessage] = useState('');
   const [selectedEditorIds, setSelectedEditorIds] = useState<string[]>([]);
-  const [assignedBuyerId, setAssignedBuyerId] = useState<string>('');
+  const [assignedBuyerIds, setAssignedBuyerIds] = useState<string[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
   const [editors, setEditors] = useState<Editor[]>([]);
   const [buyers, setBuyers] = useState<Buyer[]>([]);
@@ -214,7 +214,7 @@ export function CreateFileRequestModal({ onClose, onSuccess, teamId }: CreateFil
       setSelectedEditorIds(template.default_assigned_editor_ids);
     }
     if (template.default_assigned_buyer_id) {
-      setAssignedBuyerId(template.default_assigned_buyer_id);
+      setAssignedBuyerIds([template.default_assigned_buyer_id]);
     }
     if (template.default_due_days) {
       // Calculate deadline from default_due_days
@@ -310,7 +310,8 @@ export function CreateFileRequestModal({ onClose, onSuccess, teamId }: CreateFil
         require_email: requireEmail,
         custom_message: customMessage.trim() || undefined,
         editor_id: selectedEditorIds[0] || undefined,
-        assigned_buyer_id: assignedBuyerId || undefined,
+        assigned_buyer_id: assignedBuyerIds[0] || undefined,
+        assigned_buyer_ids: assignedBuyerIds.length > 0 ? assignedBuyerIds : undefined,
         request_type: requestType,
         platforms: platforms, // 🆕 Send as array
         verticals: verticals, // 🆕 Send as array
@@ -807,38 +808,53 @@ export function CreateFileRequestModal({ onClose, onSuccess, teamId }: CreateFil
           {verticals.length > 0 && (
             <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
               <p className="text-sm text-blue-900 dark:text-blue-200 font-medium">
-                📌 Vertical-Based Assignment Active
+                Vertical-Based Assignment Active
               </p>
               <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
-                This request will be automatically assigned to the vertical head(s) for: {verticals.join(', ')}. Buyer assignment is hidden when verticals are selected.
+                This request will be automatically assigned to the vertical head(s) for: {verticals.join(', ')}.
               </p>
             </div>
           )}
 
-          {/* Buyer Assignment - Hidden when verticals are selected */}
-          {verticals.length === 0 && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Assign to Buyer (optional)
-              </label>
-              <select
-                value={assignedBuyerId}
-                onChange={(e) => setAssignedBuyerId(e.target.value)}
-                disabled={creating}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-              >
-                <option value="">No buyer assignment</option>
+          {/* Buyer Assignment - Always visible */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Assign to Buyer(s) (optional)
+            </label>
+            {buyers.length === 0 ? (
+              <p className="text-xs text-gray-500 dark:text-gray-400 italic">No buyers available</p>
+            ) : (
+              <div className="max-h-40 overflow-y-auto border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 p-2 space-y-1">
                 {buyers.map((buyer) => (
-                  <option key={buyer.id} value={buyer.id}>
-                    {buyer.name} ({buyer.email})
-                  </option>
+                  <label
+                    key={buyer.id}
+                    className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={assignedBuyerIds.includes(buyer.id)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setAssignedBuyerIds(prev => [...prev, buyer.id]);
+                        } else {
+                          setAssignedBuyerIds(prev => prev.filter(id => id !== buyer.id));
+                        }
+                      }}
+                      disabled={creating}
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className="text-sm text-gray-900 dark:text-white">{buyer.name}</span>
+                    <span className="text-xs text-gray-500 dark:text-gray-400">({buyer.email})</span>
+                  </label>
                 ))}
-              </select>
-              <p className="text-xs text-muted-foreground mt-1">
-                Uploaded files will be automatically assigned to this buyer
+              </div>
+            )}
+            {assignedBuyerIds.length > 0 && (
+              <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                {assignedBuyerIds.length} buyer(s) selected - uploaded files will be accessible to them
               </p>
-            </div>
-          )}
+            )}
+          </div>
 
           {/* Deadline */}
           <div>

@@ -81,6 +81,24 @@ router.get('/:id/folders',
   fileRequestController.getRequestFolders.bind(fileRequestController)
 );
 
+// Move files to a sub-folder
+router.patch('/:id/folders/:folderId/files',
+  authenticateToken,
+  fileRequestController.moveFilesToFolder.bind(fileRequestController)
+);
+
+// Rename a sub-folder
+router.patch('/:id/folders/:folderId',
+  authenticateToken,
+  fileRequestController.updateRequestFolder.bind(fileRequestController)
+);
+
+// Delete a sub-folder
+router.delete('/:id/folders/:folderId',
+  authenticateToken,
+  fileRequestController.deleteRequestFolder.bind(fileRequestController)
+);
+
 // Get assigned editors for file request
 router.get('/:id/editors',
   authenticateToken,

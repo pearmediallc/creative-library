@@ -1,4 +1,5 @@
 const { query } = require('../config/database');
+const { isAdminRole } = require('../middleware/auth');
 
 /**
  * Toggle folder lock status
@@ -26,7 +27,7 @@ async function toggleFolderLock(req, res) {
     const folder = folderResult.rows[0];
 
     // Check if user is owner or admin
-    if (folder.owner_id !== userId && req.user.role !== 'admin') {
+    if (folder.owner_id !== userId && !isAdminRole(req.user.role)) {
       return res.status(403).json({
         success: false,
         error: 'Only folder owner or admin can lock/unlock folders'
@@ -34,7 +35,7 @@ async function toggleFolderLock(req, res) {
     }
 
     // If folder is locked by someone else (and user is not admin), deny
-    if (folder.is_locked && folder.locked_by !== userId && req.user.role !== 'admin') {
+    if (folder.is_locked && folder.locked_by !== userId && !isAdminRole(req.user.role)) {
       return res.status(403).json({
         success: false,
         error: 'Folder is locked by another user'

@@ -7,7 +7,7 @@ import { mediaApi, editorApi, folderApi, adminApi, starredApi } from '../lib/api
 import { MediaFile, Editor } from '../types';
 import { formatBytes, formatDate } from '../lib/utils';
 import { Image as ImageIcon, Video, X, Download, Trash2, Info, PackageOpen, Calendar, Filter, Clock, FolderInput, Share2, Star, LayoutGrid, List, FileText, Tag, FolderPlus, BarChart3 } from 'lucide-react';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth, isAdminRole } from '../contexts/AuthContext';
 import { BulkMetadataEditor } from '../components/BulkMetadataEditor';
 import { MetadataViewer } from '../components/MetadataViewer';
 import { AnalyticsMetricsPanel } from '../components/AnalyticsMetricsPanel';
@@ -209,9 +209,9 @@ export function MediaLibraryPage() {
   });
 
   // Role-based permissions
-  const isAdmin = user?.role === 'admin';
-  const canUpload = user?.role === 'admin' || user?.role === 'creative';
-  const canDelete = user?.role === 'admin';
+  const isAdmin = isAdminRole(user?.role);
+  const canUpload = isAdminRole(user?.role) || user?.role === 'creative';
+  const canDelete = isAdminRole(user?.role);
 
   // Filtered files based on search and vertical
   const filteredFiles = useMemo(() => {
@@ -1139,7 +1139,10 @@ export function MediaLibraryPage() {
                                 </div>
                               )}
                               {selectionMode && (
-                                <div className="absolute top-2 left-2 bg-white dark:bg-gray-800 rounded p-1 shadow-md border border-gray-200 dark:border-gray-700">
+                                <div
+                                  className="absolute top-2 left-2 bg-white dark:bg-gray-800 rounded p-1 shadow-md border border-gray-200 dark:border-gray-700"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
                                   <input
                                     type="checkbox"
                                     checked={selectedFiles.includes(file.id)}

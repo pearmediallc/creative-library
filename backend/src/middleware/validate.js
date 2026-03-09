@@ -47,7 +47,7 @@ const schemas = {
     name: Joi.string().min(2).max(255).required(),
     email: Joi.string().email().required(),
     password: Joi.string().min(8).max(100).required(),
-    role: Joi.string().valid('admin', 'creative', 'buyer').default('creative')
+    role: Joi.string().valid('admin', 'team_lead', 'creative', 'buyer').default('creative')
   }),
 
   login: Joi.object({
@@ -93,13 +93,13 @@ const schemas = {
     name: Joi.string().min(2).max(255).required(),
     email: Joi.string().email().required(),
     password: Joi.string().min(8).max(100).required(),
-    role: Joi.string().valid('admin', 'creative', 'buyer').required(),
+    role: Joi.string().valid('admin', 'team_lead', 'creative', 'buyer').required(),
     upload_limit_monthly: Joi.number().integer().min(0).max(10000).default(100)
   }),
 
   updateUser: Joi.object({
     name: Joi.string().min(2).max(255),
-    role: Joi.string().valid('admin', 'creative', 'buyer'),
+    role: Joi.string().valid('admin', 'team_lead', 'creative', 'buyer'),
     upload_limit_monthly: Joi.number().integer().min(0).max(10000),
     is_active: Joi.boolean()
   }),

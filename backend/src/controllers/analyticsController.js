@@ -2,6 +2,7 @@ const analyticsService = require('../services/analyticsService');
 const logger = require('../utils/logger');
 const { logActivity } = require('../middleware/activityLogger');
 const { query } = require('../config/database');
+const { isAdminRole } = require('../middleware/auth');
 
 class AnalyticsController {
   /**
@@ -383,7 +384,7 @@ class AnalyticsController {
 
       // Get user's assigned verticals if they are a vertical head
       let assignedVerticals = [];
-      if (userRole !== 'admin') {
+      if (!isAdminRole(userRole)) {
         const verticalHeadsResult = await query(
           `SELECT vertical FROM vertical_heads WHERE head_editor_id = $1`,
           [userId]
@@ -397,10 +398,10 @@ class AnalyticsController {
       }
 
       // Build vertical filter condition (case-insensitive)
-      const verticalFilter = userRole === 'admin'
+      const verticalFilter = isAdminRole(userRole)
         ? ''
         : `AND LOWER(frv.vertical) = ANY(ARRAY[${assignedVerticals.map((_, i) => `LOWER($${i + 1})`).join(',')}]::text[])`;
-      const queryParams = userRole === 'admin' ? [] : assignedVerticals;
+      const queryParams = isAdminRole(userRole) ? [] : assignedVerticals;
 
       // File Requests analytics by vertical
       const fileRequestsQuery = `
@@ -513,7 +514,7 @@ class AnalyticsController {
       });
 
       // For non-admin users, ensure ALL assigned verticals appear (even with 0 requests)
-      if (userRole !== 'admin') {
+      if (!isAdminRole(userRole)) {
         assignedVerticals.forEach(vertical => {
           if (!verticalMap.has(vertical)) {
             verticalMap.set(vertical, {
@@ -579,7 +580,7 @@ class AnalyticsController {
       const { vertical } = req.params;
 
       // Check access - admin or vertical head for this vertical
-      if (userRole !== 'admin') {
+      if (!isAdminRole(userRole)) {
         const verticalHeadsResult = await query(
           `SELECT 1 FROM vertical_heads WHERE head_editor_id = $1 AND vertical = $2`,
           [userId, vertical]

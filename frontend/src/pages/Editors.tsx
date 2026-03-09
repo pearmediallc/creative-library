@@ -5,7 +5,7 @@ import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { editorApi } from '../lib/api';
 import { Editor } from '../types';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth, isAdminRole } from '../contexts/AuthContext';
 import { Users, Plus, Edit2, Check, X, Trash2 } from 'lucide-react';
 
 export function EditorsPage() {
@@ -101,7 +101,7 @@ export function EditorsPage() {
             <h1 className="text-3xl font-bold">Editors</h1>
             <p className="text-muted-foreground">Manage creative team members</p>
           </div>
-          {user?.role === 'admin' && (
+          {isAdminRole(user?.role) && (
             <Button onClick={() => setShowAddForm(!showAddForm)}>
               <Plus size={16} className="mr-2" />
               Add Editor
@@ -177,7 +177,7 @@ export function EditorsPage() {
                       )}
                     </div>
                   </div>
-                  {user?.role === 'admin' && (
+                  {isAdminRole(user?.role) && (
                     <div className="flex gap-1">
                       {editingId === editor.id ? (
                         <>

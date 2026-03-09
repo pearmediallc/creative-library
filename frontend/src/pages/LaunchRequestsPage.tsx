@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import { CreateLaunchRequestModal } from '../components/CreateLaunchRequestModal';
 import { LaunchRequestDetailsModal } from '../components/LaunchRequestDetailsModal';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth, isAdminRole } from '../contexts/AuthContext';
 import { VERTICALS } from '../constants/verticals';
 import { PLATFORMS } from '../constants/platforms';
 import { getLaunchRequestStatusBadgeClasses } from '../constants/statusColors';
@@ -67,7 +67,7 @@ export function LaunchRequestsPage() {
   const [platformFilter, setPlatformFilter] = useState('');
   const [showFilters, setShowFilters] = useState(false);
 
-  const canCreate = user?.role === 'admin';
+  const canCreate = isAdminRole(user?.role);
 
   const fetchRequests = async () => {
     setLoading(true);
@@ -372,7 +372,7 @@ export function LaunchRequestsPage() {
                             <LinkIcon className="w-4 h-4" />
                           </Button>
                           {/* Launch button - buyer/admin only, when status is buyer_assigned */}
-                          {(user?.role === 'buyer' || user?.role === 'admin') && request.status === 'buyer_assigned' && (
+                          {(user?.role === 'buyer' || isAdminRole(user?.role)) && request.status === 'buyer_assigned' && (
                             <Button
                               variant="ghost" size="sm"
                               className="text-green-600 hover:text-green-700"
@@ -383,7 +383,7 @@ export function LaunchRequestsPage() {
                             </Button>
                           )}
                           {/* Reopen button - admin/strategist only, when status is closed */}
-                          {(user?.role === 'admin' || user?.id === request.created_by_name) && request.status === 'closed' && (
+                          {(isAdminRole(user?.role) || user?.id === request.created_by_name) && request.status === 'closed' && (
                             <Button
                               variant="ghost" size="sm"
                               className="text-orange-600 hover:text-orange-700"
@@ -393,7 +393,7 @@ export function LaunchRequestsPage() {
                               <RefreshCw className="w-4 h-4" />
                             </Button>
                           )}
-                          {(user?.role === 'admin' || user?.id === request.created_by_name) && (
+                          {(isAdminRole(user?.role) || user?.id === request.created_by_name) && (
                             <Button
                               variant="ghost" size="sm"
                               onClick={() => handleDelete(request.id)}

@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { Button } from './ui/Button';
 import { commentApi, adminApi } from '../lib/api';
+import { isAdminRole } from '../contexts/AuthContext';
 
 interface Reaction {
   type: string;
@@ -298,7 +299,7 @@ export function CommentsPanel({ isOpen, onClose, fileId, fileName }: CommentsPan
 
   const renderComment = (comment: Comment, isReply = false) => {
     const isAuthor = comment.user_id === currentUser.id;
-    const isAdmin = currentUser.role === 'admin';
+    const isAdmin = isAdminRole(currentUser.role);
     const canEdit = isAuthor || isAdmin;
     const isEditing = editingId === comment.id;
     const groupedReactions = groupReactions(comment.reactions);

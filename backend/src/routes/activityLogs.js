@@ -6,26 +6,26 @@
 const express = require('express');
 const router = express.Router();
 const activityLogController = require('../controllers/activityLogController');
-const { authenticateToken, requireAdmin } = require('../middleware/auth');
+const { authenticateToken, requireSuperAdmin } = require('../middleware/auth');
 const activityLogExportService = require('../services/activityLogExportService');
 
 // All activity log routes require admin role
 router.get('/',
   authenticateToken,
-  requireAdmin,
+  requireSuperAdmin,
   activityLogController.getLogs.bind(activityLogController)
 );
 
 router.get('/filters',
   authenticateToken,
-  requireAdmin,
+  requireSuperAdmin,
   activityLogController.getFilters.bind(activityLogController)
 );
 
 // Export endpoints
 router.get('/exports',
   authenticateToken,
-  requireAdmin,
+  requireSuperAdmin,
   async (req, res) => {
     try {
       const history = await activityLogExportService.getExportHistory(30);
@@ -38,7 +38,7 @@ router.get('/exports',
 
 router.get('/exports/:exportId',
   authenticateToken,
-  requireAdmin,
+  requireSuperAdmin,
   async (req, res) => {
     try {
       const exportData = await activityLogExportService.getExportById(req.params.exportId);
@@ -54,7 +54,7 @@ router.get('/exports/:exportId',
 
 router.get('/exports/:exportId/download',
   authenticateToken,
-  requireAdmin,
+  requireSuperAdmin,
   async (req, res) => {
     try {
       const url = await activityLogExportService.getExportDownloadUrl(req.params.exportId);
@@ -67,7 +67,7 @@ router.get('/exports/:exportId/download',
 
 router.post('/exports/manual',
   authenticateToken,
-  requireAdmin,
+  requireSuperAdmin,
   async (req, res) => {
     try {
       const { targetDate } = req.body;
@@ -84,7 +84,7 @@ router.post('/exports/manual',
 
 router.get('/exports/job/status',
   authenticateToken,
-  requireAdmin,
+  requireSuperAdmin,
   async (req, res) => {
     try {
       const status = await activityLogExportService.getJobStatus();

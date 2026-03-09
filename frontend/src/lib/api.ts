@@ -551,6 +551,7 @@ export const fileRequestApi = {
     editor_id?: string;
     editor_ids?: string[];
     assigned_buyer_id?: string;
+    assigned_buyer_ids?: string[];
   }) => api.post('/file-requests', data),
 
   // Get all file requests for current user
@@ -608,6 +609,22 @@ export const fileRequestApi = {
 
   // Get folders for file request
   getFolders: (id: string) => api.get(`/file-requests/${id}/folders`),
+
+  // Move files to a sub-folder
+  moveFilesToFolder: (requestId: string, folderId: string, uploadIds: string[]) =>
+    api.patch(`/file-requests/${requestId}/folders/${folderId}/files`, { upload_ids: uploadIds }),
+
+  // Move files back to unfiled
+  unfileFiles: (requestId: string, uploadIds: string[]) =>
+    api.patch(`/file-requests/${requestId}/folders/unfiled/files`, { upload_ids: uploadIds }),
+
+  // Rename a sub-folder
+  updateFolder: (requestId: string, folderId: string, data: { folder_name: string; description?: string }) =>
+    api.patch(`/file-requests/${requestId}/folders/${folderId}`, data),
+
+  // Delete a sub-folder
+  deleteFolder: (requestId: string, folderId: string) =>
+    api.delete(`/file-requests/${requestId}/folders/${folderId}`),
 
   // Get assigned editors for file request
   getAssignedEditors: (id: string) => api.get(`/file-requests/${id}/editors`),

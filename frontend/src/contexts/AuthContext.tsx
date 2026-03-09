@@ -85,3 +85,8 @@ export function useAuth() {
   }
   return context;
 }
+
+/** Check if a role has admin-level access (admin or team_lead) */
+export function isAdminRole(role?: string): boolean {
+  return role === 'admin' || role === 'team_lead';
+}

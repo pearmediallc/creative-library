@@ -2,6 +2,7 @@ const Comment = require('../models/Comment');
 const MediaFile = require('../models/MediaFile');
 const User = require('../models/User');
 const logger = require('../utils/logger');
+const { isAdminRole } = require('../middleware/auth');
 
 class CommentController {
   /**
@@ -147,7 +148,7 @@ class CommentController {
       }
 
       // Check permission (only author or admin can edit)
-      if (comment.user_id !== userId && req.user.role !== 'admin') {
+      if (comment.user_id !== userId && !isAdminRole(req.user.role)) {
         return res.status(403).json({
           success: false,
           error: 'You can only edit your own comments'
@@ -197,7 +198,7 @@ class CommentController {
       }
 
       // Check permission (only author or admin can delete)
-      if (comment.user_id !== userId && req.user.role !== 'admin') {
+      if (comment.user_id !== userId && !isAdminRole(req.user.role)) {
         return res.status(403).json({
           success: false,
           error: 'You can only delete your own comments'

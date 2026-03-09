@@ -171,7 +171,7 @@ class Folder extends BaseModel {
               SELECT 1
               FROM file_requests fr
               WHERE fr.folder_id IN (SELECT id FROM ancestors)
-                AND (fr.created_by = $2 OR fr.assigned_buyer_id = $2)
+                AND (fr.created_by = $2 OR fr.assigned_buyer_id = $2 OR $2 = ANY(fr.assigned_buyer_ids))
               LIMIT 1
             )
             -- Member of team with access

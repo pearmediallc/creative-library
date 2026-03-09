@@ -1,6 +1,7 @@
 const MediaFile = require('../models/MediaFile');
 const s3Service = require('../services/s3Service');
 const logger = require('../utils/logger');
+const { isAdminRole } = require('../middleware/auth');
 
 class VersionController {
   /**
@@ -19,7 +20,7 @@ class VersionController {
       }
 
       // Check access permissions
-      if (originalFile.uploaded_by !== userId && req.user.role !== 'admin') {
+      if (originalFile.uploaded_by !== userId && !isAdminRole(req.user.role)) {
         return res.status(403).json({ error: 'Access denied' });
       }
 
@@ -63,7 +64,7 @@ class VersionController {
       }
 
       // Check ownership
-      if (originalFile.uploaded_by !== userId && req.user.role !== 'admin') {
+      if (originalFile.uploaded_by !== userId && !isAdminRole(req.user.role)) {
         return res.status(403).json({ error: 'Access denied' });
       }
 
@@ -126,7 +127,7 @@ class VersionController {
       }
 
       // Check ownership
-      if (originalFile.uploaded_by !== userId && req.user.role !== 'admin') {
+      if (originalFile.uploaded_by !== userId && !isAdminRole(req.user.role)) {
         return res.status(403).json({ error: 'Access denied' });
       }
 
@@ -213,7 +214,7 @@ class VersionController {
       }
 
       // Check ownership
-      if (originalFile.uploaded_by !== userId && req.user.role !== 'admin') {
+      if (originalFile.uploaded_by !== userId && !isAdminRole(req.user.role)) {
         return res.status(403).json({ error: 'Access denied' });
       }
 

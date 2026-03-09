@@ -5,6 +5,7 @@
 
 const { query } = require('../config/database');
 const logger = require('../utils/logger');
+const { isAdminRole } = require('../middleware/auth');
 
 /**
  * Get all vertical heads mappings
@@ -98,7 +99,7 @@ async function updateVerticalHead(req, res) {
     const userRole = req.user.role;
 
     // Only admins can update vertical heads
-    if (userRole !== 'admin') {
+    if (!isAdminRole(userRole)) {
       return res.status(403).json({ error: 'Only admins can update vertical heads' });
     }
 

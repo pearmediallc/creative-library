@@ -3,6 +3,7 @@ const Notification = require('../models/Notification');
 const { query } = require('../config/database');
 const mediaService = require('../services/mediaService');
 const logger = require('../utils/logger');
+const { isAdminRole } = require('../middleware/auth');
 
 class CanvasController {
   /**
@@ -97,11 +98,11 @@ class CanvasController {
         hasAccess = true;
       }
       // 2. Admin always has access
-      else if (userRole === 'admin') {
+      else if (isAdminRole(userRole)) {
         hasAccess = true;
       }
       // 3. Assigned buyer has access
-      else if (fileRequest.assigned_buyer_id === userId) {
+      else if (fileRequest.assigned_buyer_id === userId || (fileRequest.assigned_buyer_ids && fileRequest.assigned_buyer_ids.includes(userId))) {
         hasAccess = true;
       }
       // 4. Assigned editor has access (need to check via editor_id lookup)
@@ -214,7 +215,7 @@ class CanvasController {
 
       // Check permissions - creator, admin, or buyer can edit canvas
       const isCreator = fileRequest.creator_id === userId;
-      const isAdmin = userRole === 'admin';
+      const isAdmin = isAdminRole(userRole);
       const isBuyer = userRole === 'buyer';
 
       if (!isCreator && !isAdmin && !isBuyer) {

@@ -5,6 +5,7 @@ const mediaService = require('../services/mediaService');
 const { logActivity } = require('../middleware/activityLogger');
 const Notification = require('../models/Notification');
 const Folder = require('../models/Folder');
+const { isAdminRole } = require('../middleware/auth');
 
 class FileRequestController {
   /**
@@ -108,6 +109,7 @@ class FileRequestController {
         editor_id,
         editor_ids,
         assigned_buyer_id,
+        assigned_buyer_ids, // Multi-buyer support
         // New: deliverables progress (e.g. buyer asked for 20 videos)
         deliverables_required,
         deliverables_type
@@ -117,6 +119,10 @@ class FileRequestController {
       const platformArray = platforms || (platform ? [platform] : []);
       const verticalArray = verticals || (vertical ? [vertical] : []);
       const primaryVertical = verticalArray[0] || vertical || null; // First vertical for auto-assignment
+
+      // Handle multi-buyer: resolve primary buyer for backward compat
+      const buyerIdsArray = assigned_buyer_ids || (assigned_buyer_id ? [assigned_buyer_id] : []);
+      const primaryBuyerId = buyerIdsArray[0] || assigned_buyer_id || null;
 
       console.log('Parsed values:', {
         userId,
@@ -253,16 +259,16 @@ class FileRequestController {
         }
       }
 
-      // Verify buyer exists if provided
-      if (assigned_buyer_id) {
+      // Verify buyer(s) exist if provided
+      if (buyerIdsArray.length > 0) {
         const buyerResult = await query(
-          'SELECT id FROM users WHERE id = $1 AND role = $2',
-          [assigned_buyer_id, 'buyer']
+          'SELECT id FROM users WHERE id = ANY($1::uuid[]) AND role = $2',
+          [buyerIdsArray, 'buyer']
         );
-        if (buyerResult.rows.length === 0) {
+        if (buyerResult.rows.length !== buyerIdsArray.length) {
           return res.status(404).json({
             success: false,
-            error: 'Buyer not found'
+            error: 'One or more buyers not found'
           });
         }
       }
@@ -357,7 +363,8 @@ class FileRequestController {
         allow_multiple_uploads,
         require_email,
         custom_message: custom_message || null,
-        assigned_buyer_id: assigned_buyer_id || null,
+        assigned_buyer_id: primaryBuyerId,
+        assigned_buyer_ids: buyerIdsArray,
         auto_assigned_head: autoAssignedHead || null,
         assigned_at: (editor_id || finalEditorIds.length > 0) ? new Date() : null
       });
@@ -367,9 +374,9 @@ class FileRequestController {
         result = await query(
           `INSERT INTO file_requests
           (title, description, request_type, concept_notes, num_creatives, platform, vertical, created_by, folder_id, request_token, deadline,
-           allow_multiple_uploads, require_email, custom_message, assigned_buyer_id, auto_assigned_head, assigned_at,
+           allow_multiple_uploads, require_email, custom_message, assigned_buyer_id, assigned_buyer_ids, auto_assigned_head, assigned_at,
            deliverables_required, deliverables_type)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16::uuid[], $17, $18, $19, $20)
           RETURNING *`,
           [
             requestTitle.trim(),
@@ -386,7 +393,8 @@ class FileRequestController {
             allow_multiple_uploads,
             require_email,
             custom_message || null,
-            assigned_buyer_id || null,
+            primaryBuyerId,
+            buyerIdsArray.length > 0 ? buyerIdsArray : null,
             autoAssignedHead || null,
             (editor_id || finalEditorIds.length > 0) ? new Date() : null,
             deliverables_required || null,
@@ -635,7 +643,7 @@ class FileRequestController {
 
       // Check if user has permission to edit (creator or admin)
       const isCreator = existingRequest.created_by === userId;
-      const isAdmin = userRole === 'admin';
+      const isAdmin = isAdminRole(userRole);
 
       // Check if user has view_all_requests permission
       const userPerms = await query('SELECT view_all_requests FROM users WHERE id = $1', [userId]);
@@ -1014,7 +1022,7 @@ class FileRequestController {
 
       // Check if user is an editor (creative role)
       const isEditor = userRole === 'creative' && !isGlobalReviewer;
-      const isAdminOrBuyer = userRole === 'admin' || userRole === 'buyer';
+      const isAdminOrBuyer = isAdminRole(userRole) || userRole === 'buyer';
 
       let whereClause;
       let params;
@@ -1123,14 +1131,14 @@ class FileRequestController {
         });
       } else {
         // For non-editors: differentiate between admin and buyers/regular users
-        if (userRole === 'admin' || isGlobalReviewer) {
+        if (isAdminRole(userRole) || isGlobalReviewer) {
           // Admins and global reviewers see ALL requests
           whereClause = 'WHERE 1=1';
           params = [];
           logger.info('Admin viewing all file requests', { userId, userRole });
         } else if (userRole === 'buyer') {
           // Buyers see requests they created OR requests assigned to them
-          whereClause = 'WHERE (fr.created_by = $1 OR fr.assigned_buyer_id = $1)';
+          whereClause = 'WHERE (fr.created_by = $1 OR fr.assigned_buyer_id = $1 OR $1 = ANY(fr.assigned_buyer_ids))';
           params = [userId];
           logger.info('Buyer viewing own and assigned file requests', { userId, userRole });
         } else {
@@ -1269,7 +1277,7 @@ class FileRequestController {
         // For non-editors: differentiate between admin and buyers/regular users
         const pvQuery2 = await this.getPlatformVerticalQuery();
 
-        if (userRole === 'admin' || isGlobalReviewer) {
+        if (isAdminRole(userRole) || isGlobalReviewer) {
           // Admins and global reviewers can view any request
           result = await query(
             `SELECT
@@ -1301,7 +1309,7 @@ class FileRequestController {
             LEFT JOIN folders f ON fr.folder_id = f.id
             LEFT JOIN file_request_uploads fru ON fr.id = fru.file_request_id
             LEFT JOIN users u ON fr.created_by = u.id
-            WHERE fr.id = $1 AND (fr.created_by = $2 OR fr.assigned_buyer_id = $2)
+            WHERE fr.id = $1 AND (fr.created_by = $2 OR fr.assigned_buyer_id = $2 OR $2 = ANY(fr.assigned_buyer_ids))
             GROUP BY fr.id, f.id, f.name, u.id, u.name, u.email`,
             [id, userId]
           );
@@ -1361,17 +1369,20 @@ class FileRequestController {
           fru.uploaded_by_name,
           fru.comments,
           fru.editor_id,
-          fru.created_at as upload_created_at
+          fru.created_at as upload_created_at,
+          fru.folder_id as request_folder_id,
+          frf.folder_name as request_folder_name
         FROM file_request_uploads fru
         JOIN media_files mf
           ON (
             (mf.upload_session_id = fru.id)
             OR (fru.file_id IS NOT NULL AND fru.file_id = mf.id)
           )
+        LEFT JOIN file_request_folders frf ON fru.folder_id = frf.id
         WHERE fru.file_request_id = $1
           AND COALESCE(fru.is_deleted, FALSE) = FALSE
           AND mf.is_deleted = FALSE
-        ORDER BY mf.id, fru.created_at DESC`,
+        ORDER BY frf.folder_name NULLS LAST, mf.id, fru.created_at DESC`,
         [id]
       );
 
@@ -1724,8 +1735,9 @@ class FileRequestController {
           tags: ['file-request-upload'],
           description: comments || `Uploaded via file request: ${fileRequest.title}`,
           folder_id: fileRequest.folder_id,
-          assigned_buyer_id: fileRequest.assigned_buyer_id || null, // Assign to buyer if specified
-          is_file_request_upload: true // Hide from media library by default
+          assigned_buyer_id: fileRequest.assigned_buyer_id || null,
+          assigned_buyer_ids: fileRequest.assigned_buyer_ids || null,
+          is_file_request_upload: true
         }
       );
 
@@ -2008,7 +2020,8 @@ class FileRequestController {
           description: comments || `Uploaded via file request: ${fileRequest.title}`,
           folder_id: targetFolderIdForUpload,
           assigned_buyer_id: fileRequest.assigned_buyer_id || null,
-          request_creator_id: fileRequest.creator_id, // ✨ Pass request creator for permissions
+          assigned_buyer_ids: fileRequest.assigned_buyer_ids || null,
+          request_creator_id: fileRequest.creator_id,
           request_id: fileRequest.id,  // ✨ Pass request ID for proper S3 structure
           is_file_request_upload: true, // Hide from media library by default
           upload_session_id: uploadSessionId, // 🆕 Link to upload session
@@ -2070,18 +2083,33 @@ class FileRequestController {
         [userId, fileRequest.id]
       );
 
-      // Per-editor quota progress: increment and complete if quota reached
+      // Per-editor quota + creatives progress: increment on each upload
       try {
         if (editorId) {
           const upd = await query(
             `UPDATE file_request_editors
              SET deliverables_uploaded = COALESCE(deliverables_uploaded, 0) + 1,
+                 creatives_completed = LEAST(
+                   COALESCE(creatives_completed, 0) + 1,
+                   GREATEST(COALESCE(NULLIF(num_creatives_assigned, 0), 999999), COALESCE(creatives_completed, 0) + 1)
+                 ),
+                 status = CASE
+                   WHEN COALESCE(NULLIF(num_creatives_assigned, 0), 999999) <= COALESCE(creatives_completed, 0) + 1 THEN 'completed'
+                   WHEN status IN ('pending', 'accepted') THEN 'in_progress'
+                   ELSE status
+                 END,
+                 started_at = COALESCE(started_at, NOW()),
+                 completed_at = CASE
+                   WHEN COALESCE(NULLIF(num_creatives_assigned, 0), 999999) <= COALESCE(creatives_completed, 0) + 1 THEN COALESCE(completed_at, NOW())
+                   ELSE completed_at
+                 END,
                  updated_at = CURRENT_TIMESTAMP
              WHERE request_id = $1 AND editor_id = $2
-             RETURNING deliverables_quota, deliverables_uploaded`,
+             RETURNING deliverables_quota, deliverables_uploaded, num_creatives_assigned, creatives_completed`,
             [fileRequest.id, editorId]
           );
 
+          // Also check deliverables quota completion
           const quota = upd.rows[0]?.deliverables_quota;
           const uploaded = upd.rows[0]?.deliverables_uploaded;
           if (quota && uploaded >= quota) {
@@ -2092,6 +2120,33 @@ class FileRequestController {
                    deliverables_completed_at = COALESCE(deliverables_completed_at, NOW())
                WHERE request_id = $1 AND editor_id = $2`,
               [fileRequest.id, editorId]
+            );
+          }
+        } else {
+          // Fallback: if uploader is not matched as editor (admin/vertical head uploading),
+          // and there is exactly one editor assigned, credit that editor
+          const singleEditorCheck = await query(
+            `SELECT fre.editor_id FROM file_request_editors fre
+             WHERE fre.request_id = $1 AND fre.status NOT IN ('reassigned', 'removed')`,
+            [fileRequest.id]
+          );
+          if (singleEditorCheck.rowCount === 1) {
+            await query(
+              `UPDATE file_request_editors
+               SET creatives_completed = LEAST(
+                     COALESCE(creatives_completed, 0) + 1,
+                     GREATEST(COALESCE(NULLIF(num_creatives_assigned, 0), 999999), COALESCE(creatives_completed, 0) + 1)
+                   ),
+                   deliverables_uploaded = COALESCE(deliverables_uploaded, 0) + 1,
+                   status = CASE
+                     WHEN COALESCE(NULLIF(num_creatives_assigned, 0), 999999) <= COALESCE(creatives_completed, 0) + 1 THEN 'completed'
+                     WHEN status IN ('pending', 'accepted') THEN 'in_progress'
+                     ELSE status
+                   END,
+                   started_at = COALESCE(started_at, NOW()),
+                   updated_at = CURRENT_TIMESTAMP
+               WHERE request_id = $1 AND editor_id = $2`,
+              [fileRequest.id, singleEditorCheck.rows[0].editor_id]
             );
           }
         }
@@ -2177,15 +2232,17 @@ class FileRequestController {
                 }
               });
 
-              // Notify assigned buyer if different
-              if (fileRequest.assigned_buyer_id && fileRequest.assigned_buyer_id !== fileRequest.creator_id) {
-                await Notification.create({
-                  userId: fileRequest.assigned_buyer_id,
-                  type: 'file_request_fulfilled',
-                  title: 'Request Completed',
-                  message: `All deliverables have been uploaded for "${fileRequest.title}" (${uploadedCount}/${fileRequest.deliverables_required}).`,
-                  referenceType: 'file_request',
-                  referenceId: fileRequest.id,
+              // Notify assigned buyer(s) if different from creator
+              const allBuyerIds = fileRequest.assigned_buyer_ids || (fileRequest.assigned_buyer_id ? [fileRequest.assigned_buyer_id] : []);
+              for (const buyerId of allBuyerIds) {
+                if (buyerId !== fileRequest.creator_id) {
+                  await Notification.create({
+                    userId: buyerId,
+                    type: 'file_request_fulfilled',
+                    title: 'Request Completed',
+                    message: `All deliverables have been uploaded for "${fileRequest.title}" (${uploadedCount}/${fileRequest.deliverables_required}).`,
+                    referenceType: 'file_request',
+                    referenceId: fileRequest.id,
                   metadata: {
                     deliverables_required: fileRequest.deliverables_required,
                     uploaded_count: uploadedCount
@@ -2209,6 +2266,42 @@ class FileRequestController {
         notificationSent: userId !== fileRequest.creator_id,
         hasThumbnail: !!mediaFile.thumbnail_url
       });
+
+      // Slack: Notify vertical head and buyer about new upload
+      try {
+        const slackService = require('../services/slackService');
+        const requestUrl = `${process.env.FRONTEND_URL || 'https://app.example.com'}/file-requests`;
+        const uploaderName = req.user.name || req.user.email;
+
+        // Notify vertical head (auto_assigned_head)
+        if (fileRequest.auto_assigned_head && fileRequest.auto_assigned_head !== userId) {
+          slackService.notifyFileUploaded(
+            fileRequest.auto_assigned_head, uploaderName,
+            fileRequest.title, mediaFile.original_filename, requestUrl
+          ).catch(err => logger.error('Slack upload notify head failed', { error: err.message }));
+        }
+
+        // Notify buyer(s)
+        const buyerIds = fileRequest.assigned_buyer_ids || (fileRequest.assigned_buyer_id ? [fileRequest.assigned_buyer_id] : []);
+        for (const buyerId of buyerIds) {
+          if (buyerId !== userId) {
+            slackService.notifyFileUploaded(
+              buyerId, uploaderName,
+              fileRequest.title, mediaFile.original_filename, requestUrl
+            ).catch(err => logger.error('Slack upload notify buyer failed', { error: err.message }));
+          }
+        }
+
+        // Notify request creator if different
+        if (fileRequest.creator_id !== userId && !buyerIds.includes(fileRequest.creator_id) && fileRequest.auto_assigned_head !== fileRequest.creator_id) {
+          slackService.notifyFileUploaded(
+            fileRequest.creator_id, uploaderName,
+            fileRequest.title, mediaFile.original_filename, requestUrl
+          ).catch(err => logger.error('Slack upload notify creator failed', { error: err.message }));
+        }
+      } catch (slackErr) {
+        logger.error('Slack upload notification error', { error: slackErr.message });
+      }
 
       res.status(201).json({
         success: true,
@@ -2453,6 +2546,40 @@ class FileRequestController {
         timeToComplete
       });
 
+      // Slack: Notify buyer/creator that request is completed
+      try {
+        const slackService = require('../services/slackService');
+        const requestUrl = `${process.env.FRONTEND_URL || 'https://app.example.com'}/file-requests`;
+        const editorName = req.user.name || req.user.email;
+
+        // Notify creator
+        if (fileRequest.created_by && fileRequest.created_by !== userId) {
+          slackService.notifyFileRequestCompleted(
+            fileRequest.created_by,
+            fileRequest.title || fileRequest.request_type,
+            editorName,
+            delivery_note || null,
+            requestUrl
+          ).catch(err => logger.error('Slack complete notify creator failed', { error: err.message }));
+        }
+
+        // Notify buyer(s)
+        const buyerIds = fileRequest.assigned_buyer_ids || (fileRequest.assigned_buyer_id ? [fileRequest.assigned_buyer_id] : []);
+        for (const buyerId of buyerIds) {
+          if (buyerId !== userId && buyerId !== fileRequest.created_by) {
+            slackService.notifyFileRequestCompleted(
+              buyerId,
+              fileRequest.title || fileRequest.request_type,
+              editorName,
+              delivery_note || null,
+              requestUrl
+            ).catch(err => logger.error('Slack complete notify buyer failed', { error: err.message }));
+          }
+        }
+      } catch (slackErr) {
+        logger.error('Slack complete notification error', { error: slackErr.message });
+      }
+
       res.json({
         success: true,
         message: 'File request completed successfully',
@@ -2476,7 +2603,7 @@ class FileRequestController {
       const { new_editor_ids, editor_ids, reason, editor_distribution } = req.body;
       const userId = req.user.id;
 
-      if (req.user.role !== 'admin') {
+      if (!isAdminRole(req.user.role)) {
         return res.status(403).json({ success: false, error: 'Admin only' });
       }
 
@@ -2662,6 +2789,138 @@ class FileRequestController {
       });
     } catch (error) {
       logger.error('Get request folders error', { error: error.message });
+      next(error);
+    }
+  }
+
+  /**
+   * Move files to a sub-folder within a file request
+   * PATCH /api/file-requests/:id/folders/:folderId/files
+   */
+  async moveFilesToFolder(req, res, next) {
+    try {
+      const { id, folderId } = req.params;
+      const { upload_ids } = req.body;
+      const userId = req.user.id;
+
+      if (!upload_ids || !Array.isArray(upload_ids) || upload_ids.length === 0) {
+        return res.status(400).json({
+          success: false,
+          error: 'upload_ids array is required'
+        });
+      }
+
+      // Verify request exists
+      const requestResult = await query(
+        'SELECT * FROM file_requests WHERE id = $1',
+        [id]
+      );
+      if (requestResult.rows.length === 0) {
+        return res.status(404).json({ success: false, error: 'File request not found' });
+      }
+
+      // Resolve folder_id (use null for 'unfiled')
+      const targetFolderId = folderId === 'unfiled' ? null : folderId;
+
+      // If not unfiling, verify the folder belongs to this request
+      if (targetFolderId) {
+        const folderResult = await query(
+          'SELECT id FROM file_request_folders WHERE id = $1 AND request_id = $2',
+          [targetFolderId, id]
+        );
+        if (folderResult.rows.length === 0) {
+          return res.status(404).json({ success: false, error: 'Folder not found for this request' });
+        }
+      }
+
+      // Move uploads to the folder
+      const result = await query(
+        `UPDATE file_request_uploads
+         SET folder_id = $1, updated_at = NOW()
+         WHERE file_request_id = $2 AND id = ANY($3::uuid[])
+         RETURNING id, folder_id`,
+        [targetFolderId, id, upload_ids]
+      );
+
+      logger.info('Files moved to folder', {
+        requestId: id,
+        folderId: targetFolderId,
+        movedCount: result.rows.length,
+        userId
+      });
+
+      res.json({
+        success: true,
+        message: `${result.rows.length} file(s) moved successfully`,
+        data: result.rows
+      });
+    } catch (error) {
+      logger.error('Move files to folder error', { error: error.message });
+      next(error);
+    }
+  }
+
+  /**
+   * Rename a sub-folder within a file request
+   * PATCH /api/file-requests/:id/folders/:folderId
+   */
+  async updateRequestFolder(req, res, next) {
+    try {
+      const { id, folderId } = req.params;
+      const { folder_name, description } = req.body;
+
+      if (!folder_name || folder_name.trim() === '') {
+        return res.status(400).json({ success: false, error: 'folder_name is required' });
+      }
+
+      const result = await query(
+        `UPDATE file_request_folders
+         SET folder_name = $1, description = $2, updated_at = NOW()
+         WHERE id = $3 AND request_id = $4
+         RETURNING *`,
+        [folder_name.trim(), description || null, folderId, id]
+      );
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({ success: false, error: 'Folder not found' });
+      }
+
+      res.json({ success: true, data: result.rows[0] });
+    } catch (error) {
+      logger.error('Update request folder error', { error: error.message });
+      next(error);
+    }
+  }
+
+  /**
+   * Delete a sub-folder (moves all files back to unfiled)
+   * DELETE /api/file-requests/:id/folders/:folderId
+   */
+  async deleteRequestFolder(req, res, next) {
+    try {
+      const { id, folderId } = req.params;
+
+      // Move all files in this folder back to unfiled
+      await query(
+        `UPDATE file_request_uploads
+         SET folder_id = NULL, updated_at = NOW()
+         WHERE file_request_id = $1 AND folder_id = $2`,
+        [id, folderId]
+      );
+
+      // Delete the folder
+      const result = await query(
+        `DELETE FROM file_request_folders WHERE id = $1 AND request_id = $2 RETURNING id`,
+        [folderId, id]
+      );
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({ success: false, error: 'Folder not found' });
+      }
+
+      res.json({ success: true, message: 'Folder deleted successfully' });
+    } catch (error) {
+      logger.error('Delete request folder error', { error: error.message });
       next(error);
     }
   }
@@ -2994,15 +3253,29 @@ class FileRequestController {
         ]
       );
 
-      // Per-editor quota progress (chunked): increment and complete if quota reached
+      // Per-editor quota + creatives progress (chunked): increment on each upload
       try {
         if (editorId) {
           const upd = await query(
             `UPDATE file_request_editors
              SET deliverables_uploaded = COALESCE(deliverables_uploaded, 0) + 1,
+                 creatives_completed = LEAST(
+                   COALESCE(creatives_completed, 0) + 1,
+                   GREATEST(COALESCE(NULLIF(num_creatives_assigned, 0), 999999), COALESCE(creatives_completed, 0) + 1)
+                 ),
+                 status = CASE
+                   WHEN COALESCE(NULLIF(num_creatives_assigned, 0), 999999) <= COALESCE(creatives_completed, 0) + 1 THEN 'completed'
+                   WHEN status IN ('pending', 'accepted') THEN 'in_progress'
+                   ELSE status
+                 END,
+                 started_at = COALESCE(started_at, NOW()),
+                 completed_at = CASE
+                   WHEN COALESCE(NULLIF(num_creatives_assigned, 0), 999999) <= COALESCE(creatives_completed, 0) + 1 THEN COALESCE(completed_at, NOW())
+                   ELSE completed_at
+                 END,
                  updated_at = CURRENT_TIMESTAMP
              WHERE request_id = $1 AND editor_id = $2
-             RETURNING deliverables_quota, deliverables_uploaded`,
+             RETURNING deliverables_quota, deliverables_uploaded, num_creatives_assigned, creatives_completed`,
             [id, editorId]
           );
 
@@ -3016,6 +3289,32 @@ class FileRequestController {
                    deliverables_completed_at = COALESCE(deliverables_completed_at, NOW())
                WHERE request_id = $1 AND editor_id = $2`,
               [id, editorId]
+            );
+          }
+        } else {
+          // Fallback: credit sole assigned editor if uploader isn't matched
+          const singleEditorCheck = await query(
+            `SELECT fre.editor_id FROM file_request_editors fre
+             WHERE fre.request_id = $1 AND fre.status NOT IN ('reassigned', 'removed')`,
+            [id]
+          );
+          if (singleEditorCheck.rowCount === 1) {
+            await query(
+              `UPDATE file_request_editors
+               SET creatives_completed = LEAST(
+                     COALESCE(creatives_completed, 0) + 1,
+                     GREATEST(COALESCE(NULLIF(num_creatives_assigned, 0), 999999), COALESCE(creatives_completed, 0) + 1)
+                   ),
+                   deliverables_uploaded = COALESCE(deliverables_uploaded, 0) + 1,
+                   status = CASE
+                     WHEN COALESCE(NULLIF(num_creatives_assigned, 0), 999999) <= COALESCE(creatives_completed, 0) + 1 THEN 'completed'
+                     WHEN status IN ('pending', 'accepted') THEN 'in_progress'
+                     ELSE status
+                   END,
+                   started_at = COALESCE(started_at, NOW()),
+                   updated_at = CURRENT_TIMESTAMP
+               WHERE request_id = $1 AND editor_id = $2`,
+              [id, singleEditorCheck.rows[0].editor_id]
             );
           }
         }
@@ -3127,7 +3426,7 @@ class FileRequestController {
 
       // Check permission: Only assigned editors (by editor profile) can mark as uploaded
       let isAssignedEditor = false;
-      if (userRole !== 'admin') {
+      if (!isAdminRole(userRole)) {
         const assignedEditorCheck = await query(
           `SELECT 1
            FROM file_request_editors fre
@@ -3140,7 +3439,7 @@ class FileRequestController {
         isAssignedEditor = assignedEditorCheck.rows.length > 0;
       }
 
-      if (!isAssignedEditor && userRole !== 'admin') {
+      if (!isAssignedEditor && !isAdminRole(userRole)) {
         return res.status(403).json({
           success: false,
           error: 'Only assigned editors can mark request as uploaded'
@@ -3233,8 +3532,8 @@ class FileRequestController {
 
       // Check permission: Only creator, assigned buyer, or admin
       const canLaunch = fileRequest.created_by === userId ||
-                        fileRequest.assigned_buyer_id === userId ||
-                        userRole === 'admin';
+                        fileRequest.assigned_buyer_id === userId || (fileRequest.assigned_buyer_ids && fileRequest.assigned_buyer_ids.includes(userId)) ||
+                        isAdminRole(userRole);
 
       if (!canLaunch) {
         return res.status(403).json({
@@ -3316,8 +3615,8 @@ class FileRequestController {
 
       // Check permission
       const canClose = fileRequest.created_by === userId ||
-                       fileRequest.assigned_buyer_id === userId ||
-                       userRole === 'admin';
+                       fileRequest.assigned_buyer_id === userId || (fileRequest.assigned_buyer_ids && fileRequest.assigned_buyer_ids.includes(userId)) ||
+                       isAdminRole(userRole);
 
       if (!canClose) {
         return res.status(403).json({
@@ -3405,8 +3704,8 @@ class FileRequestController {
 
       // Check permission
       const canReopen = fileRequest.created_by === userId ||
-                        fileRequest.assigned_buyer_id === userId ||
-                        userRole === 'admin';
+                        fileRequest.assigned_buyer_id === userId || (fileRequest.assigned_buyer_ids && fileRequest.assigned_buyer_ids.includes(userId)) ||
+                        isAdminRole(userRole);
 
       if (!canReopen) {
         return res.status(403).json({
@@ -3492,7 +3791,7 @@ class FileRequestController {
 
       // Check access (creator, assigned buyer, assigned editor, admin)
       let isAssignedEditor = false;
-      if (req.user.role !== 'admin') {
+      if (!isAdminRole(req.user.role)) {
         const assignedEditorCheck = await query(
           `SELECT 1
            FROM file_request_editors fre
@@ -3505,9 +3804,9 @@ class FileRequestController {
         isAssignedEditor = assignedEditorCheck.rows.length > 0;
       }
 
-      const hasAccess = req.user.role === 'admin' ||
+      const hasAccess = isAdminRole(req.user.role) ||
                        fileRequest.created_by === userId ||
-                       fileRequest.assigned_buyer_id === userId ||
+                       fileRequest.assigned_buyer_id === userId || (fileRequest.assigned_buyer_ids && fileRequest.assigned_buyer_ids.includes(userId)) ||
                        isAssignedEditor;
 
       if (!hasAccess) {
@@ -3559,7 +3858,7 @@ class FileRequestController {
 
       // Access check (creator, assigned buyer, assigned editor, admin)
       let isAssignedEditor = false;
-      if (req.user.role !== 'admin') {
+      if (!isAdminRole(req.user.role)) {
         const assignedEditorCheck = await query(
           `SELECT 1
            FROM file_request_editors fre
@@ -3572,9 +3871,9 @@ class FileRequestController {
         isAssignedEditor = assignedEditorCheck.rows.length > 0;
       }
 
-      const hasAccess = req.user.role === 'admin' ||
+      const hasAccess = isAdminRole(req.user.role) ||
         fileRequest.created_by === userId ||
-        fileRequest.assigned_buyer_id === userId ||
+        fileRequest.assigned_buyer_id === userId || (fileRequest.assigned_buyer_ids && fileRequest.assigned_buyer_ids.includes(userId)) ||
         isAssignedEditor;
 
       if (!hasAccess) {
@@ -3691,7 +3990,7 @@ class FileRequestController {
         isVerticalHead = vhCheck.rows.length > 0;
       } catch (_) { /* vertical_heads table may not exist */ }
 
-      const canReassign = req.user.role === 'admin' || fileRequest.auto_assigned_head === userId || isAssignedEditor || isVerticalHead;
+      const canReassign = isAdminRole(req.user.role) || fileRequest.auto_assigned_head === userId || isAssignedEditor || isVerticalHead;
 
       if (!canReassign) {
         return res.status(403).json({
@@ -3829,6 +4128,25 @@ class FileRequestController {
         }
       }
 
+      // Send Slack notifications to reassigned editors
+      try {
+        const slackService = require('../services/slackService');
+        const requestUrl = `${process.env.FRONTEND_URL || 'https://app.example.com'}/file-requests`;
+        for (const r of resolvedTargets) {
+          if (r.user_id) {
+            slackService.notifyRequestReassigned(
+              r.user_id,
+              fileRequest.title || fileRequest.request_type,
+              req.user.name || req.user.email,
+              note || null,
+              requestUrl
+            ).catch(err => logger.error('Slack reassign notification failed', { error: err.message }));
+          }
+        }
+      } catch (slackErr) {
+        logger.error('Slack notification error on reassign', { error: slackErr.message });
+      }
+
       // Log activity
       await logActivity({
         req,
@@ -3889,7 +4207,7 @@ class FileRequestController {
 
       // Check access (creator, assigned buyer, assigned editor, vertical head, admin)
       let isAssignedEditor = false;
-      if (req.user.role !== 'admin') {
+      if (!isAdminRole(req.user.role)) {
         const assignedEditorCheck = await query(
           `SELECT 1
            FROM file_request_editors fre
@@ -3912,9 +4230,9 @@ class FileRequestController {
         isVerticalHead = vhCheck.rows.length > 0;
       } catch (_) { /* vertical_heads table may not exist */ }
 
-      const hasAccess = req.user.role === 'admin' ||
+      const hasAccess = isAdminRole(req.user.role) ||
                        fileRequest.created_by === userId ||
-                       fileRequest.assigned_buyer_id === userId ||
+                       fileRequest.assigned_buyer_id === userId || (fileRequest.assigned_buyer_ids && fileRequest.assigned_buyer_ids.includes(userId)) ||
                        isAssignedEditor ||
                        isVerticalHead;
 

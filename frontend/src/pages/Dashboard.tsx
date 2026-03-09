@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { mediaApi, analyticsApi, editorApi } from '../lib/api';
 import { formatBytes, formatNumber } from '../lib/utils';
 import { StorageStats, EditorPerformance } from '../types';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth, isAdminRole } from '../contexts/AuthContext';
 import { VerticalDashboard } from '../components/VerticalDashboard';
 
 export function DashboardPage() {
@@ -15,7 +15,7 @@ export function DashboardPage() {
   const [showVerticalDashboard, setShowVerticalDashboard] = useState(false);
 
   // Only admins can see analytics data (ads, spend, editor performance)
-  const canViewAnalytics = user?.role === 'admin';
+  const canViewAnalytics = isAdminRole(user?.role);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -25,7 +25,7 @@ export function DashboardPage() {
         setStats(statsRes.data.data);
 
         // Check if user can see vertical dashboard (admin or vertical head)
-        if (user?.role === 'admin') {
+        if (isAdminRole(user?.role)) {
           setShowVerticalDashboard(true);
         } else {
           // For non-admin users, check if they are a vertical head

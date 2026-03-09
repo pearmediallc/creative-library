@@ -4,7 +4,7 @@ import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { TeamMembersModal } from '../components/TeamMembersModal';
 import { teamApi, adminApi } from '../lib/api';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth, isAdminRole } from '../contexts/AuthContext';
 import { Users, Plus, Trash2, UserPlus, Search, X as XIcon, Shield, User } from 'lucide-react';
 
 interface Team {
@@ -143,7 +143,7 @@ export function TeamsPage() {
                     onClick={() => setMembersModalTeam({
                       id: team.id,
                       name: team.name,
-                      isAdmin: user?.id === team.owner_id || user?.role === 'admin'
+                      isAdmin: user?.id === team.owner_id || isAdminRole(user?.role)
                     })}
                   >
                     <UserPlus size={14} className="mr-1" />

@@ -54,8 +54,9 @@ export function Sidebar() {
   const [pendingCounts, setPendingCounts] = useState({ fileRequests: 0, launchRequests: 0 });
 
   // Build navigation based on user role
+  const isAdminLike = user?.role === 'admin' || user?.role === 'team_lead';
   const navigation = (() => {
-    if (user?.role === 'admin') {
+    if (isAdminLike) {
       return [...baseNavigation, ...adminBuyerNavigation, ...adminOnlyNavigation];
     } else if (user?.role === 'creative') {
       // Editors get base navigation + their specific items (Analytics) but NOT Access Requests

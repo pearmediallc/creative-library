@@ -10,7 +10,7 @@ import { launchRequestApi, editorApi, authApi } from '../lib/api';
 import { formatDateTime, formatDate } from '../lib/utils';
 import { getLaunchRequestStatusBadgeClasses } from '../constants/statusColors';
 import { getVerticalBadgeClasses } from '../constants/statusColors';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth, isAdminRole } from '../contexts/AuthContext';
 import { CanvasEditor } from './CanvasEditor';
 import { CanvasBrief3Step } from './CanvasBrief3Step';
 
@@ -185,7 +185,7 @@ export function LaunchRequestDetailsModal({ request: initialRequest, onClose, on
     loadData();
   }, [initialRequest.id]);
 
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = isAdminRole(user?.role);
   const isCreativeHead = user?.id === request.creative_head_id;
   const isBuyerHead = user?.id === request.buyer_head_id;
   const isStrategist = user?.id === request.created_by || isAdmin;

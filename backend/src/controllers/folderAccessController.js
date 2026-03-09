@@ -6,6 +6,7 @@
 const { query } = require('../config/database');
 const Folder = require('../models/Folder');
 const logger = require('../utils/logger');
+const { isAdminRole } = require('../middleware/auth');
 
 /**
  * Grant access to a folder
@@ -35,7 +36,7 @@ async function grantFolderAccess(req, res) {
 
     // Permission check: must be folder owner or admin
     const isOwner = folder.owner_id === currentUserId;
-    const isAdmin = userRole === 'admin' || userRole === 'super_admin';
+    const isAdmin = isAdminRole(userRole) || userRole === 'super_admin';
 
     if (!isOwner && !isAdmin) {
       return res.status(403).json({
@@ -133,7 +134,7 @@ async function getFolderPermissions(req, res) {
 
     // Permission check: must be folder owner, admin, or have view access
     const isOwner = folder.owner_id === currentUserId;
-    const isAdmin = userRole === 'admin' || userRole === 'super_admin';
+    const isAdmin = isAdminRole(userRole) || userRole === 'super_admin';
     const hasAccess = await Folder.canAccess(currentUserId, folderId, 'view');
 
     if (!isOwner && !isAdmin && !hasAccess) {
@@ -192,7 +193,7 @@ async function revokeFolderAccess(req, res) {
 
     // Permission check: must be folder owner or admin
     const isOwner = folder.owner_id === currentUserId;
-    const isAdmin = userRole === 'admin' || userRole === 'super_admin';
+    const isAdmin = isAdminRole(userRole) || userRole === 'super_admin';
 
     if (!isOwner && !isAdmin) {
       return res.status(403).json({

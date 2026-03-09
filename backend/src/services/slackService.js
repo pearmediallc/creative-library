@@ -806,6 +806,120 @@ async function getActiveWorkspace() {
   return result.rows[0] || null;
 }
 
+/**
+ * Notify vertical head/buyer when a file is uploaded to a request
+ */
+async function notifyFileUploaded(userId, uploaderName, requestTitle, fileName, requestUrl) {
+  try {
+    const notificationType = 'file_uploaded';
+
+    if (!await isUserSlackEnabled(userId, notificationType)) {
+      return { success: false, reason: 'notifications_disabled' };
+    }
+
+    const slackUserId = await getSlackUserId(userId);
+    if (!slackUserId) {
+      return { success: false, reason: 'no_slack_connection' };
+    }
+
+    const message = `New file uploaded to "${requestTitle}" by ${uploaderName}`;
+
+    const blocks = [
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `*New File Uploaded*\n\n*Request:* ${requestTitle}\n*File:* ${fileName}\n*Uploaded by:* ${uploaderName}`
+        }
+      },
+      {
+        type: 'actions',
+        elements: [
+          {
+            type: 'button',
+            text: {
+              type: 'plain_text',
+              text: 'View Request'
+            },
+            url: requestUrl,
+            style: 'primary'
+          }
+        ]
+      }
+    ];
+
+    await sendMessage(slackUserId, message, blocks);
+    await logNotification(notificationType, userId, slackUserId, slackUserId, message, blocks, 'sent');
+
+    return { success: true };
+  } catch (error) {
+    console.error('notifyFileUploaded error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Notify relevant users when a launch request status changes
+ */
+async function notifyLaunchRequestStatusChange(userId, requestTitle, newStatus, changedByName, requestUrl) {
+  try {
+    const notificationType = 'launch_request_status_change';
+
+    if (!await isUserSlackEnabled(userId, notificationType)) {
+      return { success: false, reason: 'notifications_disabled' };
+    }
+
+    const slackUserId = await getSlackUserId(userId);
+    if (!slackUserId) {
+      return { success: false, reason: 'no_slack_connection' };
+    }
+
+    const statusLabels = {
+      launched: 'Launched',
+      rejected: 'Rejected',
+      in_review: 'In Review',
+      approved: 'Approved',
+      completed: 'Completed',
+      closed: 'Closed'
+    };
+
+    const statusLabel = statusLabels[newStatus] || newStatus;
+    const message = `Launch request "${requestTitle}" is now ${statusLabel}`;
+
+    const blocks = [
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `*Launch Request Status Update*\n\n*Request:* ${requestTitle}\n*New Status:* ${statusLabel}\n*Changed by:* ${changedByName}`
+        }
+      },
+      {
+        type: 'actions',
+        elements: [
+          {
+            type: 'button',
+            text: {
+              type: 'plain_text',
+              text: 'View Request'
+            },
+            url: requestUrl,
+            style: 'primary'
+          }
+        ]
+      }
+    ];
+
+    await sendMessage(slackUserId, message, blocks);
+    await logNotification(notificationType, userId, slackUserId, slackUserId, message, blocks, 'sent');
+
+    return { success: true };
+  } catch (error) {
+    console.error('notifyLaunchRequestStatusChange error:', error);
+    return { success: false, error: error.message };
+  }
+}
+
 module.exports = {
   encryptToken,
   decryptToken,
@@ -819,6 +933,8 @@ module.exports = {
   notifyRequestReassigned,
   notifyPublicLinkCreated,
   notifyCommentMention,
+  notifyFileUploaded,
+  notifyLaunchRequestStatusChange,
   storeWorkspaceCredentials,
   storeUserConnection,
   getActiveWorkspace,

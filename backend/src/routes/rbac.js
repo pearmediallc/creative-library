@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const rbacController = require('../controllers/rbacController');
-const { authenticateToken: auth, requireAdmin } = require('../middleware/auth');
+const { authenticateToken: auth, requireStrictAdmin, requireSuperAdmin: requireStrictAdmin } = require('../middleware/auth');
 const { permissions, requireSuperAdmin } = require('../middleware/permissionMiddleware');
 
 // ==================== USER ENDPOINTS (Authenticated users) ====================
@@ -43,14 +43,14 @@ router.post('/permissions/check-multiple', auth, rbacController.checkMultiplePer
  * @desc    Get all users with their permissions
  * @access  Private (Admin only)
  */
-router.get('/users', auth, requireAdmin, rbacController.getAllUsersPermissions);
+router.get('/users', auth, requireStrictAdmin, rbacController.getAllUsersPermissions);
 
 /**
  * @route   GET /api/rbac/users/:userId
  * @desc    Get permissions for specific user
  * @access  Private (Admin only)
  */
-router.get('/users/:userId', auth, requireAdmin, rbacController.getUserPermissions);
+router.get('/users/:userId', auth, requireStrictAdmin, rbacController.getUserPermissions);
 
 /**
  * @route   POST /api/rbac/permissions/grant
@@ -58,7 +58,7 @@ router.get('/users/:userId', auth, requireAdmin, rbacController.getUserPermissio
  * @access  Private (Admin only)
  * @body    { userId, resourceType, action, permission, resourceId?, expiresAt?, reason? }
  */
-router.post('/permissions/grant', auth, requireAdmin, rbacController.grantPermission);
+router.post('/permissions/grant', auth, requireStrictAdmin, rbacController.grantPermission);
 
 /**
  * @route   POST /api/rbac/permissions/revoke
@@ -66,7 +66,7 @@ router.post('/permissions/grant', auth, requireAdmin, rbacController.grantPermis
  * @access  Private (Admin only)
  * @body    { userId, resourceType, action, resourceId? }
  */
-router.post('/permissions/revoke', auth, requireAdmin, rbacController.revokePermission);
+router.post('/permissions/revoke', auth, requireStrictAdmin, rbacController.revokePermission);
 
 /**
  * @route   POST /api/rbac/roles/assign
@@ -74,7 +74,7 @@ router.post('/permissions/revoke', auth, requireAdmin, rbacController.revokePerm
  * @access  Private (Admin only)
  * @body    { userId, roleName, scopeType?, scopeId?, expiresAt? }
  */
-router.post('/roles/assign', auth, requireAdmin, rbacController.assignRole);
+router.post('/roles/assign', auth, requireStrictAdmin, rbacController.assignRole);
 
 /**
  * @route   POST /api/rbac/roles/remove
@@ -82,21 +82,21 @@ router.post('/roles/assign', auth, requireAdmin, rbacController.assignRole);
  * @access  Private (Admin only)
  * @body    { userId, roleName, scopeType?, scopeId? }
  */
-router.post('/roles/remove', auth, requireAdmin, rbacController.removeRole);
+router.post('/roles/remove', auth, requireStrictAdmin, rbacController.removeRole);
 
 /**
  * @route   GET /api/rbac/roles
  * @desc    Get all available roles
  * @access  Private (Admin only)
  */
-router.get('/roles', auth, requireAdmin, rbacController.getRoles);
+router.get('/roles', auth, requireStrictAdmin, rbacController.getRoles);
 
 /**
  * @route   GET /api/rbac/roles/:roleId/permissions
  * @desc    Get default permissions for a role
  * @access  Private (Admin only)
  */
-router.get('/roles/:roleId/permissions', auth, requireAdmin, rbacController.getRolePermissions);
+router.get('/roles/:roleId/permissions', auth, requireStrictAdmin, rbacController.getRolePermissions);
 
 // ==================== FOLDER ADMIN ENDPOINTS ====================
 
@@ -131,7 +131,7 @@ router.get('/folder-admin/:folderId', auth, rbacController.getFolderAdmins);
  * @access  Private (Admin only)
  * @body    { userId, uiElement, isVisible, isEnabled?, customLabel? }
  */
-router.post('/ui-permissions', auth, requireAdmin, rbacController.setUIPermission);
+router.post('/ui-permissions', auth, requireStrictAdmin, rbacController.setUIPermission);
 
 // ==================== AUDIT LOG ENDPOINTS ====================
 
@@ -141,7 +141,7 @@ router.post('/ui-permissions', auth, requireAdmin, rbacController.setUIPermissio
  * @access  Private (Admin only)
  * @query   userId, targetUserId, actionType, startDate, endDate, limit, offset
  */
-router.get('/audit-log', auth, requireAdmin, rbacController.getAuditLog);
+router.get('/audit-log', auth, requireStrictAdmin, rbacController.getAuditLog);
 
 // ==================== MAINTENANCE ENDPOINTS ====================
 

@@ -7,8 +7,9 @@ import { CanvasBrief3Step } from './CanvasBrief3Step';
 import { UploadedFileCard } from './UploadedFileCard';
 import { UploadHistoryTimeline } from './UploadHistoryTimeline';
 import { ReassignFileRequestModal } from './ReassignFileRequestModal';
+import { FileRequestOrganizer } from './FileRequestOrganizer';
 import { VideoPlayer } from './VideoPlayer';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth, isAdminRole } from '../contexts/AuthContext';
 import { getFileRequestStatusColor, getVerticalBadgeClasses } from '../constants/statusColors';
 
 // Canvas Brief type
@@ -49,6 +50,9 @@ interface FileUpload {
   uploaded_by_email?: string;
   uploaded_by_name?: string;
   created_at: string;
+  request_folder_id?: string | null;
+  request_folder_name?: string | null;
+  [key: string]: any;
 }
 
 interface AssignedEditor {
@@ -1082,14 +1086,14 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
 
   // Determine if user can reassign
   const canReassign = user && request && (
-    user.role === 'admin' ||
+    isAdminRole(user.role) ||
     request.auto_assigned_head === user.id
   );
 
   // 3-hour edit lock for buyers - admins can always edit
   const isEditLocked = (() => {
     if (!request || !user) return false;
-    if (user.role === 'admin') return false;
+    if (isAdminRole(user.role)) return false;
     if (user.role !== 'buyer') return true;
     const createdAt = new Date(request.created_at);
     const threeHoursLater = new Date(createdAt.getTime() + 3 * 60 * 60 * 1000);
@@ -1168,7 +1172,7 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
             ) : (
               <>
                 {/* Edit Button - Only for buyers (within 3hrs) and admins */}
-                {(user?.role === 'buyer' || user?.role === 'admin') &&
+                {(user?.role === 'buyer' || isAdminRole(user?.role)) &&
                  request.status !== 'closed' && request.status !== 'launched' && (
                   isEditLocked ? (
                     <span
@@ -1189,7 +1193,7 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
                 )}
 
                 {/* Duplicate Button - Only for buyers and admins */}
-                {(user?.role === 'buyer' || user?.role === 'admin') && (
+                {(user?.role === 'buyer' || isAdminRole(user?.role)) && (
                   <button
                     onClick={() => handleDuplicateRequest()}
                     className="p-2 text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-400 rounded-lg transition-colors"
@@ -1511,7 +1515,7 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
                     Created: {formatDate(canvas.created_at)}
                   </span>
                 )}
-                {canvas && (user?.role === 'buyer' || user?.role === 'admin') && (
+                {canvas && (user?.role === 'buyer' || isAdminRole(user?.role)) && (
                   <Button variant="outline" size="sm" onClick={() => setShow3StepCanvas(true)}>
                     <FileText className="w-4 h-4 mr-1" /> Edit
                   </Button>
@@ -1521,7 +1525,7 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
                     <FileText className="w-4 h-4 mr-1" /> View Full
                   </Button>
                 )}
-                {!canvas && (user?.role === 'buyer' || user?.role === 'admin') && (
+                {!canvas && (user?.role === 'buyer' || isAdminRole(user?.role)) && (
                   <Button variant="outline" size="sm" onClick={() => setShow3StepCanvas(true)}>
                     <FileText className="w-4 h-4 mr-1" /> Create
                   </Button>
@@ -2105,27 +2109,23 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
             </div>
 
             {request.uploads.length > 0 ? (
-              <div className="space-y-2">
-                {request.uploads.map((upload) => (
-                  <div key={upload.id} className="flex items-start gap-2">
-                    <input
-                      type="checkbox"
-                      checked={selectedUploads.has(upload.id)}
-                      onChange={() => toggleSelectUpload(upload.id)}
-                      className="mt-3 w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
-                    />
-                    <div className="flex-1">
-                      <UploadedFileCard
-                        upload={upload}
-                        onDownload={handleDownload}
-                        onAddToLibrary={user?.role !== 'creative' ? handleAddToLibrary : undefined}
-                        onRemoveFromRequest={user?.role === 'creative' ? handleRemoveFromRequest : undefined}
-                        onRename={handleRename}
-                      />
-                    </div>
-                  </div>
+              <FileRequestOrganizer
+                requestId={requestId}
+                uploads={request.uploads}
+                canOrganize={!!(user && (
+                  isAdminRole(user.role) ||
+                  request.auto_assigned_head === user.id ||
+                  (user.role === 'buyer' && request.created_by === user.id)
                 ))}
-              </div>
+                userRole={user?.role}
+                selectedUploads={selectedUploads}
+                onToggleSelect={toggleSelectUpload}
+                onDownload={handleDownload}
+                onAddToLibrary={user?.role !== 'creative' ? handleAddToLibrary : undefined}
+                onRemoveFromRequest={user?.role === 'creative' ? handleRemoveFromRequest : undefined}
+                onRename={handleRename}
+                onRefresh={fetchRequestDetails}
+              />
             ) : (
               <div className="text-center py-8 bg-gray-50 dark:bg-gray-900 rounded-lg">
                 <p className="text-sm text-muted-foreground">No files uploaded yet</p>

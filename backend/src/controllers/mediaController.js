@@ -4,6 +4,7 @@ const { logActivity } = require('../middleware/activityLogger');
 const { v4: uuidv4 } = require('uuid');
 const bulkMetadataService = require('../services/bulkMetadataService');
 const { query, pool } = require('../config/database');
+const { isAdminRole } = require('../middleware/auth');
 
 class MediaController {
   constructor() {
@@ -175,7 +176,7 @@ class MediaController {
 
       // Check permission (owner or admin)
       const isOwner = mediaFile.uploaded_by === req.user.id;
-      const isAdmin = req.user.role === 'admin';
+      const isAdmin = isAdminRole(req.user.role);
 
       // 🆕 Canvas Brief Access: Check if user is assigned to the file request
       let isAssignedCreative = false;
@@ -417,7 +418,7 @@ class MediaController {
 
       // 🔒 SECURITY CHECK: Verify user has permission to download
       const isOwner = file.uploaded_by === userId;
-      const isAdmin = userRole === 'admin' || userRole === 'super_admin';
+      const isAdmin = isAdminRole(userRole) || userRole === 'super_admin';
       const isBuyer = userRole === 'buyer' || file.assigned_buyer_id === userId;
 
       // Check if user has explicit download permission
@@ -549,7 +550,7 @@ class MediaController {
 
       // 🔒 SECURITY CHECK: Same permission check as regular download
       const isOwner = file.uploaded_by === userId;
-      const isAdmin = userRole === 'admin' || userRole === 'super_admin';
+      const isAdmin = isAdminRole(userRole) || userRole === 'super_admin';
       const isBuyer = userRole === 'buyer' || file.assigned_buyer_id === userId;
 
       const FilePermission = require('../models/FilePermission');
@@ -878,7 +879,7 @@ class MediaController {
       }
 
       // Only admins can bulk delete
-      if (userRole !== 'admin') {
+      if (!isAdminRole(userRole)) {
         return res.status(403).json({
           success: false,
           error: 'Only administrators can perform bulk delete'
@@ -898,6 +899,43 @@ class MediaController {
           // Soft delete the file
           await MediaFile.softDelete(fileId, userId);
           results.success.push(fileId);
+
+          // Decrement file_request_editors counters if file request upload
+          try {
+            const file = await query(
+              `SELECT upload_session_id FROM media_files WHERE id = $1`,
+              [fileId]
+            );
+            if (file.rows[0]?.upload_session_id) {
+              const uploadSession = await query(
+                `SELECT file_request_id, editor_id FROM file_request_uploads WHERE id = $1`,
+                [file.rows[0].upload_session_id]
+              );
+              if (uploadSession.rows[0]?.editor_id) {
+                const { file_request_id, editor_id } = uploadSession.rows[0];
+                await query(
+                  `UPDATE file_request_editors
+                   SET deliverables_uploaded = GREATEST(COALESCE(deliverables_uploaded, 0) - 1, 0),
+                       creatives_completed = GREATEST(COALESCE(creatives_completed, 0) - 1, 0),
+                       status = CASE
+                         WHEN GREATEST(COALESCE(creatives_completed, 0) - 1, 0) < COALESCE(NULLIF(num_creatives_assigned, 0), 999999)
+                           AND status = 'completed' THEN 'in_progress'
+                         ELSE status
+                       END,
+                       completed_at = CASE
+                         WHEN GREATEST(COALESCE(creatives_completed, 0) - 1, 0) < COALESCE(NULLIF(num_creatives_assigned, 0), 999999)
+                           THEN NULL
+                         ELSE completed_at
+                       END,
+                       updated_at = CURRENT_TIMESTAMP
+                   WHERE request_id = $1 AND editor_id = $2`,
+                  [file_request_id, editor_id]
+                );
+              }
+            }
+          } catch (counterErr) {
+            logger.error(`Failed to decrement counters for file ${fileId}`, { error: counterErr.message });
+          }
         } catch (error) {
           logger.error(`Failed to delete file ${fileId}`, { error: error.message });
           results.failed.push({ fileId, error: error.message });
@@ -1010,7 +1048,7 @@ class MediaController {
       const User = require('../models/User');
       const user = await User.findById(userId);
 
-      if (file.uploaded_by !== userId && user.role !== 'admin') {
+      if (file.uploaded_by !== userId && !isAdminRole(user.role)) {
         return res.status(403).json({
           success: false,
           error: 'Permission denied'
@@ -1318,11 +1356,11 @@ class MediaController {
         LEFT JOIN users u ON u.id = mf.uploaded_by
         LEFT JOIN editors e ON e.id = mf.editor_id
         WHERE mf.is_deleted = TRUE
-        ${userRole !== 'admin' ? 'AND mf.uploaded_by = $1' : ''}
+        ${!isAdminRole(userRole) ? 'AND mf.uploaded_by = $1' : ''}
         ORDER BY mf.deleted_at DESC
       `;
 
-      const result = userRole !== 'admin'
+      const result = !isAdminRole(userRole)
         ? await MediaFile.raw(sql, [userId])
         : await MediaFile.raw(sql);
 
@@ -1390,7 +1428,7 @@ class MediaController {
       const User = require('../models/User');
       const user = await User.findById(userId);
 
-      if (file.uploaded_by !== userId && user.role !== 'admin') {
+      if (file.uploaded_by !== userId && !isAdminRole(user.role)) {
         return res.status(403).json({
           success: false,
           error: 'Permission denied'
@@ -1462,7 +1500,7 @@ class MediaController {
       const User = require('../models/User');
       const user = await User.findById(userId);
 
-      if (file.uploaded_by !== userId && user.role !== 'admin') {
+      if (file.uploaded_by !== userId && !isAdminRole(user.role)) {
         return res.status(403).json({
           success: false,
           error: 'Permission denied - you can only permanently delete your own files'
@@ -1635,7 +1673,7 @@ class MediaController {
       const User = require('../models/User');
       const user = await User.findById(userId);
 
-      if (file.uploaded_by !== userId && user.role !== 'admin') {
+      if (file.uploaded_by !== userId && !isAdminRole(user.role)) {
         return res.status(403).json({
           success: false,
           error: 'Permission denied'
@@ -2061,7 +2099,7 @@ class MediaController {
       });
 
       // Verify user has permission (request creator or admin/buyer)
-      if (fileData.request_creator !== userId && userRole !== 'admin' && userRole !== 'buyer') {
+      if (fileData.request_creator !== userId && !isAdminRole(userRole) && userRole !== 'buyer') {
         logger.error('❌ Permission denied', {
           userId,
           userRole,

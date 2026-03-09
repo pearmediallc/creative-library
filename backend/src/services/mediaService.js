@@ -4,6 +4,7 @@ const Editor = require('../models/Editor');
 const s3Service = require('./s3Service');
 const metadataService = require('./metadataService');
 const logger = require('../utils/logger');
+const { isAdminRole } = require('../middleware/auth');
 const archiver = require('archiver');
 const https = require('https');
 const http = require('http');
@@ -280,8 +281,12 @@ class MediaService {
           const FilePermission = require('../models/FilePermission');
           const usersToGrant = [];
 
-          // Grant to assigned buyer if specified
-          if (metadata.assigned_buyer_id) {
+          // Grant to assigned buyer(s) if specified
+          if (metadata.assigned_buyer_ids && Array.isArray(metadata.assigned_buyer_ids)) {
+            metadata.assigned_buyer_ids.forEach(id => {
+              if (!usersToGrant.includes(id)) usersToGrant.push(id);
+            });
+          } else if (metadata.assigned_buyer_id) {
             usersToGrant.push(metadata.assigned_buyer_id);
           }
 
@@ -355,7 +360,7 @@ class MediaService {
       // - All other users (editors, creatives, etc.) can only see their own uploads
 
       // For non-admins, apply RBAC filtering
-      if (userRole !== 'admin') {
+      if (!isAdminRole(userRole)) {
         filters.user_id = userId;
         filters.user_role = userRole;
         logger.info('Non-admin user - applying RBAC filters', { userId, userRole });
@@ -455,7 +460,7 @@ class MediaService {
 
       // Check ownership (only uploader or admin can update)
       const user = await User.findById(userId);
-      if (mediaFile.user_id !== userId && user.role !== 'admin') {
+      if (mediaFile.user_id !== userId && !isAdminRole(user.role)) {
         throw new Error('Permission denied');
       }
 
@@ -492,18 +497,48 @@ class MediaService {
 
       // Check ownership (only uploader or admin can delete)
       const user = await User.findById(userId);
-      if (mediaFile.user_id !== userId && user.role !== 'admin') {
+      if (mediaFile.user_id !== userId && !isAdminRole(user.role)) {
         throw new Error('Permission denied');
       }
 
       // Soft delete in database
       await MediaFile.softDelete(mediaFileId, userId);
 
-      // Optional: Delete from S3 (can be done async/batch)
-      // await s3Service.deleteFile(mediaFile.s3_key);
-      // if (mediaFile.thumbnail_s3_key) {
-      //   await s3Service.deleteFile(mediaFile.thumbnail_s3_key);
-      // }
+      // Decrement file_request_editors counters if this was a file request upload
+      try {
+        const { query } = require('../config/database');
+        const uploadSession = await query(
+          `SELECT fru.file_request_id, fru.editor_id
+           FROM file_request_uploads fru
+           WHERE fru.id = $1`,
+          [mediaFile.upload_session_id]
+        );
+
+        if (uploadSession.rows.length > 0 && uploadSession.rows[0].editor_id) {
+          const { file_request_id, editor_id } = uploadSession.rows[0];
+          await query(
+            `UPDATE file_request_editors
+             SET deliverables_uploaded = GREATEST(COALESCE(deliverables_uploaded, 0) - 1, 0),
+                 creatives_completed = GREATEST(COALESCE(creatives_completed, 0) - 1, 0),
+                 status = CASE
+                   WHEN GREATEST(COALESCE(creatives_completed, 0) - 1, 0) < COALESCE(NULLIF(num_creatives_assigned, 0), 999999)
+                     AND status = 'completed' THEN 'in_progress'
+                   ELSE status
+                 END,
+                 completed_at = CASE
+                   WHEN GREATEST(COALESCE(creatives_completed, 0) - 1, 0) < COALESCE(NULLIF(num_creatives_assigned, 0), 999999)
+                     THEN NULL
+                   ELSE completed_at
+                 END,
+                 updated_at = CURRENT_TIMESTAMP
+             WHERE request_id = $1 AND editor_id = $2`,
+            [file_request_id, editor_id]
+          );
+          logger.info('Decremented file request editor counters on file delete', { file_request_id, editor_id, mediaFileId });
+        }
+      } catch (counterError) {
+        logger.error('Failed to decrement file request counters on delete', { error: counterError.message, mediaFileId });
+      }
 
       logger.info('Media file deleted', { mediaFileId, userId });
 

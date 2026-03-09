@@ -86,8 +86,8 @@ function optionalAuth(req, res, next) {
 }
 
 /**
- * Require admin role
- * Convenience middleware for admin-only routes
+ * Require admin or team_lead role
+ * Used for most management functions
  */
 function requireAdmin(req, res, next) {
   if (!req.user) {
@@ -97,7 +97,7 @@ function requireAdmin(req, res, next) {
     });
   }
 
-  if (req.user.role !== 'admin') {
+  if (req.user.role !== 'admin' && req.user.role !== 'team_lead') {
     logger.warn('Admin access denied', {
       userId: req.user.id,
       email: req.user.email,
@@ -112,9 +112,45 @@ function requireAdmin(req, res, next) {
   next();
 }
 
+/**
+ * Require strictly admin role (not team_lead)
+ * Used for: Admin Panel, RBAC Permissions, Activity Logs, Log Exports
+ */
+function requireSuperAdmin(req, res, next) {
+  if (!req.user) {
+    return res.status(401).json({
+      success: false,
+      error: 'Authentication required'
+    });
+  }
+
+  if (req.user.role !== 'admin') {
+    logger.warn('Super admin access denied', {
+      userId: req.user.id,
+      email: req.user.email,
+      role: req.user.role
+    });
+    return res.status(403).json({
+      success: false,
+      error: 'Admin-only access required'
+    });
+  }
+
+  next();
+}
+
+/**
+ * Check if a role has admin-level access (admin or team_lead)
+ */
+function isAdminRole(role) {
+  return role === 'admin' || role === 'team_lead';
+}
+
 module.exports = {
   authenticateToken,
   requireRole,
   requireAdmin,
+  requireSuperAdmin,
+  isAdminRole,
   optionalAuth
 };

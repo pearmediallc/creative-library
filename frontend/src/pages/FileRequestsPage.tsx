@@ -9,7 +9,7 @@ import { Inbox, Plus, Link as LinkIcon, Copy, XCircle, Trash2, CheckCircle, User
 import { CreateFileRequestModal } from '../components/CreateFileRequestModal';
 import { FileRequestDetailsModal } from '../components/FileRequestDetailsModal';
 import { ReassignFileRequestModal } from '../components/ReassignFileRequestModal';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth, isAdminRole } from '../contexts/AuthContext';
 import { VERTICALS } from '../constants/verticals';
 import { PLATFORMS } from '../constants/platforms';
 import { getVerticalBadgeClasses, getStatusBadgeClasses } from '../constants/statusColors';
@@ -620,7 +620,7 @@ export function FileRequestsPage() {
                           >
                             <LinkIcon className="w-4 h-4" />
                           </Button>
-                          {user?.role === 'admin' && (
+                          {isAdminRole(user?.role) && (
                             <Button
                               variant="ghost"
                               size="sm"
@@ -812,7 +812,7 @@ export function FileRequestsPage() {
                         <LinkIcon className="w-3 h-3 mr-1" />
                         Details
                       </Button>
-                      {user?.role === 'admin' && (
+                      {isAdminRole(user?.role) && (
                         <Button
                           variant="outline"
                           size="sm"
@@ -883,7 +883,7 @@ export function FileRequestsPage() {
                   ? 'Create a file request to start collecting files from external parties'
                   : 'Try adjusting your filters to see more results'}
               </p>
-              {requests.length === 0 && (user?.role === 'buyer' || user?.role === 'admin') && (
+              {requests.length === 0 && (user?.role === 'buyer' || isAdminRole(user?.role)) && (
                 <Button onClick={() => setShowCreateModal(true)}>
                   <Plus className="w-4 h-4 mr-2" />
                   Create Your First Request

@@ -75,6 +75,28 @@ function AdminRoute({ children }: { children: React.ReactElement }) {
     return <Navigate to="/login" />;
   }
 
+  if (user.role !== 'admin' && user.role !== 'team_lead') {
+    return <Navigate to="/" />;
+  }
+
+  return children;
+}
+
+function StrictAdminRoute({ children }: { children: React.ReactElement }) {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <p className="text-muted-foreground">Loading...</p>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Navigate to="/login" />;
+  }
+
   if (user.role !== 'admin') {
     return <Navigate to="/" />;
   }
@@ -189,33 +211,33 @@ function AppRoutes() {
       <Route
         path="/admin"
         element={
-          <AdminRoute>
+          <StrictAdminRoute>
             <AdminPage />
-          </AdminRoute>
+          </StrictAdminRoute>
         }
       />
       <Route
         path="/rbac-admin"
         element={
-          <AdminRoute>
+          <StrictAdminRoute>
             <RBACAdminPanel />
-          </AdminRoute>
+          </StrictAdminRoute>
         }
       />
       <Route
         path="/activity-logs"
         element={
-          <AdminRoute>
+          <StrictAdminRoute>
             <ActivityLogsPage />
-          </AdminRoute>
+          </StrictAdminRoute>
         }
       />
       <Route
         path="/activity-log-export"
         element={
-          <AdminRoute>
+          <StrictAdminRoute>
             <ActivityLogExportPage />
-          </AdminRoute>
+          </StrictAdminRoute>
         }
       />
       <Route

@@ -4,7 +4,7 @@ import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { savedSearchApi, editorApi, adminApi, mediaApi } from '../lib/api';
 import { MediaFilters } from '../hooks/useMediaFilters';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth, isAdminRole } from '../contexts/AuthContext';
 
 interface CreateCollectionModalProps {
   isOpen: boolean;
@@ -44,7 +44,7 @@ export function CreateCollectionModal({
   prefilledFilters
 }: CreateCollectionModalProps) {
   const { user } = useAuth();
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = isAdminRole(user?.role);
 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');

@@ -232,6 +232,7 @@ export function CreativeDistributionInput({
 
                 <div className="flex items-center gap-1">
                   <button
+                    type="button"
                     onClick={() => decrement(editorId)}
                     disabled={assigned === 0}
                     className="w-7 h-7 flex items-center justify-center rounded bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
@@ -249,6 +250,7 @@ export function CreativeDistributionInput({
                   />
 
                   <button
+                    type="button"
                     onClick={() => increment(editorId)}
                     disabled={totalAssigned >= totalCreatives}
                     className="w-7 h-7 flex items-center justify-center rounded bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"

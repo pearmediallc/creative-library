@@ -1,5 +1,6 @@
 const MediaFile = require('../models/MediaFile');
 const logger = require('../utils/logger');
+const { isAdminRole } = require('../middleware/auth');
 
 class StarredController {
   /**
@@ -51,7 +52,7 @@ class StarredController {
   async getStarredFiles(req, res, next) {
     try {
       const userId = req.user.id;
-      const isAdmin = req.user.role === 'admin';
+      const isAdmin = isAdminRole(req.user.role);
 
       // Admins can see all starred files, others only their own
       const files = await MediaFile.getStarredFiles(isAdmin ? null : userId);
