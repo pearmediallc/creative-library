@@ -1382,7 +1382,7 @@ class FileRequestController {
         WHERE fru.file_request_id = $1
           AND COALESCE(fru.is_deleted, FALSE) = FALSE
           AND mf.is_deleted = FALSE
-        ORDER BY frf.folder_name NULLS LAST, mf.id, fru.created_at DESC`,
+        ORDER BY mf.id, frf.folder_name NULLS LAST, fru.created_at DESC`,
         [id]
       );
 
@@ -2774,7 +2774,7 @@ class FileRequestController {
         `SELECT
            frf.*,
            u.name as created_by_name,
-           COUNT(fru.id) as file_count
+           COUNT(fru.id) FILTER (WHERE COALESCE(fru.is_deleted, FALSE) = FALSE) as file_count
          FROM file_request_folders frf
          LEFT JOIN users u ON frf.created_by = u.id
          LEFT JOIN file_request_uploads fru ON fru.folder_id = frf.id

@@ -404,7 +404,25 @@ class AnalyticsController {
       const queryParams = isAdminRole(userRole) ? [] : assignedVerticals;
 
       // File Requests analytics by vertical
+      // Use CTEs to pre-aggregate per request, avoiding row multiplication
       const fileRequestsQuery = `
+        WITH fr_editor_stats AS (
+          SELECT
+            fre.request_id,
+            COALESCE(SUM(fre.num_creatives_assigned), 0) as total_assigned,
+            STRING_AGG(DISTINCT e.display_name, ', ') as editors_working
+          FROM file_request_editors fre
+          LEFT JOIN editors e ON e.id = fre.editor_id
+          WHERE fre.status NOT IN ('reassigned', 'removed')
+          GROUP BY fre.request_id
+        ),
+        fr_upload_counts AS (
+          SELECT fru.file_request_id, COUNT(DISTINCT mf.id) as upload_count
+          FROM file_request_uploads fru
+          JOIN media_files mf ON mf.upload_session_id = fru.id
+          WHERE COALESCE(fru.is_deleted, FALSE) = FALSE AND mf.is_deleted = FALSE
+          GROUP BY fru.file_request_id
+        )
         SELECT
           frv.vertical,
           COUNT(DISTINCT fr.id) as total_requests,
@@ -412,13 +430,13 @@ class AnalyticsController {
           COUNT(DISTINCT fr.id) FILTER (WHERE fr.status IN ('open', 'in_progress', 'uploaded')) as pending_requests,
           COUNT(DISTINCT fr.id) FILTER (WHERE fr.status = 'launched') as launched_requests,
           COUNT(DISTINCT fr.id) FILTER (WHERE fr.status = 'closed') as closed_requests,
-          STRING_AGG(DISTINCT e.display_name, ', ') as editors_working,
-          COALESCE(SUM(fre.num_creatives_assigned), 0) as total_creatives,
-          COALESCE(SUM(fre.creatives_completed), 0) as completed_creatives
+          STRING_AGG(DISTINCT fes.editors_working, ', ') as editors_working,
+          COALESCE(SUM(fes.total_assigned), 0) as total_creatives,
+          COALESCE(SUM(fuc.upload_count), 0) as completed_creatives
         FROM file_request_verticals frv
         JOIN file_requests fr ON fr.id = frv.file_request_id
-        LEFT JOIN file_request_editors fre ON fre.request_id = fr.id AND fre.status NOT IN ('reassigned', 'removed')
-        LEFT JOIN editors e ON e.id = fre.editor_id
+        LEFT JOIN fr_editor_stats fes ON fes.request_id = fr.id
+        LEFT JOIN fr_upload_counts fuc ON fuc.file_request_id = fr.id
         WHERE fr.is_active = TRUE
         ${verticalFilter}
         GROUP BY frv.vertical
@@ -428,7 +446,25 @@ class AnalyticsController {
       const fileRequestsResult = await query(fileRequestsQuery, queryParams);
 
       // Launch Requests analytics by vertical
+      // Use CTEs to pre-aggregate per request, avoiding row multiplication
       const launchRequestsQuery = `
+        WITH lr_editor_stats AS (
+          SELECT
+            lre.launch_request_id,
+            COALESCE(SUM(lre.num_creatives_assigned), 0) as total_assigned,
+            STRING_AGG(DISTINCT e.display_name, ', ') as editors_working
+          FROM launch_request_editors lre
+          LEFT JOIN editors e ON e.id = lre.editor_id
+          WHERE lre.status NOT IN ('reassigned', 'removed')
+          GROUP BY lre.launch_request_id
+        ),
+        lr_upload_counts AS (
+          SELECT lru.launch_request_id, COUNT(DISTINCT mf.id) as upload_count
+          FROM launch_request_uploads lru
+          JOIN media_files mf ON mf.upload_session_id = lru.id
+          WHERE mf.is_deleted = FALSE
+          GROUP BY lru.launch_request_id
+        )
         SELECT
           lrv.vertical,
           COUNT(DISTINCT lr.id) as total_requests,
@@ -436,13 +472,13 @@ class AnalyticsController {
           COUNT(DISTINCT lr.id) FILTER (WHERE lr.status IN ('draft', 'pending_review', 'in_production', 'ready_to_launch', 'buyer_assigned')) as pending_requests,
           COUNT(DISTINCT lr.id) FILTER (WHERE lr.status = 'launched') as launched_requests,
           COUNT(DISTINCT lr.id) FILTER (WHERE lr.status = 'closed') as closed_requests,
-          STRING_AGG(DISTINCT e.display_name, ', ') as editors_working,
-          COALESCE(SUM(lre.num_creatives_assigned), 0) as total_creatives,
-          COALESCE(SUM(lre.creatives_completed), 0) as completed_creatives
+          STRING_AGG(DISTINCT les.editors_working, ', ') as editors_working,
+          COALESCE(SUM(les.total_assigned), 0) as total_creatives,
+          COALESCE(SUM(luc.upload_count), 0) as completed_creatives
         FROM launch_request_verticals lrv
         JOIN launch_requests lr ON lr.id = lrv.launch_request_id
-        LEFT JOIN launch_request_editors lre ON lre.launch_request_id = lr.id AND lre.status NOT IN ('reassigned', 'removed')
-        LEFT JOIN editors e ON e.id = lre.editor_id
+        LEFT JOIN lr_editor_stats les ON les.launch_request_id = lr.id
+        LEFT JOIN lr_upload_counts luc ON luc.launch_request_id = lr.id
         WHERE 1=1
         ${verticalFilter.replace('frv.vertical', 'lrv.vertical')}
         GROUP BY lrv.vertical
@@ -595,7 +631,27 @@ class AnalyticsController {
       }
 
       // Get detailed file requests for this vertical
+      // Use CTEs to get accurate upload counts instead of unreliable creatives_completed counter
       const fileRequestsQuery = `
+        WITH fr_editor_agg AS (
+          SELECT
+            fre.request_id,
+            STRING_AGG(DISTINCT e.display_name, ', ' ORDER BY e.display_name) as assigned_editors,
+            COALESCE(SUM(fre.num_creatives_assigned), 0) as total_assigned,
+            MIN(fre.created_at) as first_assignment_at,
+            MAX(fre.accepted_at) as last_accepted_at
+          FROM file_request_editors fre
+          LEFT JOIN editors e ON e.id = fre.editor_id
+          WHERE fre.status NOT IN ('reassigned', 'removed')
+          GROUP BY fre.request_id
+        ),
+        fr_upload_agg AS (
+          SELECT fru.file_request_id, COUNT(DISTINCT mf.id) as upload_count
+          FROM file_request_uploads fru
+          JOIN media_files mf ON mf.upload_session_id = fru.id
+          WHERE COALESCE(fru.is_deleted, FALSE) = FALSE AND mf.is_deleted = FALSE
+          GROUP BY fru.file_request_id
+        )
         SELECT
           fr.id,
           fr.title,
@@ -607,19 +663,19 @@ class AnalyticsController {
           fr.closed_at,
           u_creator.name as creator_name,
           u_buyer.name as buyer_name,
-          STRING_AGG(DISTINCT e.display_name, ', ' ORDER BY e.display_name) as assigned_editors,
-          COALESCE(SUM(fre.num_creatives_assigned), 0) as total_creatives,
-          COALESCE(SUM(fre.creatives_completed), 0) as completed_creatives,
-          MIN(fre.created_at) as first_assignment_at,
-          MAX(fre.accepted_at) as last_accepted_at
+          fea.assigned_editors,
+          COALESCE(fea.total_assigned, 0) as total_creatives,
+          COALESCE(fua.upload_count, 0) as completed_creatives,
+          fea.first_assignment_at,
+          fea.last_accepted_at
         FROM file_request_verticals frv
         JOIN file_requests fr ON fr.id = frv.file_request_id
         LEFT JOIN users u_creator ON u_creator.id = fr.created_by
         LEFT JOIN users u_buyer ON u_buyer.id = fr.assigned_buyer_id
-        LEFT JOIN file_request_editors fre ON fre.request_id = fr.id AND fre.status IN ('pending', 'accepted', 'in_progress')
-        LEFT JOIN editors e ON e.id = fre.editor_id
+        LEFT JOIN fr_editor_agg fea ON fea.request_id = fr.id
+        LEFT JOIN fr_upload_agg fua ON fua.file_request_id = fr.id
         WHERE frv.vertical = $1 AND fr.is_active = TRUE
-        GROUP BY fr.id, u_creator.name, u_buyer.name
+        GROUP BY fr.id, u_creator.name, u_buyer.name, fea.assigned_editors, fea.total_assigned, fua.upload_count, fea.first_assignment_at, fea.last_accepted_at
         ORDER BY fr.created_at DESC
       `;
 
@@ -627,6 +683,24 @@ class AnalyticsController {
 
       // Get detailed launch requests for this vertical
       const launchRequestsQuery = `
+        WITH lr_editor_agg AS (
+          SELECT
+            lre.launch_request_id,
+            STRING_AGG(DISTINCT e.display_name, ', ' ORDER BY e.display_name) as assigned_editors,
+            COALESCE(SUM(lre.num_creatives_assigned), 0) as total_assigned,
+            MIN(lre.assigned_at) as first_assignment_at
+          FROM launch_request_editors lre
+          LEFT JOIN editors e ON e.id = lre.editor_id
+          WHERE lre.status NOT IN ('reassigned', 'removed')
+          GROUP BY lre.launch_request_id
+        ),
+        lr_upload_agg AS (
+          SELECT lru.launch_request_id, COUNT(DISTINCT mf.id) as upload_count
+          FROM launch_request_uploads lru
+          JOIN media_files mf ON mf.upload_session_id = lru.id
+          WHERE mf.is_deleted = FALSE
+          GROUP BY lru.launch_request_id
+        )
         SELECT
           lr.id,
           lr.title,
@@ -638,18 +712,18 @@ class AnalyticsController {
           lr.closed_at,
           u_creator.name as creator_name,
           u_buyer_head.name as buyer_name,
-          STRING_AGG(DISTINCT e.display_name, ', ' ORDER BY e.display_name) as assigned_editors,
-          COALESCE(SUM(lre.num_creatives_assigned), 0) as total_creatives,
-          COALESCE(SUM(lre.creatives_completed), 0) as completed_creatives,
-          MIN(lre.assigned_at) as first_assignment_at
+          lea.assigned_editors,
+          COALESCE(lea.total_assigned, 0) as total_creatives,
+          COALESCE(lua.upload_count, 0) as completed_creatives,
+          lea.first_assignment_at
         FROM launch_request_verticals lrv
         JOIN launch_requests lr ON lr.id = lrv.launch_request_id
         LEFT JOIN users u_creator ON u_creator.id = lr.created_by
         LEFT JOIN users u_buyer_head ON u_buyer_head.id = lr.buyer_head_id
-        LEFT JOIN launch_request_editors lre ON lre.launch_request_id = lr.id AND lre.status NOT IN ('reassigned', 'removed')
-        LEFT JOIN editors e ON e.id = lre.editor_id
+        LEFT JOIN lr_editor_agg lea ON lea.launch_request_id = lr.id
+        LEFT JOIN lr_upload_agg lua ON lua.launch_request_id = lr.id
         WHERE lrv.vertical = $1
-        GROUP BY lr.id, u_creator.name, u_buyer_head.name
+        GROUP BY lr.id, u_creator.name, u_buyer_head.name, lea.assigned_editors, lea.total_assigned, lua.upload_count, lea.first_assignment_at
         ORDER BY lr.created_at DESC
       `;
 
