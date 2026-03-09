@@ -1354,35 +1354,39 @@ class FileRequestController {
       // Media files are linked via media_files.upload_session_id.
       // NOTE: We also support legacy rows that used fru.file_id directly.
       const uploadsResult = await query(
-        `SELECT DISTINCT ON (mf.id)
-          mf.id as id,
-          mf.id as file_id,
-          mf.original_filename,
-          mf.file_type,
-          mf.file_size,
-          mf.thumbnail_url,
-          mf.s3_url,
-          mf.created_at,
-          fru.id as upload_session_id,
-          fru.uploaded_by,
-          fru.uploaded_by_email,
-          fru.uploaded_by_name,
-          fru.comments,
-          fru.editor_id,
-          fru.created_at as upload_created_at,
-          fru.folder_id as request_folder_id,
-          frf.folder_name as request_folder_name
-        FROM file_request_uploads fru
-        JOIN media_files mf
-          ON (
-            (mf.upload_session_id = fru.id)
-            OR (fru.file_id IS NOT NULL AND fru.file_id = mf.id)
-          )
-        LEFT JOIN file_request_folders frf ON fru.folder_id = frf.id
-        WHERE fru.file_request_id = $1
-          AND COALESCE(fru.is_deleted, FALSE) = FALSE
-          AND mf.is_deleted = FALSE
-        ORDER BY mf.id, frf.folder_name NULLS LAST, fru.created_at DESC`,
+        `SELECT * FROM (
+          SELECT DISTINCT ON (mf.id)
+            mf.id as id,
+            mf.id as file_id,
+            mf.original_filename,
+            mf.file_type,
+            mf.file_size,
+            mf.thumbnail_url,
+            mf.s3_url,
+            mf.created_at,
+            fru.id as upload_session_id,
+            fru.uploaded_by,
+            fru.uploaded_by_email,
+            fru.uploaded_by_name,
+            fru.comments,
+            fru.editor_id,
+            fru.created_at as upload_created_at,
+            fru.folder_id as request_folder_id,
+            frf.folder_name as request_folder_name,
+            COALESCE(fru.sort_order, 999999) as sort_order
+          FROM file_request_uploads fru
+          JOIN media_files mf
+            ON (
+              (mf.upload_session_id = fru.id)
+              OR (fru.file_id IS NOT NULL AND fru.file_id = mf.id)
+            )
+          LEFT JOIN file_request_folders frf ON fru.folder_id = frf.id
+          WHERE fru.file_request_id = $1
+            AND COALESCE(fru.is_deleted, FALSE) = FALSE
+            AND mf.is_deleted = FALSE
+          ORDER BY mf.id, fru.created_at DESC
+        ) sub
+        ORDER BY request_folder_name NULLS LAST, sort_order, created_at DESC`,
         [id]
       );
 
@@ -2866,6 +2870,48 @@ class FileRequestController {
       });
     } catch (error) {
       logger.error('Move files to folder error', { error: error.message });
+      next(error);
+    }
+  }
+
+  /**
+   * Reorder files within a file request
+   * PATCH /api/file-requests/:id/reorder
+   * Body: { ordered_upload_session_ids: string[] }
+   */
+  async reorderFiles(req, res, next) {
+    try {
+      const { id } = req.params;
+      const { ordered_upload_session_ids } = req.body;
+
+      if (!ordered_upload_session_ids || !Array.isArray(ordered_upload_session_ids)) {
+        return res.status(400).json({ success: false, error: 'ordered_upload_session_ids array is required' });
+      }
+
+      // Verify request exists
+      const requestResult = await query('SELECT * FROM file_requests WHERE id = $1', [id]);
+      if (requestResult.rows.length === 0) {
+        return res.status(404).json({ success: false, error: 'File request not found' });
+      }
+
+      // Check permission: only admin or vertical head
+      const fileRequest = requestResult.rows[0];
+      const userId = req.user.id;
+      if (!isAdminRole(req.user.role) && fileRequest.auto_assigned_head !== userId) {
+        return res.status(403).json({ success: false, error: 'Not authorized to reorder files' });
+      }
+
+      // Update sort_order for each upload session
+      for (let i = 0; i < ordered_upload_session_ids.length; i++) {
+        await query(
+          `UPDATE file_request_uploads SET sort_order = $1 WHERE id = $2 AND file_request_id = $3`,
+          [i, ordered_upload_session_ids[i], id]
+        );
+      }
+
+      res.json({ success: true, message: 'Files reordered successfully' });
+    } catch (error) {
+      logger.error('Reorder files error', { error: error.message });
       next(error);
     }
   }

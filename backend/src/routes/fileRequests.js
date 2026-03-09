@@ -87,6 +87,12 @@ router.patch('/:id/folders/:folderId/files',
   fileRequestController.moveFilesToFolder.bind(fileRequestController)
 );
 
+// Reorder files within a folder (or unfiled)
+router.patch('/:id/reorder',
+  authenticateToken,
+  fileRequestController.reorderFiles.bind(fileRequestController)
+);
+
 // Rename a sub-folder
 router.patch('/:id/folders/:folderId',
   authenticateToken,

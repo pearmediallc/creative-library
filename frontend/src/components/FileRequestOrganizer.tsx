@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { FolderPlus, ChevronDown, ChevronRight, Trash2, Edit3, Check, X, GripVertical } from 'lucide-react';
 import { Button } from './ui/Button';
 import { UploadedFileCard } from './UploadedFileCard';
@@ -10,6 +10,7 @@ interface Upload {
   original_filename: string;
   request_folder_id?: string | null;
   request_folder_name?: string | null;
+  sort_order?: number;
   [key: string]: any;
 }
 
@@ -54,12 +55,14 @@ export function FileRequestOrganizer({
   const [editFolderName, setEditFolderName] = useState('');
   const [dragOverFolder, setDragOverFolder] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [reorderingFolder, setReorderingFolder] = useState<string | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const dragItemRef = useRef<{ uploadSessionId: string; sourceFolderId: string; index: number } | null>(null);
 
   const fetchFolders = useCallback(async () => {
     try {
       const response = await fileRequestApi.getFolders(requestId);
       setFolders(response.data.data || []);
-      // Auto-expand all folders
       const ids = new Set(['unfiled', ...(response.data.data || []).map((f: Folder) => f.id)]);
       setExpandedFolders(ids);
     } catch (error) {
@@ -71,7 +74,7 @@ export function FileRequestOrganizer({
     fetchFolders();
   }, [fetchFolders]);
 
-  // Group uploads by folder
+  // Group uploads by folder, preserving sort order
   const groupedUploads = React.useMemo(() => {
     const groups: Record<string, Upload[]> = { unfiled: [] };
     folders.forEach(f => { groups[f.id] = []; });
@@ -130,31 +133,47 @@ export function FileRequestOrganizer({
     }
   };
 
-  const handleDragStart = (e: React.DragEvent, upload: Upload) => {
+  // --- Drag handlers for both reordering and folder moves ---
+  const handleDragStart = (e: React.DragEvent, upload: Upload, folderId: string, index: number) => {
+    dragItemRef.current = {
+      uploadSessionId: upload.upload_session_id || '',
+      sourceFolderId: folderId,
+      index,
+    };
     e.dataTransfer.setData('text/plain', JSON.stringify({
       uploadSessionId: upload.upload_session_id,
       uploadId: upload.id,
+      sourceFolderId: folderId,
     }));
     e.dataTransfer.effectAllowed = 'move';
   };
 
-  const handleDragOver = (e: React.DragEvent, folderId: string) => {
+  const handleFolderDragOver = (e: React.DragEvent, folderId: string) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
-    setDragOverFolder(folderId);
+    // Only highlight folder if dragging from a different folder
+    if (dragItemRef.current && dragItemRef.current.sourceFolderId !== folderId) {
+      setDragOverFolder(folderId);
+    }
   };
 
-  const handleDragLeave = () => {
+  const handleFolderDragLeave = () => {
     setDragOverFolder(null);
   };
 
-  const handleDrop = async (e: React.DragEvent, targetFolderId: string) => {
+  const handleFolderDrop = async (e: React.DragEvent, targetFolderId: string) => {
     e.preventDefault();
+    e.stopPropagation();
     setDragOverFolder(null);
+    setDragOverIndex(null);
 
     try {
       const data = JSON.parse(e.dataTransfer.getData('text/plain'));
       const uploadSessionId = data.uploadSessionId;
+      const sourceFolderId = data.sourceFolderId;
+
+      // If dropping on the same folder, ignore (reorder is handled by item drop)
+      if (sourceFolderId === targetFolderId) return;
 
       if (targetFolderId === 'unfiled') {
         await fileRequestApi.unfileFiles(requestId, [uploadSessionId]);
@@ -167,12 +186,66 @@ export function FileRequestOrganizer({
     }
   };
 
-  const renderUploadCard = (upload: Upload) => (
+  // --- Reorder within a folder ---
+  const handleItemDragOver = (e: React.DragEvent, folderId: string, index: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (dragItemRef.current && dragItemRef.current.sourceFolderId === folderId) {
+      setDragOverIndex(index);
+      setReorderingFolder(folderId);
+    }
+  };
+
+  const handleItemDrop = async (e: React.DragEvent, folderId: string, dropIndex: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOverIndex(null);
+    setReorderingFolder(null);
+
+    if (!dragItemRef.current || dragItemRef.current.sourceFolderId !== folderId) return;
+
+    const folderUploads = groupedUploads[folderId] || [];
+    const fromIndex = dragItemRef.current.index;
+    if (fromIndex === dropIndex) return;
+
+    // Reorder locally
+    const reordered = [...folderUploads];
+    const [moved] = reordered.splice(fromIndex, 1);
+    reordered.splice(dropIndex, 0, moved);
+
+    // Save new order
+    const orderedIds = reordered
+      .map(u => u.upload_session_id)
+      .filter((id): id is string => !!id);
+
+    try {
+      await fileRequestApi.reorderFiles(requestId, orderedIds);
+      onRefresh();
+    } catch (error) {
+      console.error('Failed to reorder files:', error);
+    }
+  };
+
+  const handleDragEnd = () => {
+    dragItemRef.current = null;
+    setDragOverIndex(null);
+    setReorderingFolder(null);
+    setDragOverFolder(null);
+  };
+
+  const renderUploadCard = (upload: Upload, folderId: string, index: number) => (
     <div
       key={upload.id}
-      className="flex items-start gap-2"
+      className={`flex items-start gap-2 transition-all ${
+        reorderingFolder === folderId && dragOverIndex === index
+          ? 'border-t-2 border-blue-400 pt-1'
+          : ''
+      }`}
       draggable={canOrganize}
-      onDragStart={(e) => handleDragStart(e, upload)}
+      onDragStart={(e) => handleDragStart(e, upload, folderId, index)}
+      onDragEnd={handleDragEnd}
+      onDragOver={(e) => canOrganize ? handleItemDragOver(e, folderId, index) : undefined}
+      onDrop={(e) => canOrganize ? handleItemDrop(e, folderId, index) : undefined}
     >
       {canOrganize && (
         <GripVertical className="w-4 h-4 mt-3 text-gray-400 cursor-grab flex-shrink-0" />
@@ -207,9 +280,9 @@ export function FileRequestOrganizer({
             ? 'border-blue-400 bg-blue-50 dark:bg-blue-900/20'
             : 'border-gray-200 dark:border-gray-700'
         }`}
-        onDragOver={(e) => canOrganize ? handleDragOver(e, folderId) : undefined}
-        onDragLeave={canOrganize ? handleDragLeave : undefined}
-        onDrop={(e) => canOrganize ? handleDrop(e, folderId) : undefined}
+        onDragOver={(e) => canOrganize ? handleFolderDragOver(e, folderId) : undefined}
+        onDragLeave={canOrganize ? handleFolderDragLeave : undefined}
+        onDrop={(e) => canOrganize ? handleFolderDrop(e, folderId) : undefined}
       >
         <div
           className="flex items-center justify-between px-3 py-2 bg-gray-50 dark:bg-gray-800 cursor-pointer"
@@ -277,7 +350,7 @@ export function FileRequestOrganizer({
         {isExpanded && (
           <div className="p-3 space-y-2">
             {folderUploads.length > 0 ? (
-              folderUploads.map(renderUploadCard)
+              folderUploads.map((upload, index) => renderUploadCard(upload, folderId, index))
             ) : (
               <p className="text-xs text-gray-500 dark:text-gray-400 text-center py-2 italic">
                 {canOrganize ? 'Drag files here to organize' : 'No files in this folder'}
@@ -293,14 +366,13 @@ export function FileRequestOrganizer({
   if (folders.length === 0 && !canOrganize) {
     return (
       <div className="space-y-2">
-        {uploads.map(renderUploadCard)}
+        {uploads.map((u, i) => renderUploadCard(u, 'unfiled', i))}
       </div>
     );
   }
 
   return (
     <div className="space-y-3">
-      {/* Create folder button */}
       {canOrganize && (
         <div className="flex items-center gap-2">
           {showNewFolder ? (
@@ -339,12 +411,10 @@ export function FileRequestOrganizer({
         </div>
       )}
 
-      {/* Folder sections */}
       {folders.map(folder =>
         renderFolderSection(folder.id, folder.folder_name, groupedUploads[folder.id] || [])
       )}
 
-      {/* Unfiled section */}
       {renderFolderSection('unfiled', 'Unfiled', groupedUploads['unfiled'] || [], true)}
     </div>
   );

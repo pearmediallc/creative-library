@@ -2114,8 +2114,7 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
                 uploads={request.uploads}
                 canOrganize={!!(user && (
                   isAdminRole(user.role) ||
-                  request.auto_assigned_head === user.id ||
-                  (user.role === 'buyer' && request.created_by === user.id)
+                  request.auto_assigned_head === user.id
                 ))}
                 userRole={user?.role}
                 selectedUploads={selectedUploads}

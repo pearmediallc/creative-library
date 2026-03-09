@@ -618,6 +618,10 @@ export const fileRequestApi = {
   unfileFiles: (requestId: string, uploadIds: string[]) =>
     api.patch(`/file-requests/${requestId}/folders/unfiled/files`, { upload_ids: uploadIds }),
 
+  // Reorder files within a request
+  reorderFiles: (requestId: string, orderedUploadSessionIds: string[]) =>
+    api.patch(`/file-requests/${requestId}/reorder`, { ordered_upload_session_ids: orderedUploadSessionIds }),
+
   // Rename a sub-folder
   updateFolder: (requestId: string, folderId: string, data: { folder_name: string; description?: string }) =>
     api.patch(`/file-requests/${requestId}/folders/${folderId}`, data),
