@@ -2252,6 +2252,7 @@ class FileRequestController {
             }
           }
         }
+        }
       } catch (e) {
         logger.warn('Deliverables progress update failed (non-fatal)', { requestId: fileRequest.id, error: e.message });
       }
