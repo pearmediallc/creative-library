@@ -2489,9 +2489,33 @@ class FileRequestController {
 
       const folder = result.rows[0];
 
+      // Also create a corresponding media library subfolder for the buyer
+      const fileRequest = requestResult.rows[0];
+      if (fileRequest.folder_id) {
+        try {
+          const libFolderResult = await query(
+            `INSERT INTO folders (name, owner_id, parent_folder_id, description, is_auto_created, folder_type)
+             VALUES ($1, $2, $3, $4, TRUE, 'file_request')
+             ON CONFLICT DO NOTHING
+             RETURNING id`,
+            [folder_name.trim(), userId, fileRequest.folder_id, `Request subfolder: ${folder_name.trim()}`]
+          );
+          if (libFolderResult.rows.length > 0) {
+            await query(
+              `UPDATE file_request_folders SET library_folder_id = $1 WHERE id = $2`,
+              [libFolderResult.rows[0].id, folder.id]
+            );
+            folder.library_folder_id = libFolderResult.rows[0].id;
+          }
+        } catch (libErr) {
+          logger.warn('Failed to create linked media library folder (non-fatal)', { error: libErr.message });
+        }
+      }
+
       logger.info('File request folder created', {
         folderId: folder.id,
         requestId: id,
+        libraryFolderId: folder.library_folder_id || null,
         userId
       });
 
@@ -2856,9 +2880,37 @@ class FileRequestController {
         [targetFolderId, id, upload_ids]
       );
 
+      // Also sync media_files.folder_id to the linked media library folder
+      const fileRequest = requestResult.rows[0];
+      let libraryFolderId = fileRequest.folder_id; // default: request's root folder
+      if (targetFolderId) {
+        try {
+          const linkResult = await query(
+            'SELECT library_folder_id FROM file_request_folders WHERE id = $1',
+            [targetFolderId]
+          );
+          if (linkResult.rows[0]?.library_folder_id) {
+            libraryFolderId = linkResult.rows[0].library_folder_id;
+          }
+        } catch (_) { /* column may not exist yet */ }
+      }
+      // Update media_files for each moved upload session
+      if (libraryFolderId) {
+        try {
+          await query(
+            `UPDATE media_files SET folder_id = $1
+             WHERE upload_session_id = ANY($2::uuid[]) AND is_deleted = FALSE`,
+            [libraryFolderId, upload_ids]
+          );
+        } catch (syncErr) {
+          logger.warn('Media library folder sync failed (non-fatal)', { error: syncErr.message });
+        }
+      }
+
       logger.info('Files moved to folder', {
         requestId: id,
         folderId: targetFolderId,
+        libraryFolderId,
         movedCount: result.rows.length,
         userId
       });
@@ -3675,15 +3727,26 @@ class FileRequestController {
 
       const fileRequest = requestResult.rows[0];
 
-      // Check permission
+      // Check permission - allow creator, assigned buyers, admin, and vertical heads
+      let isVerticalHead = false;
+      try {
+        const vhCheck = await query(
+          `SELECT 1 FROM vertical_heads WHERE head_editor_id = $1 LIMIT 1`,
+          [userId]
+        );
+        isVerticalHead = vhCheck.rows.length > 0;
+      } catch (_) { /* vertical_heads table may not exist */ }
+
       const canClose = fileRequest.created_by === userId ||
                        fileRequest.assigned_buyer_id === userId || (fileRequest.assigned_buyer_ids && fileRequest.assigned_buyer_ids.includes(userId)) ||
+                       fileRequest.auto_assigned_head === userId ||
+                       isVerticalHead ||
                        isAdminRole(userRole);
 
       if (!canClose) {
         return res.status(403).json({
           success: false,
-          error: 'Only request creator or assigned buyer can close'
+          error: 'Only request creator, assigned buyer, or vertical head can close'
         });
       }
 

@@ -180,7 +180,7 @@ class AuthService {
     const result = await query(
       `SELECT id, name, email
        FROM users
-       WHERE is_active = TRUE AND role = 'buyer'
+       WHERE is_active = TRUE AND role IN ('buyer', 'admin', 'team_lead')
        ORDER BY name ASC`
     );
     return result.rows || result;

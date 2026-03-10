@@ -25,6 +25,7 @@ interface FileRequestOrganizerProps {
   uploads: Upload[];
   canOrganize: boolean;
   userRole?: string;
+  viewMode?: 'list' | 'grid' | 'tile';
   selectedUploads: Set<string>;
   onToggleSelect: (id: string) => void;
   onDownload: (upload: any) => any;
@@ -39,6 +40,7 @@ export function FileRequestOrganizer({
   uploads,
   canOrganize,
   userRole,
+  viewMode = 'list',
   selectedUploads,
   onToggleSelect,
   onDownload,
@@ -231,40 +233,104 @@ export function FileRequestOrganizer({
     setDragOverFolder(null);
   };
 
-  const renderUploadCard = (upload: Upload, folderId: string, index: number) => (
-    <div
-      key={upload.id}
-      className={`flex items-start gap-2 transition-all ${
-        reorderingFolder === folderId && dragOverIndex === index
-          ? 'border-t-2 border-blue-400 pt-1'
-          : ''
-      }`}
-      draggable={canOrganize}
-      onDragStart={(e) => handleDragStart(e, upload, folderId, index)}
-      onDragEnd={handleDragEnd}
-      onDragOver={(e) => canOrganize ? handleItemDragOver(e, folderId, index) : undefined}
-      onDrop={(e) => canOrganize ? handleItemDrop(e, folderId, index) : undefined}
-    >
-      {canOrganize && (
-        <GripVertical className="w-4 h-4 mt-3 text-gray-400 cursor-grab flex-shrink-0" />
-      )}
-      <input
-        type="checkbox"
-        checked={selectedUploads.has(upload.id)}
-        onChange={() => onToggleSelect(upload.id)}
-        className="mt-3 w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
-      />
-      <div className="flex-1">
-        <UploadedFileCard
-          upload={upload as any}
-          onDownload={onDownload}
-          onAddToLibrary={onAddToLibrary}
-          onRemoveFromRequest={onRemoveFromRequest}
-          onRename={onRename}
+  const isVideoFile = (upload: Upload) =>
+    upload.file_type?.startsWith('video/') || upload.original_filename?.match(/\.(mp4|mov|avi|webm|mkv)$/i);
+
+  const formatSize = (bytes: number) => {
+    if (!bytes) return '';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return `${Math.round(bytes / Math.pow(k, i) * 100) / 100} ${sizes[i]}`;
+  };
+
+  const renderUploadCard = (upload: Upload, folderId: string, index: number) => {
+    const dropIndicator = reorderingFolder === folderId && dragOverIndex === index
+      ? 'border-t-2 border-blue-400 pt-1' : '';
+
+    const dragProps = {
+      draggable: canOrganize,
+      onDragStart: (e: React.DragEvent<HTMLDivElement>) => handleDragStart(e, upload, folderId, index),
+      onDragEnd: handleDragEnd,
+      onDragOver: (e: React.DragEvent<HTMLDivElement>) => { if (canOrganize) handleItemDragOver(e, folderId, index); },
+      onDrop: (e: React.DragEvent<HTMLDivElement>) => { if (canOrganize) handleItemDrop(e, folderId, index); },
+    };
+
+    // Grid view: cards with thumbnail
+    if (viewMode === 'grid') {
+      return (
+        <div key={upload.id} className={`relative group bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden hover:shadow-md transition-all ${dropIndicator}`} {...dragProps}>
+          <div className="absolute top-2 left-2 z-10">
+            <input type="checkbox" checked={selectedUploads.has(upload.id)} onChange={() => onToggleSelect(upload.id)}
+              className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer" />
+          </div>
+          <div className="aspect-video bg-gray-200 dark:bg-gray-800 flex items-center justify-center cursor-pointer" onClick={() => onDownload(upload)}>
+            {upload.thumbnail_url ? (
+              <img src={upload.thumbnail_url} alt={upload.original_filename} className="w-full h-full object-cover" />
+            ) : isVideoFile(upload) ? (
+              <div className="text-gray-500"><svg className="w-10 h-10" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></div>
+            ) : (
+              <span className="text-xs font-medium text-gray-500 dark:text-gray-400">{upload.file_type?.split('/')[1]?.toUpperCase() || 'FILE'}</span>
+            )}
+          </div>
+          <div className="p-2">
+            <p className="text-xs font-medium text-gray-900 dark:text-white truncate">{upload.original_filename}</p>
+            <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-0.5">{formatSize(upload.file_size)}</p>
+          </div>
+        </div>
+      );
+    }
+
+    // Tile view: compact small tiles
+    if (viewMode === 'tile') {
+      return (
+        <div key={upload.id} className={`relative group bg-gray-50 dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-700 overflow-hidden hover:shadow transition-all ${dropIndicator}`} {...dragProps}>
+          <div className="absolute top-1 left-1 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+            <input type="checkbox" checked={selectedUploads.has(upload.id)} onChange={() => onToggleSelect(upload.id)}
+              className="w-3.5 h-3.5 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer" />
+          </div>
+          <div className="aspect-square bg-gray-200 dark:bg-gray-800 flex items-center justify-center cursor-pointer" onClick={() => onDownload(upload)}>
+            {upload.thumbnail_url ? (
+              <img src={upload.thumbnail_url} alt={upload.original_filename} className="w-full h-full object-cover" />
+            ) : isVideoFile(upload) ? (
+              <div className="text-gray-500"><svg className="w-8 h-8" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></div>
+            ) : (
+              <span className="text-[10px] font-bold text-gray-400">{upload.file_type?.split('/')[1]?.toUpperCase() || 'FILE'}</span>
+            )}
+          </div>
+          <p className="px-1.5 py-1 text-[10px] text-gray-700 dark:text-gray-300 truncate">{upload.original_filename}</p>
+        </div>
+      );
+    }
+
+    // List view (default)
+    return (
+      <div
+        key={upload.id}
+        className={`flex items-start gap-2 transition-all ${dropIndicator}`}
+        {...dragProps}
+      >
+        {canOrganize && (
+          <GripVertical className="w-4 h-4 mt-3 text-gray-400 cursor-grab flex-shrink-0" />
+        )}
+        <input
+          type="checkbox"
+          checked={selectedUploads.has(upload.id)}
+          onChange={() => onToggleSelect(upload.id)}
+          className="mt-3 w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
         />
+        <div className="flex-1">
+          <UploadedFileCard
+            upload={upload as any}
+            onDownload={onDownload}
+            onAddToLibrary={onAddToLibrary}
+            onRemoveFromRequest={onRemoveFromRequest}
+            onRename={onRename}
+          />
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   const renderFolderSection = (folderId: string, folderName: string, folderUploads: Upload[], isUnfiled = false) => {
     const isExpanded = expandedFolders.has(folderId);
@@ -346,11 +412,15 @@ export function FileRequestOrganizer({
         </div>
 
         {isExpanded && (
-          <div className="p-3 space-y-2">
+          <div className={`p-3 ${
+            viewMode === 'grid' ? 'grid grid-cols-2 gap-2'
+            : viewMode === 'tile' ? 'grid grid-cols-3 sm:grid-cols-4 gap-1.5'
+            : 'space-y-2'
+          }`}>
             {folderUploads.length > 0 ? (
               folderUploads.map((upload, index) => renderUploadCard(upload, folderId, index))
             ) : (
-              <p className="text-xs text-gray-500 dark:text-gray-400 text-center py-2 italic">
+              <p className={`text-xs text-gray-500 dark:text-gray-400 text-center py-2 italic ${viewMode !== 'list' ? 'col-span-full' : ''}`}>
                 {canOrganize ? 'Drag files here to organize' : 'No files in this folder'}
               </p>
             )}
@@ -363,7 +433,11 @@ export function FileRequestOrganizer({
   // If no folders exist, render flat list (backward compat)
   if (folders.length === 0 && !canOrganize) {
     return (
-      <div className="space-y-2">
+      <div className={
+        viewMode === 'grid' ? 'grid grid-cols-2 gap-2'
+        : viewMode === 'tile' ? 'grid grid-cols-3 sm:grid-cols-4 gap-1.5'
+        : 'space-y-2'
+      }>
         {uploads.map((u, i) => renderUploadCard(u, 'unfiled', i))}
       </div>
     );

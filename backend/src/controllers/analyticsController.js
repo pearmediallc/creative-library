@@ -594,9 +594,51 @@ class AnalyticsController {
           : 0
       })).sort((a, b) => b.combined_total - a.combined_total);
 
+      // Deduplicated summary totals (avoids double-counting multi-vertical requests)
+      const summaryQuery = `
+        WITH fr_totals AS (
+          SELECT
+            COUNT(DISTINCT fr.id) as total_requests,
+            COALESCE(SUM(DISTINCT fes.total_assigned), 0) as total_creatives
+          FROM file_requests fr
+          LEFT JOIN (
+            SELECT request_id, COALESCE(SUM(num_creatives_assigned), 0) as total_assigned
+            FROM file_request_editors WHERE status NOT IN ('reassigned', 'removed')
+            GROUP BY request_id
+          ) fes ON fes.request_id = fr.id
+          ${isAdminRole(userRole)
+            ? 'WHERE fr.is_active = TRUE'
+            : `JOIN file_request_verticals frv ON frv.file_request_id = fr.id
+               WHERE fr.is_active = TRUE ${verticalFilter.replace('frv.vertical', 'frv.vertical')}`}
+        ),
+        fr_uploads AS (
+          SELECT COUNT(DISTINCT mf.id) as completed
+          FROM file_request_uploads fru
+          JOIN media_files mf ON mf.upload_session_id = fru.id
+          JOIN file_requests fr ON fr.id = fru.file_request_id
+          ${isAdminRole(userRole)
+            ? ''
+            : `JOIN file_request_verticals frv ON frv.file_request_id = fr.id`}
+          WHERE COALESCE(fru.is_deleted, FALSE) = FALSE AND mf.is_deleted = FALSE
+            AND fr.is_active = TRUE
+            ${verticalFilter}
+        )
+        SELECT
+          (SELECT total_requests FROM fr_totals) as total_requests,
+          (SELECT total_creatives FROM fr_totals) as total_creatives,
+          (SELECT completed FROM fr_uploads) as completed_creatives
+      `;
+      const summaryResult = await query(summaryQuery, queryParams);
+      const summary = summaryResult.rows[0] || {};
+
       res.json({
         success: true,
-        data: verticals
+        data: verticals,
+        summary: {
+          total_requests: parseInt(summary.total_requests || 0, 10),
+          total_creatives: parseInt(summary.total_creatives || 0, 10),
+          completed_creatives: parseInt(summary.completed_creatives || 0, 10)
+        }
       });
 
     } catch (error) {

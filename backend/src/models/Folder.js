@@ -681,7 +681,7 @@ class Folder extends BaseModel {
       const today = new Date();
       const dateStr = today.toISOString().split('T')[0]; // YYYY-MM-DD
       const sanitizedName = userName.trim().replace(/\s+/g, '-');
-      const datedFolderName = `${sanitizedName}-${dateStr}`;
+      const datedFolderName = `${dateStr}-${sanitizedName}`;
 
       // Check if dated folder already exists
       const existingDated = await query(

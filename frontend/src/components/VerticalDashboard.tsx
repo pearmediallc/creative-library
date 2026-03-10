@@ -66,6 +66,7 @@ export function VerticalDashboard() {
   const [expandedVertical, setExpandedVertical] = useState<string | null>(null);
   const [detailedData, setDetailedData] = useState<VerticalDetails | null>(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
+  const [summary, setSummary] = useState<{ total_requests: number; total_creatives: number; completed_creatives: number }>({ total_requests: 0, total_creatives: 0, completed_creatives: 0 });
 
   useEffect(() => {
     fetchVerticalStats();
@@ -76,6 +77,9 @@ export function VerticalDashboard() {
       setLoading(true);
       const response = await analyticsApi.getVerticalDashboard();
       setStats(response.data.data || []);
+      if (response.data.summary) {
+        setSummary(response.data.summary);
+      }
     } catch (err: any) {
       console.error('Failed to fetch vertical stats:', err);
       setError(err.response?.data?.error || 'Failed to load vertical analytics');
@@ -253,7 +257,7 @@ export function VerticalDashboard() {
             <div>
               <p className="text-sm text-muted-foreground">Creatives Done</p>
               <p className="text-2xl font-bold text-foreground">
-                {stats.reduce((sum, v) => sum + v.combined_completed, 0)} / {stats.reduce((sum, v) => sum + v.combined_creatives, 0)}
+                {summary.completed_creatives} / {summary.total_creatives}
               </p>
             </div>
           </div>

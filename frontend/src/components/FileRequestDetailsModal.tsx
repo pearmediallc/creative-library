@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { X, Copy, Calendar, Folder, Mail, CheckCircle, Clock, FileText, Upload as UploadIcon, Rocket, XCircle, RotateCcw, UserPlus, Edit2, ChevronDown, ChevronRight, Download, Eye, Play } from 'lucide-react';
+import { X, Copy, Calendar, Folder, Mail, CheckCircle, Clock, FileText, Upload as UploadIcon, Rocket, XCircle, RotateCcw, UserPlus, Edit2, ChevronDown, ChevronRight, Download, Eye, Play, List, Grid3X3, LayoutGrid } from 'lucide-react';
 import { Button } from './ui/Button';
 import { fileRequestApi, mediaApi } from '../lib/api';
-import { formatDate } from '../lib/utils';
+import { formatDate, linkifyText } from '../lib/utils';
 import { CanvasBrief3Step } from './CanvasBrief3Step';
 import { UploadedFileCard } from './UploadedFileCard';
 import { UploadHistoryTimeline } from './UploadHistoryTimeline';
@@ -311,6 +311,8 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
 
   // Reassignment state
   const [showReassignModal, setShowReassignModal] = useState(false);
+  const [showUploadHistory, setShowUploadHistory] = useState(false);
+  const [uploadViewMode, setUploadViewMode] = useState<'list' | 'grid' | 'tile'>('list');
   const [reassignments, setReassignments] = useState<any[]>([]);
   const [expandedReassignments, setExpandedReassignments] = useState<Set<string>>(new Set());
 
@@ -1542,13 +1544,13 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
                     {content.headline && (
                       <div className="mb-3">
                         <h4 className="text-xs font-semibold text-blue-700 dark:text-blue-300 mb-1">HEADLINE</h4>
-                        <p className="text-sm text-blue-900 dark:text-blue-100">{content.headline}</p>
+                        <p className="text-sm text-blue-900 dark:text-blue-100">{linkifyText(content.headline)}</p>
                       </div>
                     )}
                     {content.script && (
                       <div className="mb-3">
                         <h4 className="text-xs font-semibold text-blue-700 dark:text-blue-300 mb-1">SCRIPT</h4>
-                        <p className="text-sm text-blue-900 dark:text-blue-100 whitespace-pre-wrap">{content.script}</p>
+                        <p className="text-sm text-blue-900 dark:text-blue-100 whitespace-pre-wrap">{linkifyText(content.script)}</p>
                       </div>
                     )}
                     {/* Combined reference samples + attachments as rich file cards */}
@@ -1649,7 +1651,7 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
                     placeholder="Enter request description..."
                   />
                 ) : (
-                  <p className="text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap">{request.description}</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap">{linkifyText(request.description || '')}</p>
                 )}
               </div>
             )}
@@ -1659,7 +1661,7 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
                 <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Custom Message
                 </h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap">{request.custom_message}</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap">{linkifyText(request.custom_message)}</p>
               </div>
             )}
 
@@ -1668,66 +1670,58 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
                 <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Assigned Creatives ({request.num_creatives_requested || request.assigned_editors.length})
                 </h3>
-                <div className="space-y-2">
-                  {request.assigned_editors.map((editor) => (
-                    <div key={editor.id} className="flex items-center justify-between text-sm bg-white dark:bg-gray-800 rounded p-2 border border-gray-200 dark:border-gray-700">
-                      <div className="flex-1">
-                        <span className="font-medium text-gray-900 dark:text-white">
-                          {editor.display_name || editor.name}
-                        </span>
-                        {/* Creative Distribution Display with Progress Bar */}
-                        {editor.num_creatives_assigned !== undefined && editor.num_creatives_assigned > 0 && (
-                          <div className="mt-2 space-y-1">
-                            <div className="flex items-center justify-between text-xs">
-                              <span className="text-gray-600 dark:text-gray-400">
-                                Progress: <span className="font-medium text-blue-600 dark:text-blue-400">{editor.creatives_completed || 0}/{editor.num_creatives_assigned}</span> creatives
-                              </span>
-                              <span className="font-medium text-gray-700 dark:text-gray-300">
-                                {Math.round(((editor.creatives_completed || 0) / editor.num_creatives_assigned) * 100)}%
-                              </span>
-                            </div>
-                            {/* Progress Bar */}
-                            <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                              <div
-                                className={`h-2 rounded-full transition-all ${
-                                  editor.creatives_completed === editor.num_creatives_assigned
-                                    ? 'bg-green-600'
-                                    : editor.creatives_completed && editor.creatives_completed > 0
-                                    ? 'bg-yellow-500'
-                                    : 'bg-gray-400'
-                                }`}
-                                style={{ width: `${Math.round(((editor.creatives_completed || 0) / editor.num_creatives_assigned) * 100)}%` }}
-                              />
-                            </div>
-                            <div className="text-xs text-gray-500 dark:text-gray-400">
-                              {editor.creatives_completed === editor.num_creatives_assigned ? (
-                                <span className="text-green-600 dark:text-green-400 font-medium">✓ Completed</span>
-                              ) : editor.creatives_completed && editor.creatives_completed > 0 ? (
-                                <span className="text-yellow-600 dark:text-yellow-400">In Progress</span>
-                              ) : (
-                                <span>Not Started</span>
-                              )}
-                            </div>
+                <div className="space-y-1.5">
+                  {request.assigned_editors.map((editor) => {
+                    const completed = editor.creatives_completed || 0;
+                    const total = editor.num_creatives_assigned || 0;
+                    const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
+                    const status = total === 0 ? 'none' : completed >= total ? 'completed' : completed > 0 ? 'progress' : 'pending';
+                    const strokeColor = status === 'completed' ? '#16a34a' : status === 'progress' ? '#d97706' : '#9ca3af';
+                    const radius = 12;
+                    const circumference = 2 * Math.PI * radius;
+                    const dashOffset = circumference - (pct / 100) * circumference;
+
+                    return (
+                      <div key={editor.id} className="flex items-center gap-3 text-sm bg-white dark:bg-gray-800 rounded px-3 py-2 border border-gray-200 dark:border-gray-700">
+                        {/* Mini pie/donut chart */}
+                        {total > 0 ? (
+                          <svg width="32" height="32" viewBox="0 0 32 32" className="flex-shrink-0">
+                            <circle cx="16" cy="16" r={radius} fill="none" stroke="#e5e7eb" strokeWidth="4" />
+                            <circle cx="16" cy="16" r={radius} fill="none" stroke={strokeColor} strokeWidth="4"
+                              strokeDasharray={circumference} strokeDashoffset={dashOffset}
+                              strokeLinecap="round" transform="rotate(-90 16 16)" className="transition-all" />
+                            <text x="16" y="16" textAnchor="middle" dominantBaseline="central"
+                              className="fill-gray-700 dark:fill-gray-300" fontSize="8" fontWeight="600">
+                              {pct}%
+                            </text>
+                          </svg>
+                        ) : (
+                          <div className="w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center flex-shrink-0">
+                            <span className="text-[8px] text-gray-400">--</span>
                           </div>
                         )}
-                        {/* Per-Editor Notes */}
-                        {editor.reassignment_notes && (
-                          <div className="mt-2 text-xs">
-                            <span className="font-medium text-gray-700 dark:text-gray-300">Notes: </span>
-                            <span className="text-gray-600 dark:text-gray-400 italic whitespace-pre-wrap">
-                              {editor.reassignment_notes}
+                        {/* Name + count */}
+                        <div className="flex-1 min-w-0">
+                          <span className="font-medium text-gray-900 dark:text-white truncate block">
+                            {editor.display_name || editor.name}
+                          </span>
+                          {total > 0 && (
+                            <span className={`text-xs ${status === 'completed' ? 'text-green-600 dark:text-green-400' : status === 'progress' ? 'text-yellow-600 dark:text-yellow-400' : 'text-gray-500'}`}>
+                              {completed}/{total} creatives
                             </span>
-                          </div>
-                        )}
+                          )}
+                        </div>
+                        {/* Status badge */}
+                        <span className={`text-xs px-2 py-0.5 rounded-full flex-shrink-0 ${
+                          status === 'completed' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                          : status === 'progress' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
+                          : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400'
+                        }`}>
+                          {status === 'completed' ? 'Done' : status === 'progress' ? 'In Progress' : 'Pending'}
+                        </span>
                       </div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400 text-right">
-                        {formatDate(editor.assigned_at)}
-                        {editor.assigned_by_name && (
-                          <div className="mt-0.5">by {editor.assigned_by_name}</div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -2063,9 +2057,24 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
           {/* Uploaded Files */}
           <div>
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                Uploaded Files ({request.uploads.length})
-              </h3>
+              <div className="flex items-center gap-3">
+                <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Uploaded Files ({request.uploads.length})
+                </h3>
+                {/* View Mode Toggle */}
+                <div className="flex items-center border border-gray-200 dark:border-gray-600 rounded-md overflow-hidden">
+                  {([['list', List, 'List'], ['grid', Grid3X3, 'Grid'], ['tile', LayoutGrid, 'Tiles']] as const).map(([mode, Icon, label]) => (
+                    <button
+                      key={mode}
+                      onClick={() => setUploadViewMode(mode)}
+                      title={label}
+                      className={`p-1.5 transition-colors ${uploadViewMode === mode ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/40 dark:text-blue-400' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}`}
+                    >
+                      <Icon className="w-3.5 h-3.5" />
+                    </button>
+                  ))}
+                </div>
+              </div>
 
               {request.uploads.length > 0 && (
                 <div className="flex items-center gap-2">
@@ -2117,6 +2126,7 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
                   request.auto_assigned_head === user.id
                 ))}
                 userRole={user?.role}
+                viewMode={uploadViewMode}
                 selectedUploads={selectedUploads}
                 onToggleSelect={toggleSelectUpload}
                 onDownload={handleDownload}
@@ -2132,14 +2142,26 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
             )}
           </div>
 
-          {/* Upload History Timeline */}
-          <div>
-            <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-              Upload History
-            </h3>
-            <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4">
-              <UploadHistoryTimeline requestId={requestId} />
-            </div>
+          {/* Upload History - Single Accordion */}
+          <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+            <button
+              onClick={() => setShowUploadHistory(!showUploadHistory)}
+              className="w-full flex items-center justify-between px-4 py-2.5 bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors"
+            >
+              <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                Upload History
+              </h3>
+              {showUploadHistory ? (
+                <ChevronDown className="w-4 h-4 text-gray-500" />
+              ) : (
+                <ChevronRight className="w-4 h-4 text-gray-500" />
+              )}
+            </button>
+            {showUploadHistory && (
+              <div className="p-3 bg-white dark:bg-gray-900">
+                <UploadHistoryTimeline requestId={requestId} />
+              </div>
+            )}
           </div>
 
           {/* Edit History Timeline */}
