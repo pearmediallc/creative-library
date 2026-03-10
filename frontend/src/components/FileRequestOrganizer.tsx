@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { FolderPlus, ChevronDown, ChevronRight, Trash2, Edit3, Check, X, GripVertical } from 'lucide-react';
+import { FolderPlus, ChevronDown, ChevronRight, Trash2, Edit3, Check, X, GripVertical, Play } from 'lucide-react';
 import { Button } from './ui/Button';
 import { UploadedFileCard } from './UploadedFileCard';
+import { VideoPlayer } from './VideoPlayer';
 import { fileRequestApi } from '../lib/api';
+import { formatBytes, formatDate } from '../lib/utils';
 
 interface Upload {
   id: string;
@@ -27,7 +29,7 @@ interface FileRequestOrganizerProps {
   userRole?: string;
   viewMode?: 'list' | 'grid' | 'tile';
   selectedUploads: Set<string>;
-  onToggleSelect: (id: string) => void;
+  onToggleSelect: (id: string, shiftKey?: boolean) => void;
   onDownload: (upload: any) => any;
   onAddToLibrary?: (upload: any) => any;
   onRemoveFromRequest?: (upload: any) => any;
@@ -59,6 +61,7 @@ export function FileRequestOrganizer({
   const [creating, setCreating] = useState(false);
   const [reorderingFolder, setReorderingFolder] = useState<string | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const [previewUpload, setPreviewUpload] = useState<Upload | null>(null);
   const dragItemRef = useRef<{ uploadSessionId: string; sourceFolderId: string; index: number } | null>(null);
 
   const fetchFolders = useCallback(async () => {
@@ -137,6 +140,12 @@ export function FileRequestOrganizer({
 
   // --- Drag handlers for both reordering and folder moves ---
   const handleDragStart = (e: React.DragEvent, upload: Upload, folderId: string, index: number) => {
+    // If this upload is part of a multi-selection, drag all selected uploads
+    const isMultiDrag = selectedUploads.has(upload.id) && selectedUploads.size > 1;
+    const draggedIds = isMultiDrag
+      ? uploads.filter(u => selectedUploads.has(u.id)).map(u => u.upload_session_id).filter(Boolean) as string[]
+      : [upload.upload_session_id || ''];
+
     dragItemRef.current = {
       uploadSessionId: upload.upload_session_id || '',
       sourceFolderId: folderId,
@@ -146,8 +155,19 @@ export function FileRequestOrganizer({
       uploadSessionId: upload.upload_session_id,
       uploadId: upload.id,
       sourceFolderId: folderId,
+      multiIds: draggedIds,
     }));
     e.dataTransfer.effectAllowed = 'move';
+
+    // Visual feedback: show drag count
+    if (isMultiDrag) {
+      const badge = document.createElement('div');
+      badge.textContent = `${selectedUploads.size} files`;
+      badge.style.cssText = 'position:absolute;top:-9999px;padding:4px 8px;background:#3b82f6;color:white;border-radius:4px;font-size:12px;';
+      document.body.appendChild(badge);
+      e.dataTransfer.setDragImage(badge, 0, 0);
+      setTimeout(() => document.body.removeChild(badge), 0);
+    }
   };
 
   const handleFolderDragOver = (e: React.DragEvent, folderId: string) => {
@@ -171,20 +191,24 @@ export function FileRequestOrganizer({
 
     try {
       const data = JSON.parse(e.dataTransfer.getData('text/plain'));
-      const uploadSessionId = data.uploadSessionId;
       const sourceFolderId = data.sourceFolderId;
 
       // If dropping on the same folder, ignore (reorder is handled by item drop)
       if (sourceFolderId === targetFolderId) return;
 
+      // Use multiIds if available (multi-select drag), otherwise single file
+      const sessionIds: string[] = data.multiIds && data.multiIds.length > 0
+        ? data.multiIds
+        : [data.uploadSessionId];
+
       if (targetFolderId === 'unfiled') {
-        await fileRequestApi.unfileFiles(requestId, [uploadSessionId]);
+        await fileRequestApi.unfileFiles(requestId, sessionIds);
       } else {
-        await fileRequestApi.moveFilesToFolder(requestId, targetFolderId, [uploadSessionId]);
+        await fileRequestApi.moveFilesToFolder(requestId, targetFolderId, sessionIds);
       }
       onRefresh();
     } catch (error) {
-      console.error('Failed to move file:', error);
+      console.error('Failed to move files:', error);
     }
   };
 
@@ -247,6 +271,8 @@ export function FileRequestOrganizer({
   const renderUploadCard = (upload: Upload, folderId: string, index: number) => {
     const dropIndicator = reorderingFolder === folderId && dragOverIndex === index
       ? 'border-t-2 border-blue-400 pt-1' : '';
+    const isSelected = selectedUploads.has(upload.id);
+    const selectedClass = isSelected ? 'ring-2 ring-blue-400 bg-blue-50 dark:bg-blue-900/20' : '';
 
     const dragProps = {
       draggable: canOrganize,
@@ -259,12 +285,12 @@ export function FileRequestOrganizer({
     // Grid view: cards with thumbnail
     if (viewMode === 'grid') {
       return (
-        <div key={upload.id} className={`relative group bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden hover:shadow-md transition-all ${dropIndicator}`} {...dragProps}>
+        <div key={upload.id} className={`relative group bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden hover:shadow-md transition-all ${dropIndicator} ${selectedClass}`} {...dragProps}>
           <div className="absolute top-2 left-2 z-10">
-            <input type="checkbox" checked={selectedUploads.has(upload.id)} onChange={() => onToggleSelect(upload.id)}
+            <input type="checkbox" checked={selectedUploads.has(upload.id)} onChange={(e) => onToggleSelect(upload.id, e.nativeEvent instanceof MouseEvent ? (e.nativeEvent as MouseEvent).shiftKey : false)}
               className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer" />
           </div>
-          <div className="aspect-video bg-gray-200 dark:bg-gray-800 flex items-center justify-center cursor-pointer" onClick={() => onDownload(upload)}>
+          <div className="aspect-video bg-gray-200 dark:bg-gray-800 flex items-center justify-center cursor-pointer" onClick={() => setPreviewUpload(upload)}>
             {upload.thumbnail_url ? (
               <img src={upload.thumbnail_url} alt={upload.original_filename} className="w-full h-full object-cover" />
             ) : isVideoFile(upload) ? (
@@ -284,12 +310,12 @@ export function FileRequestOrganizer({
     // Tile view: compact small tiles
     if (viewMode === 'tile') {
       return (
-        <div key={upload.id} className={`relative group bg-gray-50 dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-700 overflow-hidden hover:shadow transition-all ${dropIndicator}`} {...dragProps}>
+        <div key={upload.id} className={`relative group bg-gray-50 dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-700 overflow-hidden hover:shadow transition-all ${dropIndicator} ${selectedClass}`} {...dragProps}>
           <div className="absolute top-1 left-1 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
-            <input type="checkbox" checked={selectedUploads.has(upload.id)} onChange={() => onToggleSelect(upload.id)}
+            <input type="checkbox" checked={selectedUploads.has(upload.id)} onChange={(e) => onToggleSelect(upload.id, e.nativeEvent instanceof MouseEvent ? (e.nativeEvent as MouseEvent).shiftKey : false)}
               className="w-3.5 h-3.5 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer" />
           </div>
-          <div className="aspect-square bg-gray-200 dark:bg-gray-800 flex items-center justify-center cursor-pointer" onClick={() => onDownload(upload)}>
+          <div className="aspect-square bg-gray-200 dark:bg-gray-800 flex items-center justify-center cursor-pointer" onClick={() => setPreviewUpload(upload)}>
             {upload.thumbnail_url ? (
               <img src={upload.thumbnail_url} alt={upload.original_filename} className="w-full h-full object-cover" />
             ) : isVideoFile(upload) ? (
@@ -307,7 +333,7 @@ export function FileRequestOrganizer({
     return (
       <div
         key={upload.id}
-        className={`flex items-start gap-2 transition-all ${dropIndicator}`}
+        className={`flex items-start gap-2 transition-all ${dropIndicator} ${isSelected ? 'bg-blue-50 dark:bg-blue-900/20 rounded' : ''}`}
         {...dragProps}
       >
         {canOrganize && (
@@ -316,7 +342,7 @@ export function FileRequestOrganizer({
         <input
           type="checkbox"
           checked={selectedUploads.has(upload.id)}
-          onChange={() => onToggleSelect(upload.id)}
+          onChange={(e) => onToggleSelect(upload.id, e.nativeEvent instanceof MouseEvent ? (e.nativeEvent as MouseEvent).shiftKey : false)}
           className="mt-3 w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
         />
         <div className="flex-1">
@@ -430,64 +456,112 @@ export function FileRequestOrganizer({
     );
   };
 
+  const isImageFile = (upload: Upload) =>
+    upload.file_type?.startsWith('image/') || upload.original_filename?.match(/\.(jpg|jpeg|png|gif|webp)$/i);
+
+  const previewModal = previewUpload ? (
+    <div
+      className="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-[100]"
+      onClick={() => setPreviewUpload(null)}
+    >
+      <div className="relative w-full h-full flex items-center justify-center p-8" onClick={(e) => e.stopPropagation()}>
+        <button
+          onClick={() => setPreviewUpload(null)}
+          className="absolute top-4 right-4 text-white hover:text-gray-300 z-20 bg-black/50 rounded-full p-2"
+        >
+          <X className="w-6 h-6" />
+        </button>
+        {isVideoFile(previewUpload) ? (
+          <div className="w-full h-full max-w-[90vw] max-h-[80vh] flex items-center justify-center">
+            <VideoPlayer
+              src={previewUpload.cloudfront_url || previewUpload.s3_url}
+              poster={previewUpload.thumbnail_url}
+              autoPlay={true}
+              className="w-full h-full"
+            />
+          </div>
+        ) : isImageFile(previewUpload) ? (
+          <img
+            src={previewUpload.cloudfront_url || previewUpload.s3_url || previewUpload.thumbnail_url}
+            alt={previewUpload.original_filename}
+            className="max-w-full max-h-full rounded-lg object-contain shadow-2xl"
+            style={{ maxHeight: '90vh', maxWidth: '90vw' }}
+          />
+        ) : null}
+        <div className="absolute bottom-4 left-4 right-4 bg-black/70 text-white p-4 rounded-lg max-w-2xl mx-auto">
+          <p className="font-medium truncate">{previewUpload.original_filename}</p>
+          <p className="text-sm text-gray-300 mt-1">
+            {formatBytes(previewUpload.file_size)} • {formatDate(previewUpload.created_at)}
+          </p>
+        </div>
+      </div>
+    </div>
+  ) : null;
+
   // If no folders exist, render flat list (backward compat)
   if (folders.length === 0 && !canOrganize) {
     return (
-      <div className={
-        viewMode === 'grid' ? 'grid grid-cols-2 gap-2'
-        : viewMode === 'tile' ? 'grid grid-cols-3 sm:grid-cols-4 gap-1.5'
-        : 'space-y-2'
-      }>
-        {uploads.map((u, i) => renderUploadCard(u, 'unfiled', i))}
-      </div>
+      <>
+        <div className={
+          viewMode === 'grid' ? 'grid grid-cols-2 gap-2'
+          : viewMode === 'tile' ? 'grid grid-cols-3 sm:grid-cols-4 gap-1.5'
+          : 'space-y-2'
+        }>
+          {uploads.map((u, i) => renderUploadCard(u, 'unfiled', i))}
+        </div>
+        {previewModal}
+      </>
     );
   }
 
   return (
-    <div className="space-y-3">
-      {canOrganize && (
-        <div className="flex items-center gap-2">
-          {showNewFolder ? (
-            <div className="flex items-center gap-2 flex-1">
-              <input
-                type="text"
-                value={newFolderName}
-                onChange={(e) => setNewFolderName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleCreateFolder();
-                  if (e.key === 'Escape') setShowNewFolder(false);
-                }}
-                placeholder="Folder name (e.g., Approved, Needs Revision)"
-                className="flex-1 px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500"
-                autoFocus
-                disabled={creating}
-              />
-              <Button size="sm" onClick={handleCreateFolder} disabled={creating || !newFolderName.trim()}>
-                Create
+    <>
+      <div className="space-y-3">
+        {canOrganize && (
+          <div className="flex items-center gap-2">
+            {showNewFolder ? (
+              <div className="flex items-center gap-2 flex-1">
+                <input
+                  type="text"
+                  value={newFolderName}
+                  onChange={(e) => setNewFolderName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleCreateFolder();
+                    if (e.key === 'Escape') setShowNewFolder(false);
+                  }}
+                  placeholder="Folder name (e.g., Approved, Needs Revision)"
+                  className="flex-1 px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500"
+                  autoFocus
+                  disabled={creating}
+                />
+                <Button size="sm" onClick={handleCreateFolder} disabled={creating || !newFolderName.trim()}>
+                  Create
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => { setShowNewFolder(false); setNewFolderName(''); }}>
+                  Cancel
+                </Button>
+              </div>
+            ) : (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setShowNewFolder(true)}
+                className="flex items-center gap-1"
+              >
+                <FolderPlus className="w-4 h-4" />
+                New Folder
               </Button>
-              <Button size="sm" variant="outline" onClick={() => { setShowNewFolder(false); setNewFolderName(''); }}>
-                Cancel
-              </Button>
-            </div>
-          ) : (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setShowNewFolder(true)}
-              className="flex items-center gap-1"
-            >
-              <FolderPlus className="w-4 h-4" />
-              New Folder
-            </Button>
-          )}
-        </div>
-      )}
+            )}
+          </div>
+        )}
 
-      {folders.map(folder =>
-        renderFolderSection(folder.id, folder.folder_name, groupedUploads[folder.id] || [])
-      )}
+        {folders.map(folder =>
+          renderFolderSection(folder.id, folder.folder_name, groupedUploads[folder.id] || [])
+        )}
 
-      {renderFolderSection('unfiled', 'Unfiled', groupedUploads['unfiled'] || [], true)}
-    </div>
+        {renderFolderSection('unfiled', 'Unfiled', groupedUploads['unfiled'] || [], true)}
+      </div>
+      {previewModal}
+    </>
   );
 }

@@ -262,8 +262,8 @@ class FileRequestController {
       // Verify buyer(s) exist if provided
       if (buyerIdsArray.length > 0) {
         const buyerResult = await query(
-          'SELECT id FROM users WHERE id = ANY($1::uuid[]) AND role = $2',
-          [buyerIdsArray, 'buyer']
+          'SELECT id FROM users WHERE id = ANY($1::uuid[]) AND role IN ($2, $3, $4) AND is_active = TRUE',
+          [buyerIdsArray, 'buyer', 'admin', 'team_lead']
         );
         if (buyerResult.rows.length !== buyerIdsArray.length) {
           return res.status(404).json({
@@ -1088,12 +1088,12 @@ class FileRequestController {
           `SELECT
             fr.*,
             f.name as folder_name,
-            COUNT(DISTINCT fru.id) FILTER (WHERE COALESCE(fru.is_deleted, FALSE) = FALSE AND COALESCE(fru.file_count, 0) > 0) as upload_count,
-            COUNT(mf.id) FILTER (WHERE COALESCE(fru.is_deleted, FALSE) = FALSE AND mf.is_deleted = FALSE) as uploaded_files_count,
-            COUNT(mf.id) FILTER (WHERE COALESCE(fru.is_deleted, FALSE) = FALSE AND mf.is_deleted = FALSE AND fru.uploaded_by = $2) as my_uploaded_files_count,
+            COUNT(DISTINCT mf.id) FILTER (WHERE COALESCE(fru.is_deleted, FALSE) = FALSE AND mf.is_deleted = FALSE) as upload_count,
+            COUNT(DISTINCT mf.id) FILTER (WHERE COALESCE(fru.is_deleted, FALSE) = FALSE AND mf.is_deleted = FALSE) as uploaded_files_count,
+            COUNT(DISTINCT mf.id) FILTER (WHERE COALESCE(fru.is_deleted, FALSE) = FALSE AND mf.is_deleted = FALSE AND fru.uploaded_by = $2) as my_uploaded_files_count,
             fre.status as my_assignment_status,
             fre.num_creatives_assigned as my_creatives_assigned,
-            fre.creatives_completed as my_creatives_completed,
+            COUNT(DISTINCT mf.id) FILTER (WHERE COALESCE(fru.is_deleted, FALSE) = FALSE AND mf.is_deleted = FALSE AND fru.editor_id = fre.editor_id) as my_creatives_completed,
             fre.created_at as assigned_at,
             buyer.name as buyer_name,
             buyer.email as buyer_email,
@@ -1114,7 +1114,7 @@ class FileRequestController {
           LEFT JOIN file_request_editors fre_all ON fr.id = fre_all.request_id AND fre_all.status != 'reassigned'
           LEFT JOIN editors e ON fre_all.editor_id = e.id
           ${whereClause}
-          GROUP BY fr.id, f.id, f.name, fre.status, fre.num_creatives_assigned, fre.creatives_completed, fre.created_at, buyer.id, buyer.name, buyer.email, creator.id, creator.name
+          GROUP BY fr.id, f.id, f.name, fre.status, fre.num_creatives_assigned, fre.editor_id, fre.created_at, buyer.id, buyer.name, buyer.email, creator.id, creator.name
           ORDER BY fre.created_at DESC`,
           params
         );
@@ -1187,7 +1187,7 @@ class FileRequestController {
           `SELECT
             fr.*,
             f.name as folder_name,
-            COUNT(DISTINCT fru.id) FILTER (WHERE COALESCE(fru.is_deleted, FALSE) = FALSE AND COALESCE(fru.file_count, 0) > 0) as upload_count,
+            COUNT(DISTINCT mf.id) FILTER (WHERE COALESCE(fru.is_deleted, FALSE) = FALSE AND mf.is_deleted = FALSE) as upload_count,
             buyer.name as buyer_name,
             buyer.email as buyer_email,
             creator.name as created_by_name,
@@ -1200,6 +1200,7 @@ class FileRequestController {
           FROM file_requests fr
           LEFT JOIN folders f ON fr.folder_id = f.id
           LEFT JOIN file_request_uploads fru ON fr.id = fru.file_request_id
+          LEFT JOIN media_files mf ON mf.upload_session_id = fru.id
           LEFT JOIN users buyer ON fr.assigned_buyer_id = buyer.id
           LEFT JOIN users creator ON fr.created_by = creator.id
           LEFT JOIN file_request_editors fre ON fr.id = fre.request_id
@@ -1260,7 +1261,7 @@ class FileRequestController {
           `SELECT
             fr.*,
             f.name as folder_name,
-            COUNT(DISTINCT fru.id) FILTER (WHERE COALESCE(fru.is_deleted, FALSE) = FALSE AND COALESCE(fru.file_count, 0) > 0) as upload_count,
+            COUNT(DISTINCT mf.id) FILTER (WHERE COALESCE(fru.is_deleted, FALSE) = FALSE AND mf.is_deleted = FALSE) as upload_count,
             u.name as creator_name,
             u.email as creator_email,
             ${pvQuery1}
@@ -1268,6 +1269,7 @@ class FileRequestController {
           JOIN file_requests fr ON fre.request_id = fr.id
           LEFT JOIN folders f ON fr.folder_id = f.id
           LEFT JOIN file_request_uploads fru ON fr.id = fru.file_request_id
+          LEFT JOIN media_files mf ON mf.upload_session_id = fru.id
           LEFT JOIN users u ON fr.created_by = u.id
           WHERE fr.id = $1 AND fre.editor_id = $2
           GROUP BY fr.id, f.id, f.name, u.id, u.name, u.email`,
@@ -1283,13 +1285,14 @@ class FileRequestController {
             `SELECT
               fr.*,
               f.name as folder_name,
-              COUNT(DISTINCT fru.id) FILTER (WHERE COALESCE(fru.is_deleted, FALSE) = FALSE AND COALESCE(fru.file_count, 0) > 0) as upload_count,
+              COUNT(DISTINCT mf.id) FILTER (WHERE COALESCE(fru.is_deleted, FALSE) = FALSE AND mf.is_deleted = FALSE) as upload_count,
               u.name as creator_name,
               u.email as creator_email,
               ${pvQuery2}
             FROM file_requests fr
             LEFT JOIN folders f ON fr.folder_id = f.id
             LEFT JOIN file_request_uploads fru ON fr.id = fru.file_request_id
+            LEFT JOIN media_files mf ON mf.upload_session_id = fru.id
             LEFT JOIN users u ON fr.created_by = u.id
             WHERE fr.id = $1
             GROUP BY fr.id, f.id, f.name, u.id, u.name, u.email`,
@@ -1301,13 +1304,14 @@ class FileRequestController {
             `SELECT
               fr.*,
               f.name as folder_name,
-              COUNT(DISTINCT fru.id) FILTER (WHERE COALESCE(fru.is_deleted, FALSE) = FALSE AND COALESCE(fru.file_count, 0) > 0) as upload_count,
+              COUNT(DISTINCT mf.id) FILTER (WHERE COALESCE(fru.is_deleted, FALSE) = FALSE AND mf.is_deleted = FALSE) as upload_count,
               u.name as creator_name,
               u.email as creator_email,
               ${pvQuery2}
             FROM file_requests fr
             LEFT JOIN folders f ON fr.folder_id = f.id
             LEFT JOIN file_request_uploads fru ON fr.id = fru.file_request_id
+            LEFT JOIN media_files mf ON mf.upload_session_id = fru.id
             LEFT JOIN users u ON fr.created_by = u.id
             WHERE fr.id = $1 AND (fr.created_by = $2 OR fr.assigned_buyer_id = $2 OR $2 = ANY(fr.assigned_buyer_ids))
             GROUP BY fr.id, f.id, f.name, u.id, u.name, u.email`,
@@ -1319,7 +1323,7 @@ class FileRequestController {
             `SELECT
               fr.*,
               f.name as folder_name,
-              COUNT(DISTINCT fru.id) FILTER (WHERE COALESCE(fru.is_deleted, FALSE) = FALSE AND COALESCE(fru.file_count, 0) > 0) as upload_count,
+              COUNT(DISTINCT mf.id) FILTER (WHERE COALESCE(fru.is_deleted, FALSE) = FALSE AND mf.is_deleted = FALSE) as upload_count,
               u.name as creator_name,
               u.email as creator_email,
               ${pvQuery2}
@@ -1331,6 +1335,7 @@ class FileRequestController {
             FROM file_requests fr
             LEFT JOIN folders f ON fr.folder_id = f.id
             LEFT JOIN file_request_uploads fru ON fr.id = fru.file_request_id
+            LEFT JOIN media_files mf ON mf.upload_session_id = fru.id
             LEFT JOIN users u ON fr.created_by = u.id
             WHERE fr.id = $1 AND fr.created_by = $2
             GROUP BY fr.id, f.id, f.name, u.id, u.name, u.email`,

@@ -302,6 +302,7 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
 
   // Bulk actions state
   const [selectedUploads, setSelectedUploads] = useState<Set<string>>(new Set());
+  const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
   const [bulkActionInProgress, setBulkActionInProgress] = useState(false);
 
   // Deadline editing state
@@ -534,15 +535,32 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
     }
   };
 
-  // Bulk selection handlers
-  const toggleSelectUpload = (uploadId: string) => {
-    const newSelected = new Set(selectedUploads);
-    if (newSelected.has(uploadId)) {
-      newSelected.delete(uploadId);
+  // Bulk selection handlers (supports Shift+click range selection)
+  const toggleSelectUpload = (uploadId: string, shiftKey?: boolean) => {
+    if (!request) return;
+    const uploads = request.uploads;
+    const clickedIndex = uploads.findIndex(u => u.id === uploadId);
+
+    if (shiftKey && lastSelectedIndex !== null && clickedIndex !== -1 && clickedIndex !== lastSelectedIndex) {
+      // Shift+click: select range between last click and current click
+      const start = Math.min(lastSelectedIndex, clickedIndex);
+      const end = Math.max(lastSelectedIndex, clickedIndex);
+      const newSelected = new Set(selectedUploads);
+      for (let i = start; i <= end; i++) {
+        newSelected.add(uploads[i].id);
+      }
+      setSelectedUploads(newSelected);
     } else {
-      newSelected.add(uploadId);
+      // Normal click: toggle single item
+      const newSelected = new Set(selectedUploads);
+      if (newSelected.has(uploadId)) {
+        newSelected.delete(uploadId);
+      } else {
+        newSelected.add(uploadId);
+      }
+      setSelectedUploads(newSelected);
     }
-    setSelectedUploads(newSelected);
+    setLastSelectedIndex(clickedIndex);
   };
 
   const toggleReassignment = (reassignmentId: string) => {
@@ -1682,37 +1700,32 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
                     const dashOffset = circumference - (pct / 100) * circumference;
 
                     return (
-                      <div key={editor.id} className="flex items-center gap-3 text-sm bg-white dark:bg-gray-800 rounded px-3 py-2 border border-gray-200 dark:border-gray-700">
-                        {/* Mini pie/donut chart */}
+                      <div key={editor.id} className="flex items-center gap-2 text-sm px-2 py-1 rounded hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                        {/* Mini donut chart */}
                         {total > 0 ? (
-                          <svg width="32" height="32" viewBox="0 0 32 32" className="flex-shrink-0">
-                            <circle cx="16" cy="16" r={radius} fill="none" stroke="#e5e7eb" strokeWidth="4" />
-                            <circle cx="16" cy="16" r={radius} fill="none" stroke={strokeColor} strokeWidth="4"
-                              strokeDasharray={circumference} strokeDashoffset={dashOffset}
-                              strokeLinecap="round" transform="rotate(-90 16 16)" className="transition-all" />
-                            <text x="16" y="16" textAnchor="middle" dominantBaseline="central"
-                              className="fill-gray-700 dark:fill-gray-300" fontSize="8" fontWeight="600">
-                              {pct}%
-                            </text>
+                          <svg width="24" height="24" viewBox="0 0 24 24" className="flex-shrink-0">
+                            <circle cx="12" cy="12" r="9" fill="none" stroke="#e5e7eb" strokeWidth="3" />
+                            <circle cx="12" cy="12" r="9" fill="none" stroke={strokeColor} strokeWidth="3"
+                              strokeDasharray={2 * Math.PI * 9} strokeDashoffset={2 * Math.PI * 9 - (pct / 100) * 2 * Math.PI * 9}
+                              strokeLinecap="round" transform="rotate(-90 12 12)" className="transition-all" />
                           </svg>
                         ) : (
-                          <div className="w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center flex-shrink-0">
-                            <span className="text-[8px] text-gray-400">--</span>
+                          <div className="w-6 h-6 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center flex-shrink-0">
+                            <span className="text-[7px] text-gray-400">--</span>
                           </div>
                         )}
-                        {/* Name + count */}
-                        <div className="flex-1 min-w-0">
-                          <span className="font-medium text-gray-900 dark:text-white truncate block">
-                            {editor.display_name || editor.name}
+                        {/* Name */}
+                        <span className="font-medium text-gray-900 dark:text-white truncate flex-1 min-w-0">
+                          {editor.display_name || editor.name}
+                        </span>
+                        {/* Count */}
+                        {total > 0 && (
+                          <span className={`text-xs flex-shrink-0 ${status === 'completed' ? 'text-green-600 dark:text-green-400' : status === 'progress' ? 'text-yellow-600 dark:text-yellow-400' : 'text-gray-500'}`}>
+                            {completed}/{total}
                           </span>
-                          {total > 0 && (
-                            <span className={`text-xs ${status === 'completed' ? 'text-green-600 dark:text-green-400' : status === 'progress' ? 'text-yellow-600 dark:text-yellow-400' : 'text-gray-500'}`}>
-                              {completed}/{total} creatives
-                            </span>
-                          )}
-                        </div>
+                        )}
                         {/* Status badge */}
-                        <span className={`text-xs px-2 py-0.5 rounded-full flex-shrink-0 ${
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full flex-shrink-0 ${
                           status === 'completed' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
                           : status === 'progress' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
                           : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400'

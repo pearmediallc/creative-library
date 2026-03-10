@@ -90,152 +90,57 @@ export function UploadedFileCard({ upload, onDownload, onAddToLibrary, onRemoveF
 
   return (
     <>
-      <div className="flex items-start gap-3 p-3 bg-gray-50 dark:bg-gray-900 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors border border-gray-200 dark:border-gray-700">
-        {/* Thumbnail/Preview */}
-        <div className="flex-shrink-0">
+      <div className="flex items-center gap-2 px-2 py-1.5 bg-gray-50 dark:bg-gray-900 rounded hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors border border-gray-100 dark:border-gray-700/50 group">
+        {/* Compact Thumbnail */}
+        <div className="flex-shrink-0 cursor-pointer" onClick={() => setShowPreview(true)}>
           {isVideo ? (
-            <div
-              className="w-16 h-16 bg-gray-800 rounded flex items-center justify-center cursor-pointer hover:bg-gray-700 transition-colors"
-              onClick={() => setShowPreview(true)}
-            >
-              <Play className="w-8 h-8 text-white" />
+            <div className="w-8 h-8 bg-gray-800 rounded flex items-center justify-center">
+              <Play className="w-4 h-4 text-white" />
             </div>
-          ) : isImage && upload.thumbnail_url ? (
-            <img
-              src={upload.thumbnail_url}
-              alt={upload.original_filename}
-              className="w-16 h-16 object-cover rounded cursor-pointer"
-              onClick={() => setShowPreview(true)}
-            />
+          ) : (isImage && upload.thumbnail_url) ? (
+            <img src={upload.thumbnail_url} alt="" className="w-8 h-8 object-cover rounded" />
           ) : upload.thumbnail_url ? (
-            <img
-              src={upload.thumbnail_url}
-              alt={upload.original_filename}
-              className="w-16 h-16 object-cover rounded"
-            />
+            <img src={upload.thumbnail_url} alt="" className="w-8 h-8 object-cover rounded" />
           ) : (
-            <div className="w-16 h-16 bg-gray-200 dark:bg-gray-700 rounded flex items-center justify-center">
-              <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
-                {upload.file_type.split('/')[1]?.toUpperCase() || 'FILE'}
-              </span>
+            <div className="w-8 h-8 bg-gray-200 dark:bg-gray-700 rounded flex items-center justify-center">
+              <span className="text-[9px] font-bold text-gray-400">{upload.file_type.split('/')[1]?.toUpperCase()?.slice(0, 3) || 'FILE'}</span>
             </div>
           )}
         </div>
 
-        {/* File Info */}
+        {/* File Info - single line */}
         <div className="flex-1 min-w-0">
           {isEditing ? (
-            <div className="flex items-center gap-2 mb-1">
-              <input
-                type="text"
-                value={newFilename}
-                onChange={(e) => setNewFilename(e.target.value)}
-                className="flex-1 px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
-                placeholder="Enter filename"
-                disabled={renaming}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleSaveRename();
-                  if (e.key === 'Escape') handleCancelEdit();
-                }}
-                autoFocus
-              />
-              <button
-                onClick={handleSaveRename}
-                disabled={renaming}
-                className="p-1 text-green-600 hover:bg-green-100 dark:hover:bg-green-900/20 rounded disabled:opacity-50"
-                title="Save"
-              >
-                <Check className="w-4 h-4" />
-              </button>
-              <button
-                onClick={handleCancelEdit}
-                disabled={renaming}
-                className="p-1 text-red-600 hover:bg-red-100 dark:hover:bg-red-900/20 rounded disabled:opacity-50"
-                title="Cancel"
-              >
-                <XCircle className="w-4 h-4" />
-              </button>
+            <div className="flex items-center gap-1">
+              <input type="text" value={newFilename} onChange={(e) => setNewFilename(e.target.value)}
+                className="flex-1 px-1.5 py-0.5 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-1 focus:ring-blue-500"
+                disabled={renaming} onKeyDown={(e) => { if (e.key === 'Enter') handleSaveRename(); if (e.key === 'Escape') handleCancelEdit(); }} autoFocus />
+              <button onClick={handleSaveRename} disabled={renaming} className="p-0.5 text-green-600 rounded" title="Save"><Check className="w-3 h-3" /></button>
+              <button onClick={handleCancelEdit} disabled={renaming} className="p-0.5 text-red-600 rounded" title="Cancel"><XCircle className="w-3 h-3" /></button>
             </div>
           ) : (
-            <div className="flex items-center gap-2 group">
-              <p className="text-sm font-medium text-gray-900 dark:text-white truncate flex-1">
-                {upload.original_filename}
-              </p>
-              {onRename && (
-                <button
-                  onClick={handleStartEdit}
-                  className="p-1 text-gray-500 hover:text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/20 rounded transition-colors"
-                  title="Rename file"
-                >
-                  <Edit2 className="w-3 h-3" />
-                </button>
-              )}
-            </div>
+            <p className="text-xs font-medium text-gray-900 dark:text-white truncate">{upload.original_filename}</p>
           )}
-          <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400 mt-1">
-            <span>{formatBytes(upload.file_size)}</span>
-            <span>•</span>
-            <span>{formatDate(upload.created_at)}</span>
-            {(upload.uploaded_by_name || upload.uploaded_by_email) && (
-              <>
-                <span>•</span>
-                <span className="truncate max-w-[200px]">
-                  {upload.uploaded_by_name || upload.uploaded_by_email}
-                </span>
-              </>
-            )}
-          </div>
         </div>
 
-        {/* Actions */}
-        <div className="flex items-center gap-2 flex-shrink-0">
-          {/* Preview Button for videos/images */}
+        {/* Size */}
+        <span className="text-[10px] text-gray-400 dark:text-gray-500 flex-shrink-0 w-16 text-right">{formatBytes(upload.file_size)}</span>
+
+        {/* Date */}
+        <span className="text-[10px] text-gray-400 dark:text-gray-500 flex-shrink-0 w-20 text-right hidden sm:block">{formatDate(upload.created_at)}</span>
+
+        {/* Compact icon-only actions - visible on hover */}
+        <div className="flex items-center gap-0.5 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+          {onRename && !isEditing && (
+            <button onClick={handleStartEdit} className="p-1 text-gray-400 hover:text-blue-600 rounded" title="Rename"><Edit2 className="w-3 h-3" /></button>
+          )}
           {(isVideo || isImage) && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowPreview(true)}
-              title="Preview"
-            >
-              <Eye className="w-4 h-4" />
-            </Button>
+            <button onClick={() => setShowPreview(true)} className="p-1 text-gray-400 hover:text-blue-600 rounded" title="Preview"><Eye className="w-3 h-3" /></button>
           )}
-
-          {/* Add to Media Library */}
-          {onAddToLibrary && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleAddToLibrary}
-              disabled={adding}
-              title="Add to Media Library"
-            >
-              <Plus className="w-4 h-4" />
-              {adding ? 'Adding...' : 'Add to Library'}
-            </Button>
-          )}
-
-          {/* Remove from request (keeps history; soft-delete) */}
           {onRemoveFromRequest && upload.upload_session_id && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleRemoveFromRequest}
-              title="Remove from request"
-            >
-              <X className="w-4 h-4" />
-            </Button>
+            <button onClick={handleRemoveFromRequest} className="p-1 text-gray-400 hover:text-red-600 rounded" title="Remove"><X className="w-3 h-3" /></button>
           )}
-
-          {/* Download Button */}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onDownload(upload)}
-            title="Download"
-          >
-            <Download className="w-4 h-4" />
-          </Button>
+          <button onClick={() => onDownload(upload)} className="p-1 text-gray-400 hover:text-blue-600 rounded" title="Download"><Download className="w-3 h-3" /></button>
         </div>
       </div>
 
