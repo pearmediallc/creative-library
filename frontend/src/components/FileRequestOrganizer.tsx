@@ -282,7 +282,7 @@ export function FileRequestOrganizer({
       onDrop: (e: React.DragEvent<HTMLDivElement>) => { if (canOrganize) handleItemDrop(e, folderId, index); },
     };
 
-    // Grid view: cards with thumbnail
+    // Grid view: 4 per row, larger cards with thumbnail + info
     if (viewMode === 'grid') {
       return (
         <div key={upload.id} className={`relative group bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden hover:shadow-md transition-all ${dropIndicator} ${selectedClass}`} {...dragProps}>
@@ -307,24 +307,24 @@ export function FileRequestOrganizer({
       );
     }
 
-    // Tile view: compact small tiles
+    // Tile view: 6 per row, small compact tiles
     if (viewMode === 'tile') {
       return (
         <div key={upload.id} className={`relative group bg-gray-50 dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-700 overflow-hidden hover:shadow transition-all ${dropIndicator} ${selectedClass}`} {...dragProps}>
           <div className="absolute top-1 left-1 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
             <input type="checkbox" checked={selectedUploads.has(upload.id)} onChange={(e) => onToggleSelect(upload.id, e.nativeEvent instanceof MouseEvent ? (e.nativeEvent as MouseEvent).shiftKey : false)}
-              className="w-3.5 h-3.5 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer" />
+              className="w-3 h-3 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer" />
           </div>
           <div className="aspect-square bg-gray-200 dark:bg-gray-800 flex items-center justify-center cursor-pointer" onClick={() => setPreviewUpload(upload)}>
             {upload.thumbnail_url ? (
               <img src={upload.thumbnail_url} alt={upload.original_filename} className="w-full h-full object-cover" />
             ) : isVideoFile(upload) ? (
-              <div className="text-gray-500"><svg className="w-8 h-8" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></div>
+              <div className="text-gray-500"><svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></div>
             ) : (
-              <span className="text-[10px] font-bold text-gray-400">{upload.file_type?.split('/')[1]?.toUpperCase() || 'FILE'}</span>
+              <span className="text-[8px] font-bold text-gray-400">{upload.file_type?.split('/')[1]?.toUpperCase() || 'FILE'}</span>
             )}
           </div>
-          <p className="px-1.5 py-1 text-[10px] text-gray-700 dark:text-gray-300 truncate">{upload.original_filename}</p>
+          <p className="px-1 py-0.5 text-[9px] text-gray-700 dark:text-gray-300 truncate">{upload.original_filename}</p>
         </div>
       );
     }
@@ -439,8 +439,8 @@ export function FileRequestOrganizer({
 
         {isExpanded && (
           <div className={`p-3 ${
-            viewMode === 'grid' ? 'grid grid-cols-2 gap-2'
-            : viewMode === 'tile' ? 'grid grid-cols-3 sm:grid-cols-4 gap-1.5'
+            viewMode === 'grid' ? 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2'
+            : viewMode === 'tile' ? 'grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-1'
             : 'space-y-2'
           }`}>
             {folderUploads.length > 0 ? (

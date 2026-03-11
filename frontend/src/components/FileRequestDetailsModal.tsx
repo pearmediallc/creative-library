@@ -1688,44 +1688,47 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
                 <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Assigned Creatives ({request.num_creatives_requested || request.assigned_editors.length})
                 </h3>
-                <div className="space-y-1.5">
+                <div className="grid grid-cols-4 gap-3">
                   {request.assigned_editors.map((editor) => {
                     const completed = editor.creatives_completed || 0;
                     const total = editor.num_creatives_assigned || 0;
                     const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
                     const status = total === 0 ? 'none' : completed >= total ? 'completed' : completed > 0 ? 'progress' : 'pending';
                     const strokeColor = status === 'completed' ? '#16a34a' : status === 'progress' ? '#d97706' : '#9ca3af';
-                    const radius = 12;
-                    const circumference = 2 * Math.PI * radius;
-                    const dashOffset = circumference - (pct / 100) * circumference;
+                    const r = 18;
+                    const circ = 2 * Math.PI * r;
 
                     return (
-                      <div key={editor.id} className="flex items-center gap-2 text-sm px-2 py-1 rounded hover:bg-gray-50 dark:hover:bg-gray-800/50">
-                        {/* Mini donut chart */}
+                      <div key={editor.id} className="flex flex-col items-center text-center p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                        {/* Donut chart */}
                         {total > 0 ? (
-                          <svg width="24" height="24" viewBox="0 0 24 24" className="flex-shrink-0">
-                            <circle cx="12" cy="12" r="9" fill="none" stroke="#e5e7eb" strokeWidth="3" />
-                            <circle cx="12" cy="12" r="9" fill="none" stroke={strokeColor} strokeWidth="3"
-                              strokeDasharray={2 * Math.PI * 9} strokeDashoffset={2 * Math.PI * 9 - (pct / 100) * 2 * Math.PI * 9}
-                              strokeLinecap="round" transform="rotate(-90 12 12)" className="transition-all" />
+                          <svg width="48" height="48" viewBox="0 0 48 48" className="mb-1">
+                            <circle cx="24" cy="24" r={r} fill="none" stroke="#e5e7eb" strokeWidth="4" />
+                            <circle cx="24" cy="24" r={r} fill="none" stroke={strokeColor} strokeWidth="4"
+                              strokeDasharray={circ} strokeDashoffset={circ - (pct / 100) * circ}
+                              strokeLinecap="round" transform="rotate(-90 24 24)" className="transition-all" />
+                            <text x="24" y="24" textAnchor="middle" dominantBaseline="central"
+                              className="fill-gray-700 dark:fill-gray-300" fontSize="11" fontWeight="600">
+                              {pct}%
+                            </text>
                           </svg>
                         ) : (
-                          <div className="w-6 h-6 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center flex-shrink-0">
-                            <span className="text-[7px] text-gray-400">--</span>
+                          <div className="w-12 h-12 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center mb-1">
+                            <span className="text-xs text-gray-400">--</span>
                           </div>
                         )}
-                        {/* Name */}
-                        <span className="font-medium text-gray-900 dark:text-white truncate flex-1 min-w-0">
-                          {editor.display_name || editor.name}
-                        </span>
-                        {/* Count */}
+                        {/* Progress below chart */}
                         {total > 0 && (
-                          <span className={`text-xs flex-shrink-0 ${status === 'completed' ? 'text-green-600 dark:text-green-400' : status === 'progress' ? 'text-yellow-600 dark:text-yellow-400' : 'text-gray-500'}`}>
+                          <span className={`text-[10px] font-medium ${status === 'completed' ? 'text-green-600 dark:text-green-400' : status === 'progress' ? 'text-yellow-600 dark:text-yellow-400' : 'text-gray-500'}`}>
                             {completed}/{total}
                           </span>
                         )}
+                        {/* Name */}
+                        <span className="text-xs font-medium text-gray-900 dark:text-white truncate w-full mt-0.5">
+                          {editor.display_name || editor.name}
+                        </span>
                         {/* Status badge */}
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full flex-shrink-0 ${
+                        <span className={`text-[9px] px-1.5 py-0.5 rounded-full mt-0.5 ${
                           status === 'completed' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
                           : status === 'progress' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
                           : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400'
