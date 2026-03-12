@@ -21,6 +21,7 @@ interface Request {
   progress: number;
   uploaded: number;
   assigned: number;
+  requestedBy?: string;
 }
 
 export function EditorDetailModal({ editorId, onClose, onUpdate }: EditorDetailModalProps) {
@@ -157,6 +158,9 @@ export function EditorDetailModal({ editorId, onClose, onUpdate }: EditorDetailM
                       Completed Date
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                      Requested By
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
                       Progress
                     </th>
                   </tr>
@@ -197,6 +201,11 @@ export function EditorDetailModal({ editorId, onClose, onUpdate }: EditorDetailM
                         ) : (
                           <span className="text-xs text-gray-400">In progress</span>
                         )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="text-sm text-gray-700 dark:text-gray-300">
+                          {request.requestedBy || 'N/A'}
+                        </span>
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">

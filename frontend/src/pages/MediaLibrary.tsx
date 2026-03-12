@@ -235,11 +235,11 @@ export function MediaLibraryPage() {
 
   // Lasso mouse handlers
   const handleLassoMouseDown = useCallback((e: React.MouseEvent) => {
-    // Only start lasso on left click directly on the grid container background
+    // Only start lasso on left click
     if (e.button !== 0) return;
     const target = e.target as HTMLElement;
-    // Don't start lasso if clicking on a card, button, input, or interactive element
-    if (target.closest('.media-card-item, button, input, a, [role="button"]')) return;
+    // Don't start lasso if clicking on interactive elements
+    if (target.closest('button, input, a, [role="button"], select, textarea')) return;
     e.preventDefault();
     setLassoActive(true);
     setLassoStart({ x: e.clientX, y: e.clientY });
@@ -979,75 +979,81 @@ export function MediaLibraryPage() {
                   </div>
                 )}
               </div>
-              {canUpload && (
-                <div className="flex gap-2 flex-wrap">
+              <div className="flex gap-2 flex-wrap">
+                {canUpload && (
                   <Button onClick={() => setShowUploadModal(true)}>
                     Upload Files
                   </Button>
-                  {selectedFiles.length > 0 && (
-                    <>
+                )}
+                {selectedFiles.length > 0 && (
+                  <>
+                    {canUpload && (
                       <Button onClick={() => setShowBulkEditor(true)}>
                         Edit {selectedFiles.length} Selected
                       </Button>
-                      <Button
-                        variant="outline"
-                        onClick={handleBulkDownloadZip}
-                        disabled={downloadingZip}
-                      >
-                        <Download className="w-4 h-4 mr-2" />
-                        {downloadingZip ? 'Creating ZIP...' : `Download ZIP (${selectedFiles.length} file${selectedFiles.length !== 1 ? 's' : ''})`}
-                      </Button>
-                      <Button
-                        variant="outline"
-                        onClick={handleBulkMoveToFolder}
-                      >
-                        <FolderInput className="w-4 h-4 mr-2" />
-                        Move
-                      </Button>
-                      <Button
-                        variant="outline"
-                        onClick={handleBulkCopyToFolder}
-                      >
-                        <FolderInput className="w-4 h-4 mr-2" />
-                        Copy
-                      </Button>
-                      <Button
-                        variant="outline"
-                        onClick={() => {
-                          if (selectedFiles.length > 0) {
-                            setShareDialogFile({
-                              id: selectedFiles[0],
-                              name: `${selectedFiles.length} file${selectedFiles.length !== 1 ? 's' : ''}`,
-                              type: 'file'
-                            });
-                          }
-                        }}
-                      >
-                        <Share2 className="w-4 h-4 mr-2" />
-                        Share ({selectedFiles.length})
-                      </Button>
-                      {canDelete && (
+                    )}
+                    <Button
+                      variant="outline"
+                      onClick={handleBulkDownloadZip}
+                      disabled={downloadingZip}
+                    >
+                      <Download className="w-4 h-4 mr-2" />
+                      {downloadingZip ? 'Creating ZIP...' : `Download ZIP (${selectedFiles.length} file${selectedFiles.length !== 1 ? 's' : ''})`}
+                    </Button>
+                    {canUpload && (
+                      <>
                         <Button
                           variant="outline"
-                          className="text-destructive hover:text-destructive"
-                          onClick={handleBulkDelete}
+                          onClick={handleBulkMoveToFolder}
                         >
-                          <Trash2 className="w-4 h-4 mr-2" />
-                          Delete {selectedFiles.length}
+                          <FolderInput className="w-4 h-4 mr-2" />
+                          Move
                         </Button>
-                      )}
+                        <Button
+                          variant="outline"
+                          onClick={handleBulkCopyToFolder}
+                        >
+                          <FolderInput className="w-4 h-4 mr-2" />
+                          Copy
+                        </Button>
+                      </>
+                    )}
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        if (selectedFiles.length > 0) {
+                          setShareDialogFile({
+                            id: selectedFiles[0],
+                            name: `${selectedFiles.length} file${selectedFiles.length !== 1 ? 's' : ''}`,
+                            type: 'file'
+                          });
+                        }
+                      }}
+                    >
+                      <Share2 className="w-4 h-4 mr-2" />
+                      Share ({selectedFiles.length})
+                    </Button>
+                    {canDelete && (
                       <Button
                         variant="outline"
-                        onClick={() => setSelectedFiles([])}
-                        title="Clear selection"
+                        className="text-destructive hover:text-destructive"
+                        onClick={handleBulkDelete}
                       >
-                        <X className="w-4 h-4 mr-2" />
-                        Clear
+                        <Trash2 className="w-4 h-4 mr-2" />
+                        Delete {selectedFiles.length}
                       </Button>
-                    </>
-                  )}
-                </div>
-              )}
+                    )}
+                    <Button
+                      variant="outline"
+                      onClick={() => setSelectedFiles([])}
+                      title="Clear selection"
+                    >
+                      <X className="w-4 h-4 mr-2" />
+                      Clear
+                    </Button>
+                  </>
+                )}
+              </div>
             </div>
 
             {/* Breadcrumb */}
@@ -1281,30 +1287,29 @@ export function MediaLibraryPage() {
 
                 {/* FILES */}
                 {filteredFiles.length > 0 ? (
-                  <>
+                  <div
+                    ref={gridContainerRef}
+                    className="relative select-none"
+                    onMouseDown={handleLassoMouseDown}
+                  >
+                    {/* Lasso overlay */}
+                    {lassoActive && lassoRect && (
+                      <div
+                        style={{
+                          position: 'fixed',
+                          left: lassoRect.left,
+                          top: lassoRect.top,
+                          width: lassoRect.right - lassoRect.left,
+                          height: lassoRect.bottom - lassoRect.top,
+                          border: '2px dashed #3b82f6',
+                          backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                          pointerEvents: 'none',
+                          zIndex: 50,
+                        }}
+                      />
+                    )}
                     {folders.length > 0 && <h2 className="text-lg font-semibold mb-4 mt-8">Files</h2>}
                     {viewMode === 'grid' ? (
-                    <div
-                      ref={gridContainerRef}
-                      className="relative select-none"
-                      onMouseDown={handleLassoMouseDown}
-                    >
-                      {/* Lasso overlay */}
-                      {lassoActive && lassoRect && (
-                        <div
-                          style={{
-                            position: 'fixed',
-                            left: lassoRect.left,
-                            top: lassoRect.top,
-                            width: lassoRect.right - lassoRect.left,
-                            height: lassoRect.bottom - lassoRect.top,
-                            border: '2px dashed #3b82f6',
-                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                            pointerEvents: 'none',
-                            zIndex: 50,
-                          }}
-                        />
-                      )}
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                       {(() => {
                         const totalPages = Math.ceil(filteredFiles.length / filesPerPage);
@@ -1547,7 +1552,6 @@ export function MediaLibraryPage() {
                         ));
                       })()}
                     </div>
-                    </div>
                     ) : (
                       /* List View */
                       <div className="overflow-x-auto">
@@ -1584,6 +1588,10 @@ export function MediaLibraryPage() {
                               return paginatedFiles.map((file, index) => (
                                 <tr
                                   key={file.id}
+                                  ref={(el: HTMLTableRowElement | null) => {
+                                    if (el) cardRefsMap.current.set(file.id, el);
+                                    else cardRefsMap.current.delete(file.id);
+                                  }}
                                   className={`border-b transition-colors hover:bg-muted/50 group ${
                                     index % 2 === 0 ? 'bg-background' : 'bg-muted/20'
                                   } ${selectedFiles.includes(file.id) ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
@@ -1767,7 +1775,7 @@ export function MediaLibraryPage() {
                         </div>
                       </div>
                     )}
-                  </>
+                  </div>
                 ) : folders.length === 0 ? (
                   <Card className="p-12 text-center">
                     <p className="text-muted-foreground">No files or folders found</p>

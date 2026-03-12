@@ -203,10 +203,12 @@ class WorkloadController {
           fre.deliverables_uploaded,
           (SELECT COUNT(*)::int FROM file_request_uploads fru
            WHERE fru.file_request_id = fr.id AND fru.editor_id = fre.editor_id
-             AND COALESCE(fru.is_deleted, FALSE) = FALSE) AS actual_uploads
+             AND COALESCE(fru.is_deleted, FALSE) = FALSE) AS actual_uploads,
+          creator.name as creator_name
         FROM file_requests fr
         JOIN file_request_editors fre ON fr.id = fre.request_id
         LEFT JOIN folders f ON fr.folder_id = f.id
+        LEFT JOIN users creator ON fr.created_by = creator.id
         WHERE fre.editor_id = $1
         ORDER BY
           CASE fre.status
@@ -271,6 +273,7 @@ class WorkloadController {
               createdAt: r.created_at,
               assignedAt: r.assigned_at,
               folderName: r.folder_name,
+              requestedBy: r.creator_name || null,
               progress,
               uploaded,
               assigned,
