@@ -21,7 +21,7 @@ const adminRoutes = require('./routes/admin');
 const facebookRoutes = require('./routes/facebook');
 const activityLogRoutes = require('./routes/activityLogs');
 const folderRoutes = require('./routes/folders');
-const teamRoutes = require('./routes/teams');
+// const teamRoutes = require('./routes/teams'); // Teams feature disabled
 const permissionRoutes = require('./routes/permissions');
 const starredRoutes = require('./routes/starred');
 const commentRoutes = require('./routes/comments');
@@ -146,7 +146,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/facebook', facebookRoutes);
 app.use('/api/folders', folderRoutes);
 app.use('/api/activity-logs', activityLogRoutes);
-app.use('/api/teams', teamRoutes);
+// app.use('/api/teams', teamRoutes); // Teams feature disabled
 app.use('/api/permissions', permissionRoutes);
 app.use('/api/starred', starredRoutes);
 app.use('/api/comments', commentRoutes);
@@ -164,7 +164,7 @@ app.use('/api/templates', templatesRoutes);
 app.use('/api/launch-requests', launchRequestRoutes);
 
 // Log registered routes
-logger.info('API routes registered: /api/auth, /api/media, /api/editors, /api/analytics, /api/admin, /api/facebook, /api/activity-logs, /api/folders, /api/teams, /api/permissions, /api/starred, /api/comments, /api/saved-searches, /api/file-requests, /api/metadata-tags, /api/slack, /api/workload, /api/notifications, /api/rbac, /api/access-requests, /api/vertical-heads');
+logger.info('API routes registered: /api/auth, /api/media, /api/editors, /api/analytics, /api/admin, /api/facebook, /api/activity-logs, /api/folders, /api/permissions, /api/starred, /api/comments, /api/saved-searches, /api/file-requests, /api/metadata-tags, /api/slack, /api/workload, /api/notifications, /api/rbac, /api/access-requests, /api/vertical-heads');
 
 // 404 handler
 app.use((req, res) => {

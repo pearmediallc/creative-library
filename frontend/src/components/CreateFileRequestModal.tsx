@@ -824,29 +824,45 @@ export function CreateFileRequestModal({ onClose, onSuccess, teamId }: CreateFil
             {buyers.length === 0 ? (
               <p className="text-xs text-gray-500 dark:text-gray-400 italic">No buyers available</p>
             ) : (
-              <div className="max-h-40 overflow-y-auto border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 p-2 space-y-1">
-                {buyers.map((buyer) => (
-                  <label
-                    key={buyer.id}
-                    className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={assignedBuyerIds.includes(buyer.id)}
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setAssignedBuyerIds(prev => [...prev, buyer.id]);
-                        } else {
-                          setAssignedBuyerIds(prev => prev.filter(id => id !== buyer.id));
-                        }
-                      }}
-                      disabled={creating}
-                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                    />
-                    <span className="text-sm text-gray-900 dark:text-white">{buyer.name}</span>
-                    <span className="text-xs text-gray-500 dark:text-gray-400">({buyer.email})</span>
-                  </label>
-                ))}
+              <div>
+                <input
+                  type="text"
+                  placeholder="Search buyers by name or email..."
+                  onChange={(e) => {
+                    const list = e.target.nextElementSibling as HTMLElement;
+                    const search = e.target.value.toLowerCase();
+                    list?.querySelectorAll('[data-buyer-item]').forEach((el: any) => {
+                      const text = el.textContent?.toLowerCase() || '';
+                      el.style.display = text.includes(search) ? 'flex' : 'none';
+                    });
+                  }}
+                  className="w-full px-3 py-1.5 mb-1 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500"
+                />
+                <div className="max-h-40 overflow-y-auto border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 p-2 space-y-1">
+                  {buyers.map((buyer) => (
+                    <label
+                      key={buyer.id}
+                      data-buyer-item
+                      className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={assignedBuyerIds.includes(buyer.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setAssignedBuyerIds(prev => [...prev, buyer.id]);
+                          } else {
+                            setAssignedBuyerIds(prev => prev.filter(id => id !== buyer.id));
+                          }
+                        }}
+                        disabled={creating}
+                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      <span className="text-sm text-gray-900 dark:text-white">{buyer.name}</span>
+                      <span className="text-xs text-gray-500 dark:text-gray-400">({buyer.email})</span>
+                    </label>
+                  ))}
+                </div>
               </div>
             )}
             {assignedBuyerIds.length > 0 && (

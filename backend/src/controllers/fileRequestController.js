@@ -1513,6 +1513,23 @@ class FileRequestController {
       }
       fileRequest.reassignments = reassignmentsResult.rows;
 
+      // Fetch assigned buyers details
+      const buyerIds = fileRequest.assigned_buyer_ids || (fileRequest.assigned_buyer_id ? [fileRequest.assigned_buyer_id] : []);
+      if (buyerIds.length > 0) {
+        try {
+          const buyersResult = await query(
+            'SELECT id, name, email FROM users WHERE id = ANY($1::uuid[]) AND is_active = TRUE',
+            [buyerIds]
+          );
+          fileRequest.assigned_buyers = buyersResult.rows;
+        } catch (buyerError) {
+          logger.error('Failed to fetch assigned buyers', { error: buyerError.message });
+          fileRequest.assigned_buyers = [];
+        }
+      } else {
+        fileRequest.assigned_buyers = [];
+      }
+
       // Calculate num_creatives_requested (use from DB if available, fallback to editors count)
       fileRequest.num_creatives_requested = fileRequest.num_creatives || editorsResult.rows.length || 0;
 
@@ -2170,6 +2187,34 @@ class FileRequestController {
         }
       } catch (e) {
         logger.warn('Per-editor quota progress update failed (non-fatal)', { requestId: fileRequest.id, editorId, error: e.message });
+      }
+
+      // Auto-set completed_at when all editors reach 100% (progress bar touches 100%)
+      try {
+        const progressCheck = await query(
+          `SELECT
+            COALESCE(SUM(fre.num_creatives_assigned), 0) as total_assigned,
+            COUNT(DISTINCT mf.id) FILTER (WHERE COALESCE(fru2.is_deleted, FALSE) = FALSE AND mf.is_deleted = FALSE) as total_completed
+          FROM file_request_editors fre
+          LEFT JOIN file_request_uploads fru2 ON fru2.file_request_id = $1 AND fru2.editor_id = fre.editor_id
+          LEFT JOIN media_files mf ON mf.upload_session_id = fru2.id
+          WHERE fre.request_id = $1
+            AND fre.status NOT IN ('reassigned', 'removed')`,
+          [fileRequest.id]
+        );
+        const { total_assigned, total_completed } = progressCheck.rows[0] || {};
+        if (total_assigned > 0 && total_completed >= total_assigned) {
+          await query(
+            `UPDATE file_requests
+             SET completed_at = COALESCE(completed_at, NOW()),
+                 updated_at = NOW()
+             WHERE id = $1 AND completed_at IS NULL`,
+            [fileRequest.id]
+          );
+          logger.info('Auto-set completed_at: all creatives uploaded', { requestId: fileRequest.id, total_assigned, total_completed });
+        }
+      } catch (compErr) {
+        logger.warn('Auto-completion check failed (non-fatal)', { error: compErr.message });
       }
 
       // Log activity for the file upload
@@ -3736,11 +3781,13 @@ class FileRequestController {
       let isVerticalHead = false;
       try {
         const vhCheck = await query(
-          `SELECT 1 FROM vertical_heads WHERE head_editor_id = $1 LIMIT 1`,
+          `SELECT 1 FROM vertical_heads WHERE head_editor_id = $1
+           UNION SELECT 1 FROM user_vertical_assignments WHERE user_id = $1
+           LIMIT 1`,
           [userId]
         );
         isVerticalHead = vhCheck.rows.length > 0;
-      } catch (_) { /* vertical_heads table may not exist */ }
+      } catch (_) { /* tables may not exist */ }
 
       const canClose = fileRequest.created_by === userId ||
                        fileRequest.assigned_buyer_id === userId || (fileRequest.assigned_buyer_ids && fileRequest.assigned_buyer_ids.includes(userId)) ||
@@ -3753,23 +3800,6 @@ class FileRequestController {
           success: false,
           error: 'Only request creator, assigned buyer, or vertical head can close'
         });
-      }
-
-      // Validate creative distribution before closing
-      const totalCreativesRequested = fileRequest.num_creatives || 0;
-      if (totalCreativesRequested > 0) {
-        const assignmentsResult = await query(
-          'SELECT SUM(num_creatives_assigned) as total_assigned FROM file_request_editors WHERE request_id = $1',
-          [id]
-        );
-        const totalAssigned = parseInt(assignmentsResult.rows[0]?.total_assigned || 0, 10);
-
-        if (totalAssigned !== totalCreativesRequested) {
-          return res.status(400).json({
-            success: false,
-            error: `Cannot close request. Total creatives assigned (${totalAssigned}) must equal requested (${totalCreativesRequested}). Please reassign editors to match the exact creative count.`
-          });
-        }
       }
 
       // Update status
@@ -4114,11 +4144,13 @@ class FileRequestController {
       let isVerticalHead = false;
       try {
         const vhCheck = await query(
-          `SELECT 1 FROM vertical_heads WHERE head_editor_id = $1 LIMIT 1`,
+          `SELECT 1 FROM vertical_heads WHERE head_editor_id = $1
+           UNION SELECT 1 FROM user_vertical_assignments WHERE user_id = $1
+           LIMIT 1`,
           [userId]
         );
         isVerticalHead = vhCheck.rows.length > 0;
-      } catch (_) { /* vertical_heads table may not exist */ }
+      } catch (_) { /* tables may not exist */ }
 
       const canReassign = isAdminRole(req.user.role) || fileRequest.auto_assigned_head === userId || isAssignedEditor || isVerticalHead;
 
@@ -4350,15 +4382,17 @@ class FileRequestController {
         isAssignedEditor = assignedEditorCheck.rows.length > 0;
       }
 
-      // Also allow vertical heads
+      // Also allow vertical heads, team leads, ATLs
       let isVerticalHead = false;
       try {
         const vhCheck = await query(
-          'SELECT 1 FROM vertical_heads WHERE head_editor_id = $1 LIMIT 1',
+          `SELECT 1 FROM vertical_heads WHERE head_editor_id = $1
+           UNION SELECT 1 FROM user_vertical_assignments WHERE user_id = $1
+           LIMIT 1`,
           [userId]
         );
         isVerticalHead = vhCheck.rows.length > 0;
-      } catch (_) { /* vertical_heads table may not exist */ }
+      } catch (_) { /* tables may not exist */ }
 
       const hasAccess = isAdminRole(req.user.role) ||
                        fileRequest.created_by === userId ||

@@ -13,7 +13,7 @@ import { AdminPage } from './pages/Admin';
 import { RBACAdminPanel } from './pages/RBACAdminPanel';
 import { ActivityLogsPage } from './pages/ActivityLogs';
 import { MetadataExtraction } from './pages/MetadataExtraction';
-import { TeamsPageEnhanced as TeamsPage } from './pages/TeamsPageEnhanced';
+// import { TeamsPageEnhanced as TeamsPage } from './pages/TeamsPageEnhanced'; // Teams feature disabled
 import { StarredPage } from './pages/StarredPage';
 import { DeletedFilesPage } from './pages/DeletedFilesPage';
 import { RecentsPage } from './pages/RecentsPage';
@@ -256,6 +256,7 @@ function AppRoutes() {
           </AdminRoute>
         }
       />
+      {/* Teams feature disabled
       <Route
         path="/teams"
         element={
@@ -264,6 +265,7 @@ function AppRoutes() {
           </PrivateRoute>
         }
       />
+      */}
       <Route
         path="/collections"
         element={

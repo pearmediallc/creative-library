@@ -876,6 +876,21 @@ export function MediaLibraryPage() {
                         <FolderInput className="w-4 h-4 mr-2" />
                         Copy
                       </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          if (selectedFiles.length > 0) {
+                            setShareDialogFile({
+                              id: selectedFiles[0],
+                              name: `${selectedFiles.length} file${selectedFiles.length !== 1 ? 's' : ''}`,
+                              type: 'file'
+                            });
+                          }
+                        }}
+                      >
+                        <Share2 className="w-4 h-4 mr-2" />
+                        Share ({selectedFiles.length})
+                      </Button>
                       {canDelete && (
                         <Button
                           variant="outline"

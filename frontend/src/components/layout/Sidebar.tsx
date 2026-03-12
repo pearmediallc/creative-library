@@ -16,7 +16,7 @@ const baseNavigation = [
   { name: 'Shared with me', href: '/shared-with-me', icon: UserCheck },
   { name: 'Trash', href: '/trash', icon: Trash2 },
   { name: 'Shared by You', href: '/shared-by-me', icon: Share2 },
-  { name: 'Teams', href: '/teams', icon: Users },
+  // { name: 'Teams', href: '/teams', icon: Users }, // Teams feature disabled
   { name: 'Settings', href: '/settings', icon: User },
   { name: 'FAQ / Help', href: '/faq', icon: HelpCircle },
 ];
@@ -37,6 +37,7 @@ const adminOnlyNavigation = [
 // Editor (creative) specific navigation items
 const editorNavigation = [
   { name: 'Analytics', href: '/analytics', icon: TrendingUp },
+  { name: 'Workload', href: '/workload', icon: BarChart3 },
 ];
 
 const adminNavigation = [
@@ -55,11 +56,15 @@ export function Sidebar() {
 
   // Build navigation based on user role
   const isAdminLike = user?.role === 'admin' || user?.role === 'team_lead';
+  const isATL = user?.role === 'assistant_team_lead';
   const navigation = (() => {
     if (isAdminLike) {
       return [...baseNavigation, ...adminBuyerNavigation, ...adminOnlyNavigation];
+    } else if (isATL) {
+      // ATLs get base nav + analytics + workload (like vertical heads, no admin panel)
+      return [...baseNavigation, ...editorNavigation];
     } else if (user?.role === 'creative') {
-      // Editors get base navigation + their specific items (Analytics) but NOT Access Requests
+      // Editors get base navigation + their specific items (Analytics, Workload)
       return [...baseNavigation, ...editorNavigation];
     } else if (user?.role === 'buyer') {
       // Buyers get base navigation + Access Requests

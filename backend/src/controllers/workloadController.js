@@ -178,19 +178,12 @@ class WorkloadController {
           fr.description,
           fr.request_type,
           fre.status,
-          fr.priority,
-          fr.complexity,
-          fr.estimated_hours,
-          fr.actual_hours,
-          fr.deadline,
           fr.created_at,
+          fr.completed_at,
           fr.created_at as assigned_at,
-          ftt.estimated_completion,
-          ftt.started_at,
           f.name AS folder_name
         FROM file_requests fr
         JOIN file_request_editors fre ON fr.id = fre.request_id
-        LEFT JOIN file_request_time_tracking ftt ON fr.id = ftt.request_id
         LEFT JOIN folders f ON fr.folder_id = f.id
         WHERE fre.editor_id = $1
         ORDER BY
@@ -200,7 +193,6 @@ class WorkloadController {
             WHEN 'pending' THEN 3
             ELSE 4
           END,
-          fr.priority ASC,
           fr.created_at DESC
       `, [editorId]);
 
@@ -246,15 +238,10 @@ class WorkloadController {
             description: r.description,
             requestType: r.request_type,
             status: r.status,
-            priority: r.priority,
-            complexity: r.complexity,
-            estimatedHours: parseFloat(r.estimated_hours || 0),
-            actualHours: parseFloat(r.actual_hours || 0),
-            deadline: r.deadline,
+            requestedDate: r.created_at,
+            completedDate: r.completed_at,
             createdAt: r.created_at,
             assignedAt: r.assigned_at,
-            estimatedCompletion: r.estimated_completion,
-            startedAt: r.started_at,
             folderName: r.folder_name
           })),
           stats: {

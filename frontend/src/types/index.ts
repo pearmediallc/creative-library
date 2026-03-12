@@ -2,7 +2,7 @@ export interface User {
   id: string;
   name: string;
   email: string;
-  role: 'admin' | 'team_lead' | 'creative' | 'buyer';
+  role: 'admin' | 'team_lead' | 'assistant_team_lead' | 'creative' | 'buyer';
   is_active: boolean;
   upload_limit_monthly: number;
   view_all_requests?: boolean;

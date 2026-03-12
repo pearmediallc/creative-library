@@ -5,6 +5,7 @@ const AllowedEmail = require('../models/AllowedEmail');
 const logger = require('../utils/logger');
 const bcrypt = require('bcryptjs');
 const { logActivity } = require('../middleware/activityLogger');
+const { query } = require('../config/database');
 
 class AdminController {
   /**
@@ -15,9 +16,20 @@ class AdminController {
     try {
       const users = await User.findAll({}, 'created_at DESC');
 
-      // Sanitize password hashes
+      // Fetch vertical assignments for all users
+      let verticalMap = {};
+      try {
+        const vaResult = await query('SELECT user_id, ARRAY_AGG(vertical) as verticals FROM user_vertical_assignments GROUP BY user_id');
+        verticalMap = vaResult.rows.reduce((acc, row) => {
+          acc[row.user_id] = row.verticals;
+          return acc;
+        }, {});
+      } catch (_) { /* table may not exist yet */ }
+
+      // Sanitize password hashes and add verticals
       const sanitizedUsers = users.map(user => {
         const { password_hash, ...rest } = user;
+        rest.assigned_verticals = verticalMap[user.id] || [];
         return rest;
       });
 
@@ -90,6 +102,33 @@ class AdminController {
         }
       }
 
+      // Save vertical assignments if provided
+      const { assigned_verticals } = req.body;
+      if (assigned_verticals && Array.isArray(assigned_verticals) && assigned_verticals.length > 0) {
+        try {
+          await query('DELETE FROM user_vertical_assignments WHERE user_id = $1', [user.id]);
+          for (const vertical of assigned_verticals) {
+            await query(
+              'INSERT INTO user_vertical_assignments (user_id, vertical) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+              [user.id, vertical]
+            );
+          }
+          // Also update vertical_heads table if user is a vertical head / team_lead
+          if (['team_lead', 'creative'].includes(role)) {
+            for (const vertical of assigned_verticals) {
+              await query(
+                `INSERT INTO vertical_heads (vertical, head_editor_id)
+                 VALUES ($1, $2)
+                 ON CONFLICT (vertical) DO UPDATE SET head_editor_id = $2, updated_at = NOW()`,
+                [vertical, user.id]
+              );
+            }
+          }
+        } catch (vaErr) {
+          logger.warn('Failed to save vertical assignments', { error: vaErr.message });
+        }
+      }
+
       const { password_hash, ...sanitizedUser } = user;
 
       res.status(201).json({
@@ -127,6 +166,21 @@ class AdminController {
       if (req.body.is_active !== undefined) updates.is_active = req.body.is_active;
 
       const updatedUser = await User.update(req.params.id, updates);
+
+      // Save vertical assignments if provided
+      if (req.body.assigned_verticals && Array.isArray(req.body.assigned_verticals)) {
+        try {
+          await query('DELETE FROM user_vertical_assignments WHERE user_id = $1', [req.params.id]);
+          for (const vertical of req.body.assigned_verticals) {
+            await query(
+              'INSERT INTO user_vertical_assignments (user_id, vertical) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+              [req.params.id, vertical]
+            );
+          }
+        } catch (vaErr) {
+          logger.warn('Failed to save vertical assignments', { error: vaErr.message });
+        }
+      }
 
       logger.info('User updated by admin', { userId: req.params.id, updates, updatedBy: req.user.id });
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { FolderPlus, ChevronDown, ChevronRight, Trash2, Edit3, Check, X, GripVertical, Play } from 'lucide-react';
 import { Button } from './ui/Button';
 import { UploadedFileCard } from './UploadedFileCard';
@@ -63,6 +63,91 @@ export function FileRequestOrganizer({
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [previewUpload, setPreviewUpload] = useState<Upload | null>(null);
   const dragItemRef = useRef<{ uploadSessionId: string; sourceFolderId: string; index: number } | null>(null);
+
+  // --- Lasso (rubber-band) selection ---
+  const [lassoActive, setLassoActive] = useState(false);
+  const [lassoStart, setLassoStart] = useState<{ x: number; y: number } | null>(null);
+  const [lassoEnd, setLassoEnd] = useState<{ x: number; y: number } | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const cardRefsMap = useRef<Map<string, HTMLDivElement>>(new Map());
+
+  const registerCardRef = useCallback((id: string, el: HTMLDivElement | null) => {
+    if (el) cardRefsMap.current.set(id, el);
+    else cardRefsMap.current.delete(id);
+  }, []);
+
+  const getLassoRect = useCallback(() => {
+    if (!lassoStart || !lassoEnd) return null;
+    return {
+      left: Math.min(lassoStart.x, lassoEnd.x),
+      top: Math.min(lassoStart.y, lassoEnd.y),
+      right: Math.max(lassoStart.x, lassoEnd.x),
+      bottom: Math.max(lassoStart.y, lassoEnd.y),
+    };
+  }, [lassoStart, lassoEnd]);
+
+  const handleLassoMouseDown = useCallback((e: React.MouseEvent) => {
+    // Only start lasso on left click, not on interactive elements
+    if (e.button !== 0) return;
+    const target = e.target as HTMLElement;
+    if (target.closest('input, button, a, [role="button"], .grip-handle')) return;
+    // Don't start lasso if clicking directly on a card (that's click-to-select)
+    if (target.closest('[data-upload-id]')) return;
+
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    setLassoActive(true);
+    const pos = { x: e.clientX, y: e.clientY };
+    setLassoStart(pos);
+    setLassoEnd(pos);
+    e.preventDefault();
+  }, []);
+
+  useEffect(() => {
+    if (!lassoActive) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      setLassoEnd({ x: e.clientX, y: e.clientY });
+    };
+
+    const handleMouseUp = () => {
+      // Select all cards that intersect the lasso rectangle
+      const rect = getLassoRect();
+      if (rect && (Math.abs(rect.right - rect.left) > 5 || Math.abs(rect.bottom - rect.top) > 5)) {
+        cardRefsMap.current.forEach((el, id) => {
+          const cardRect = el.getBoundingClientRect();
+          const intersects =
+            cardRect.left < rect.right &&
+            cardRect.right > rect.left &&
+            cardRect.top < rect.bottom &&
+            cardRect.bottom > rect.top;
+          if (intersects && !selectedUploads.has(id)) {
+            onToggleSelect(id);
+          }
+        });
+      }
+      setLassoActive(false);
+      setLassoStart(null);
+      setLassoEnd(null);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [lassoActive, getLassoRect, selectedUploads, onToggleSelect]);
+
+  const lassoStyle = useMemo(() => {
+    if (!lassoActive || !lassoStart || !lassoEnd) return null;
+    const left = Math.min(lassoStart.x, lassoEnd.x);
+    const top = Math.min(lassoStart.y, lassoEnd.y);
+    const width = Math.abs(lassoEnd.x - lassoStart.x);
+    const height = Math.abs(lassoEnd.y - lassoStart.y);
+    if (width < 3 && height < 3) return null;
+    return { position: 'fixed' as const, left, top, width, height, border: '2px dashed #3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.1)', zIndex: 50, pointerEvents: 'none' as const };
+  }, [lassoActive, lassoStart, lassoEnd]);
 
   const fetchFolders = useCallback(async () => {
     try {
@@ -197,9 +282,12 @@ export function FileRequestOrganizer({
       if (sourceFolderId === targetFolderId) return;
 
       // Use multiIds if available (multi-select drag), otherwise single file
-      const sessionIds: string[] = data.multiIds && data.multiIds.length > 0
+      const sessionIds: string[] = (data.multiIds && data.multiIds.length > 0
         ? data.multiIds
-        : [data.uploadSessionId];
+        : [data.uploadSessionId]).filter(Boolean);
+
+      // Guard: don't move if no valid session IDs
+      if (sessionIds.length === 0) return;
 
       if (targetFolderId === 'unfiled') {
         await fileRequestApi.unfileFiles(requestId, sessionIds);
@@ -282,15 +370,37 @@ export function FileRequestOrganizer({
       onDrop: (e: React.DragEvent<HTMLDivElement>) => { if (canOrganize) handleItemDrop(e, folderId, index); },
     };
 
+    // Click-to-select: clicking anywhere on card selects it (except buttons/inputs/preview area)
+    const handleCardClick = (e: React.MouseEvent) => {
+      const target = e.target as HTMLElement;
+      // Don't select if clicking on interactive elements
+      if (target.closest('input, button, a, [role="button"]')) return;
+      onToggleSelect(upload.id, e.shiftKey);
+    };
+
+    // Double-click to preview
+    const handleDoubleClick = (e: React.MouseEvent) => {
+      e.preventDefault();
+      setPreviewUpload(upload);
+    };
+
     // Grid view: 4 per row, larger cards with thumbnail + info
     if (viewMode === 'grid') {
       return (
-        <div key={upload.id} className={`relative group bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden hover:shadow-md transition-all ${dropIndicator} ${selectedClass}`} {...dragProps}>
-          <div className="absolute top-2 left-2 z-10">
+        <div
+          key={upload.id}
+          ref={(el) => registerCardRef(upload.id, el)}
+          data-upload-id={upload.id}
+          className={`relative group bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden hover:shadow-md transition-all cursor-pointer select-none ${dropIndicator} ${selectedClass}`}
+          onClick={handleCardClick}
+          onDoubleClick={handleDoubleClick}
+          {...dragProps}
+        >
+          <div className="absolute top-2 left-2 z-10" onClick={(e) => e.stopPropagation()}>
             <input type="checkbox" checked={selectedUploads.has(upload.id)} onChange={(e) => onToggleSelect(upload.id, e.nativeEvent instanceof MouseEvent ? (e.nativeEvent as MouseEvent).shiftKey : false)}
               className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer" />
           </div>
-          <div className="aspect-video bg-gray-200 dark:bg-gray-800 flex items-center justify-center cursor-pointer" onClick={() => setPreviewUpload(upload)}>
+          <div className="aspect-video bg-gray-200 dark:bg-gray-800 flex items-center justify-center">
             {upload.thumbnail_url ? (
               <img src={upload.thumbnail_url} alt={upload.original_filename} className="w-full h-full object-cover" />
             ) : isVideoFile(upload) ? (
@@ -310,12 +420,20 @@ export function FileRequestOrganizer({
     // Tile view: 6 per row, small compact tiles
     if (viewMode === 'tile') {
       return (
-        <div key={upload.id} className={`relative group bg-gray-50 dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-700 overflow-hidden hover:shadow transition-all ${dropIndicator} ${selectedClass}`} {...dragProps}>
-          <div className="absolute top-1 left-1 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div
+          key={upload.id}
+          ref={(el) => registerCardRef(upload.id, el)}
+          data-upload-id={upload.id}
+          className={`relative group bg-gray-50 dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-700 overflow-hidden hover:shadow transition-all cursor-pointer select-none ${dropIndicator} ${selectedClass}`}
+          onClick={handleCardClick}
+          onDoubleClick={handleDoubleClick}
+          {...dragProps}
+        >
+          <div className="absolute top-1 left-1 z-10 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
             <input type="checkbox" checked={selectedUploads.has(upload.id)} onChange={(e) => onToggleSelect(upload.id, e.nativeEvent instanceof MouseEvent ? (e.nativeEvent as MouseEvent).shiftKey : false)}
               className="w-3 h-3 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer" />
           </div>
-          <div className="aspect-square bg-gray-200 dark:bg-gray-800 flex items-center justify-center cursor-pointer" onClick={() => setPreviewUpload(upload)}>
+          <div className="aspect-square bg-gray-200 dark:bg-gray-800 flex items-center justify-center">
             {upload.thumbnail_url ? (
               <img src={upload.thumbnail_url} alt={upload.original_filename} className="w-full h-full object-cover" />
             ) : isVideoFile(upload) ? (
@@ -329,20 +447,25 @@ export function FileRequestOrganizer({
       );
     }
 
-    // List view (default)
+    // List view (default) - entire row is clickable to select
     return (
       <div
         key={upload.id}
-        className={`flex items-start gap-2 transition-all ${dropIndicator} ${isSelected ? 'bg-blue-50 dark:bg-blue-900/20 rounded' : ''}`}
+        ref={(el) => registerCardRef(upload.id, el)}
+        data-upload-id={upload.id}
+        className={`flex items-start gap-2 transition-all cursor-pointer select-none ${dropIndicator} ${isSelected ? 'bg-blue-50 dark:bg-blue-900/20 rounded' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50 rounded'}`}
+        onClick={handleCardClick}
+        onDoubleClick={handleDoubleClick}
         {...dragProps}
       >
         {canOrganize && (
-          <GripVertical className="w-4 h-4 mt-3 text-gray-400 cursor-grab flex-shrink-0" />
+          <GripVertical className="w-4 h-4 mt-3 text-gray-400 cursor-grab flex-shrink-0 grip-handle" />
         )}
         <input
           type="checkbox"
           checked={selectedUploads.has(upload.id)}
           onChange={(e) => onToggleSelect(upload.id, e.nativeEvent instanceof MouseEvent ? (e.nativeEvent as MouseEvent).shiftKey : false)}
+          onClick={(e) => e.stopPropagation()}
           className="mt-3 w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer"
         />
         <div className="flex-1">
@@ -502,13 +625,18 @@ export function FileRequestOrganizer({
   if (folders.length === 0 && !canOrganize) {
     return (
       <>
-        <div className={
-          viewMode === 'grid' ? 'grid grid-cols-2 gap-2'
-          : viewMode === 'tile' ? 'grid grid-cols-3 sm:grid-cols-4 gap-1.5'
-          : 'space-y-2'
-        }>
+        <div
+          ref={containerRef}
+          onMouseDown={handleLassoMouseDown}
+          className={
+            viewMode === 'grid' ? 'grid grid-cols-2 gap-2'
+            : viewMode === 'tile' ? 'grid grid-cols-3 sm:grid-cols-4 gap-1.5'
+            : 'space-y-2'
+          }
+        >
           {uploads.map((u, i) => renderUploadCard(u, 'unfiled', i))}
         </div>
+        {lassoStyle && <div style={lassoStyle} />}
         {previewModal}
       </>
     );
@@ -516,7 +644,7 @@ export function FileRequestOrganizer({
 
   return (
     <>
-      <div className="space-y-3">
+      <div ref={containerRef} onMouseDown={handleLassoMouseDown} className="space-y-3">
         {canOrganize && (
           <div className="flex items-center gap-2">
             {showNewFolder ? (
@@ -561,6 +689,7 @@ export function FileRequestOrganizer({
 
         {renderFolderSection('unfiled', 'Unfiled', groupedUploads['unfiled'] || [], true)}
       </div>
+      {lassoStyle && <div style={lassoStyle} />}
       {previewModal}
     </>
   );

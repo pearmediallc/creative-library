@@ -382,17 +382,28 @@ class AnalyticsController {
       const userId = req.user.id;
       const userRole = req.user.role;
 
-      // Get user's assigned verticals if they are a vertical head
+      // Get user's assigned verticals (vertical head, team lead, or ATL)
       let assignedVerticals = [];
       if (!isAdminRole(userRole)) {
+        // Check vertical_heads table first
         const verticalHeadsResult = await query(
           `SELECT vertical FROM vertical_heads WHERE head_editor_id = $1`,
           [userId]
         );
         assignedVerticals = verticalHeadsResult.rows.map(r => r.vertical);
 
+        // Also check user_vertical_assignments (for team_leads, ATLs)
+        try {
+          const uvaResult = await query(
+            `SELECT vertical FROM user_vertical_assignments WHERE user_id = $1`,
+            [userId]
+          );
+          const uvaVerticals = uvaResult.rows.map(r => r.vertical);
+          assignedVerticals = [...new Set([...assignedVerticals, ...uvaVerticals])];
+        } catch (_) { /* table may not exist */ }
+
         if (assignedVerticals.length === 0) {
-          // Not a vertical head and not admin - no access
+          // Not a vertical head/team lead/ATL and not admin - no access
           return res.json({ success: true, data: [] });
         }
       }
@@ -658,10 +669,12 @@ class AnalyticsController {
       const userRole = req.user.role;
       const { vertical } = req.params;
 
-      // Check access - admin or vertical head for this vertical
+      // Check access - admin, vertical head, or assigned via user_vertical_assignments
       if (!isAdminRole(userRole)) {
         const verticalHeadsResult = await query(
-          `SELECT 1 FROM vertical_heads WHERE head_editor_id = $1 AND vertical = $2`,
+          `SELECT 1 FROM vertical_heads WHERE head_editor_id = $1 AND vertical = $2
+           UNION SELECT 1 FROM user_vertical_assignments WHERE user_id = $1 AND vertical = $2
+           LIMIT 1`,
           [userId, vertical]
         );
 

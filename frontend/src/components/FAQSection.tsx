@@ -61,7 +61,7 @@ const faqData: FAQItem[] = [
 ];
 
 interface FAQSectionProps {
-  userRole?: 'admin' | 'team_lead' | 'buyer' | 'creative';
+  userRole?: 'admin' | 'team_lead' | 'assistant_team_lead' | 'buyer' | 'creative';
 }
 
 export function FAQSection({ userRole }: FAQSectionProps) {

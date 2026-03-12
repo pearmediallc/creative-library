@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { X, Share2, Users, Link as LinkIcon, Copy, Check, Mail, Calendar, Eye, Download, Edit, Trash2, User as UserIcon, Lock, Clock, BarChart, MessageSquare } from 'lucide-react';
 import { Button } from './ui/Button';
-import { permissionApi, teamApi, authApi, publicLinkApi, slackApi } from '../lib/api';
+import { permissionApi, authApi, publicLinkApi, slackApi } from '../lib/api';
 
 interface ShareDialogProps {
   isOpen: boolean;
@@ -46,14 +46,14 @@ export function ShareDialog({
   const [activeTab, setActiveTab] = useState<'people' | 'link' | 'slack'>('people');
   const [permissions, setPermissions] = useState<Permission[]>([]);
   const [allUsers, setAllUsers] = useState<User[]>([]);
-  const [allTeams, setAllTeams] = useState<Team[]>([]);
+  const [allTeams, setAllTeams] = useState<Team[]>([]); // Teams disabled
   const [loading, setLoading] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
   // Share with people form state
-  const [shareType, setShareType] = useState<'user' | 'team'>('user');
+  const [shareType, setShareType] = useState<'user' | 'team'>('user'); // Teams disabled - always 'user'
   const [selectedId, setSelectedId] = useState('');
   const [selectedPermissions, setSelectedPermissions] = useState<Set<'view' | 'download' | 'edit' | 'delete'>>(new Set(['view' as const]));
   const [expiresAt, setExpiresAt] = useState('');
@@ -107,22 +107,14 @@ export function ShareDialog({
 
   const fetchUsersAndTeams = useCallback(async () => {
     try {
-      const [usersRes, teamsRes] = await Promise.all([
-        authApi.getUsers(), // Use authApi instead of adminApi - accessible by all authenticated users
-        teamApi.getAll()
-      ]);
+      const usersRes = await authApi.getUsers();
       setAllUsers((usersRes.data.data || []).map((u: any) => ({
         id: u.id,
         name: u.name,
         email: u.email
       })));
-      setAllTeams((teamsRes.data.data || []).map((t: any) => ({
-        id: t.id,
-        name: t.name,
-        description: t.description
-      })));
     } catch (err) {
-      console.error('Failed to fetch users/teams:', err);
+      console.error('Failed to fetch users:', err);
     }
   }, []);
 
@@ -533,57 +525,51 @@ export function ShareDialog({
                 </div>
 
                 <div className="grid grid-cols-1 gap-3">
-                  {/* Share Type Selection */}
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => { setShareType('user'); setSelectedId(''); }}
-                      className={`flex-1 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                        shareType === 'user'
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600'
-                      }`}
-                    >
-                      <UserIcon className="w-4 h-4 inline-block mr-1" />
-                      User
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => { setShareType('team'); setSelectedId(''); }}
-                      className={`flex-1 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                        shareType === 'team'
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600'
-                      }`}
-                    >
-                      <Users className="w-4 h-4 inline-block mr-1" />
-                      Team
-                    </button>
+                  {/* Searchable User Selection */}
+                  <div className="relative">
+                    <input
+                      type="text"
+                      placeholder="Search users by name or email..."
+                      onChange={(e) => {
+                        const search = e.target.value.toLowerCase();
+                        const el = e.target.nextElementSibling as HTMLElement;
+                        if (el) el.style.display = search ? 'block' : 'none';
+                        // Filter and show
+                        const items = el?.querySelectorAll('[data-user-item]');
+                        items?.forEach((item: any) => {
+                          const text = item.textContent?.toLowerCase() || '';
+                          item.style.display = text.includes(search) ? 'flex' : 'none';
+                        });
+                      }}
+                      onFocus={(e) => {
+                        const el = e.target.nextElementSibling as HTMLElement;
+                        if (el && e.target.value) el.style.display = 'block';
+                      }}
+                      disabled={sharing}
+                      className="w-full h-10 px-3 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
+                    />
+                    <div className="absolute z-20 left-0 right-0 top-full mt-1 max-h-40 overflow-y-auto bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg" style={{ display: 'none' }}>
+                      {availableUsers.map(user => (
+                        <div
+                          key={user.id}
+                          data-user-item
+                          onClick={() => {
+                            setSelectedId(user.id);
+                            setShareType('user');
+                            const input = document.querySelector('[placeholder="Search users by name or email..."]') as HTMLInputElement;
+                            if (input) { input.value = `${user.name} (${user.email})`; }
+                            const el = input?.nextElementSibling as HTMLElement;
+                            if (el) el.style.display = 'none';
+                          }}
+                          className={`flex items-center gap-2 px-3 py-2 text-sm cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 ${selectedId === user.id ? 'bg-blue-50 dark:bg-blue-900/30' : ''}`}
+                        >
+                          <UserIcon className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                          <span className="text-gray-900 dark:text-white">{user.name}</span>
+                          <span className="text-gray-500 text-xs">({user.email})</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-
-                  {/* User/Team Selection */}
-                  <select
-                    value={selectedId}
-                    onChange={(e) => setSelectedId(e.target.value)}
-                    disabled={sharing}
-                    className="w-full h-10 px-3 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="">
-                      {shareType === 'user' ? 'Select a user...' : 'Select a team...'}
-                    </option>
-                    {shareType === 'user'
-                      ? availableUsers.map(user => (
-                          <option key={user.id} value={user.id}>
-                            {user.name} ({user.email})
-                          </option>
-                        ))
-                      : availableTeams.map(team => (
-                          <option key={team.id} value={team.id}>
-                            {team.name}
-                          </option>
-                        ))
-                    }
-                  </select>
 
                   {/* Permission Selection */}
                   <div>

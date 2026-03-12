@@ -104,6 +104,8 @@ interface FileRequestDetails {
   reopened_by?: string;
   reopen_count?: number;
   assigned_buyer_id?: string;
+  assigned_buyer_ids?: string[];
+  assigned_buyers?: { id: string; name: string; email: string }[];
   auto_assigned_head?: string;
   reassignment_count?: number;
   // Fulfillment tracking
@@ -1248,6 +1250,20 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
                   {request.creator_email && (
                     <p className="text-xs text-blue-600 dark:text-blue-400">{request.creator_email}</p>
                   )}
+                </div>
+              )}
+
+              {/* Assigned Buyers */}
+              {request.assigned_buyers && request.assigned_buyers.length > 0 && (
+                <div>
+                  <span className="text-blue-700 dark:text-blue-300 font-medium">Assigned Buyer(s):</span>
+                  <div className="mt-0.5 space-y-0.5">
+                    {request.assigned_buyers.map((buyer) => (
+                      <p key={buyer.id} className="text-blue-900 dark:text-blue-100 text-xs">
+                        {buyer.name} <span className="text-blue-600 dark:text-blue-400">({buyer.email})</span>
+                      </p>
+                    ))}
+                  </div>
                 </div>
               )}
 

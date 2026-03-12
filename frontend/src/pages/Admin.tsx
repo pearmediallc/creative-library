@@ -21,6 +21,7 @@ export function AdminPage() {
     password: '',
     role: 'creative',
     upload_limit_monthly: 100,
+    assigned_verticals: [] as string[],
   });
   const [error, setError] = useState('');
 
@@ -63,7 +64,7 @@ export function AdminPage() {
 
     try {
       await adminApi.createUser(formData);
-      setFormData({ name: '', email: '', password: '', role: 'creative', upload_limit_monthly: 100 });
+      setFormData({ name: '', email: '', password: '', role: 'creative', upload_limit_monthly: 100, assigned_verticals: [] });
       setShowAddForm(false);
       setError('');
       fetchData();
@@ -78,9 +79,10 @@ export function AdminPage() {
         name: formData.name,
         role: formData.role as any,
         upload_limit_monthly: formData.upload_limit_monthly,
+        assigned_verticals: formData.assigned_verticals,
       });
       setEditingId(null);
-      setFormData({ name: '', email: '', password: '', role: 'creative', upload_limit_monthly: 100 });
+      setFormData({ name: '', email: '', password: '', role: 'creative', upload_limit_monthly: 100, assigned_verticals: [] });
       fetchData();
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to update user');
@@ -95,6 +97,7 @@ export function AdminPage() {
       password: '',
       role: user.role,
       upload_limit_monthly: user.upload_limit_monthly,
+      assigned_verticals: (user as any).assigned_verticals || [],
     });
   };
 
@@ -263,9 +266,35 @@ export function AdminPage() {
                     >
                       <option value="creative">Creative</option>
                       <option value="buyer">Buyer</option>
+                      <option value="team_lead">Team Lead</option>
+                      <option value="assistant_team_lead">Assistant Team Lead (ATL)</option>
                       <option value="admin">Admin</option>
                     </select>
                   </div>
+                  {['team_lead', 'assistant_team_lead', 'creative'].includes(formData.role) && (
+                    <div className="space-y-2 col-span-2">
+                      <label className="text-sm font-medium">Assigned Verticals</label>
+                      <div className="flex flex-wrap gap-2">
+                        {['bizop', 'auto', 'home', 'guns', 'refi', 'medicare'].map(v => (
+                          <label key={v} className="flex items-center gap-1.5 px-2 py-1 rounded border border-input hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={formData.assigned_verticals.includes(v)}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setFormData({ ...formData, assigned_verticals: [...formData.assigned_verticals, v] });
+                                } else {
+                                  setFormData({ ...formData, assigned_verticals: formData.assigned_verticals.filter(x => x !== v) });
+                                }
+                              }}
+                              className="rounded border-gray-300 text-blue-600"
+                            />
+                            <span className="text-sm capitalize">{v}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   <div className="space-y-2 col-span-2">
                     <label className="text-sm font-medium">Upload Limit (per month)</label>
                     <Input
@@ -279,7 +308,7 @@ export function AdminPage() {
                   <Button onClick={handleAddUser}>Create User</Button>
                   <Button variant="outline" onClick={() => {
                     setShowAddForm(false);
-                    setFormData({ name: '', email: '', password: '', role: 'creative', upload_limit_monthly: 100 });
+                    setFormData({ name: '', email: '', password: '', role: 'creative', upload_limit_monthly: 100, assigned_verticals: [] });
                     setError('');
                   }}>
                     Cancel
@@ -379,6 +408,8 @@ export function AdminPage() {
                         >
                           <option value="creative">Creative</option>
                           <option value="buyer">Buyer</option>
+                          <option value="team_lead">Team Lead</option>
+                          <option value="assistant_team_lead">ATL</option>
                           <option value="admin">Admin</option>
                         </select>
                         <Input
@@ -387,6 +418,29 @@ export function AdminPage() {
                           onChange={(e) => setFormData({ ...formData, upload_limit_monthly: parseInt(e.target.value) })}
                           placeholder="Upload limit"
                         />
+                        {['team_lead', 'assistant_team_lead', 'creative'].includes(formData.role) && (
+                          <div className="col-span-4 mt-2">
+                            <label className="text-sm font-medium text-muted-foreground mb-1 block">Assigned Verticals</label>
+                            <div className="flex flex-wrap gap-2">
+                              {['bizop', 'auto', 'home', 'guns', 'refi', 'medicare'].map((v) => (
+                                <label key={v} className="flex items-center gap-1 text-sm capitalize">
+                                  <input
+                                    type="checkbox"
+                                    checked={formData.assigned_verticals?.includes(v)}
+                                    onChange={(e) => {
+                                      if (e.target.checked) {
+                                        setFormData({ ...formData, assigned_verticals: [...(formData.assigned_verticals || []), v] });
+                                      } else {
+                                        setFormData({ ...formData, assigned_verticals: (formData.assigned_verticals || []).filter((x: string) => x !== v) });
+                                      }
+                                    }}
+                                  />
+                                  {v}
+                                </label>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     ) : (
                       <div className="flex-1">
@@ -424,7 +478,7 @@ export function AdminPage() {
                         <button
                           onClick={() => {
                             setEditingId(null);
-                            setFormData({ name: '', email: '', password: '', role: 'creative', upload_limit_monthly: 100 });
+                            setFormData({ name: '', email: '', password: '', role: 'creative', upload_limit_monthly: 100, assigned_verticals: [] });
                           }}
                           className="p-2 hover:bg-accent rounded"
                         >

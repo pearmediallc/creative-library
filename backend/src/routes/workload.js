@@ -8,9 +8,11 @@ const router = express.Router();
 const workloadController = require('../controllers/workloadController');
 const { authenticateToken, requireRole } = require('../middleware/auth');
 
-// All routes require authentication and admin role
+// Routes require authentication - admin/team_lead can see all, vertical heads see their vertical
 router.use(authenticateToken);
-router.use(requireRole('admin'));
+// Vertical heads are 'creative' role but listed in vertical_heads table
+// So we allow admin, team_lead, creative, and buyer - the controller handles data filtering
+router.use(requireRole('admin', 'team_lead', 'creative', 'buyer'));
 
 // Get workload overview for all editors
 router.get('/overview', workloadController.getOverview.bind(workloadController));

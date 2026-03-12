@@ -201,6 +201,7 @@ export const adminApi = {
     role: string;
     upload_limit_monthly: number;
     is_active: boolean;
+    assigned_verticals: string[];
   }>) => api.patch(`/admin/users/${id}`, data),
   getStats: () => api.get('/admin/stats'),
 

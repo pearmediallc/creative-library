@@ -14,11 +14,8 @@ interface Request {
   title: string;
   requestType: string;
   status: string;
-  priority: number;
-  complexity: string;
-  estimatedHours: number;
-  actualHours: number;
-  deadline: string;
+  requestedDate: string;
+  completedDate: string | null;
   createdAt: string;
   folderName: string;
 }
@@ -141,22 +138,16 @@ export function EditorDetailModal({ editorId, onClose, onUpdate }: EditorDetailM
                 <thead className="bg-gray-50 dark:bg-gray-700">
                   <tr>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                      Title
+                      Request Name
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
                       Status
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                      Priority
+                      Requested Date
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                      Complexity
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                      Est. Hours
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
-                      Deadline
+                      Completed Date
                     </th>
                   </tr>
                 </thead>
@@ -182,29 +173,19 @@ export function EditorDetailModal({ editorId, onClose, onUpdate }: EditorDetailM
                         </span>
                       </td>
                       <td className="px-4 py-3">
-                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getPriorityColor(request.priority)}`}>
-                          P{request.priority}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className="text-sm text-gray-700 dark:text-gray-300 capitalize">
-                          {request.complexity}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
                         <div className="flex items-center gap-1 text-sm text-gray-700 dark:text-gray-300">
-                          <Clock size={14} />
-                          {request.estimatedHours || 'N/A'}h
+                          <Calendar size={14} />
+                          {formatDate(request.requestedDate)}
                         </div>
                       </td>
                       <td className="px-4 py-3">
-                        {request.deadline ? (
+                        {request.completedDate ? (
                           <div className="flex items-center gap-1 text-sm text-gray-700 dark:text-gray-300">
                             <Calendar size={14} />
-                            {formatDate(request.deadline)}
+                            {formatDate(request.completedDate)}
                           </div>
                         ) : (
-                          <span className="text-xs text-gray-400">No deadline</span>
+                          <span className="text-xs text-gray-400">In progress</span>
                         )}
                       </td>
                     </tr>
