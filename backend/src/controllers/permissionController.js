@@ -487,11 +487,37 @@ class PermissionController {
         // User can share if they created the file request that this file belongs to
         if (file && file.metadata?.request_id) {
           const fileRequest = await query(
-            `SELECT created_by FROM file_requests WHERE id = $1`,
+            `SELECT created_by, assigned_buyer_id, assigned_buyer_ids FROM file_requests WHERE id = $1`,
             [file.metadata.request_id]
           );
-          if (fileRequest.rows.length > 0 && fileRequest.rows[0].created_by === userId) {
-            return true;
+          if (fileRequest.rows.length > 0) {
+            const fr = fileRequest.rows[0];
+            if (fr.created_by === userId) return true;
+            if (fr.assigned_buyer_id === userId) return true;
+            if (fr.assigned_buyer_ids && fr.assigned_buyer_ids.includes(userId)) return true;
+          }
+        }
+
+        // User can share if file is in a folder they own
+        if (file && file.folder_id) {
+          const folderOwner = await query('SELECT owner_id FROM folders WHERE id = $1', [file.folder_id]);
+          if (folderOwner.rows.length > 0 && folderOwner.rows[0].owner_id === userId) return true;
+        }
+
+        // User can share if they uploaded it via a file request upload session
+        if (file && file.upload_session_id) {
+          const session = await query(
+            `SELECT fr.created_by, fr.assigned_buyer_id, fr.assigned_buyer_ids
+             FROM file_request_uploads fru
+             JOIN file_requests fr ON fr.id = fru.file_request_id
+             WHERE fru.id = $1`,
+            [file.upload_session_id]
+          );
+          if (session.rows.length > 0) {
+            const fr = session.rows[0];
+            if (fr.created_by === userId) return true;
+            if (fr.assigned_buyer_id === userId) return true;
+            if (fr.assigned_buyer_ids && fr.assigned_buyer_ids.includes(userId)) return true;
           }
         }
 
@@ -515,6 +541,19 @@ class PermissionController {
         if (fileRequestCreator.rows.length > 0) {
           return true; // User created the file request for this folder
         }
+
+        // Check if user is an assigned buyer on a file request targeting this folder
+        const assignedBuyer = await query(
+          `SELECT 1 FROM file_requests
+           WHERE folder_id = $1
+             AND (assigned_buyer_id = $2 OR $2 = ANY(assigned_buyer_ids))
+           LIMIT 1`,
+          [resourceId, userId]
+        );
+        if (assignedBuyer.rows.length > 0) return true;
+
+        // Check if user owns the folder
+        if (folder && folder.owner_id === userId) return true;
 
         return false;
       }

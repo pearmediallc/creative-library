@@ -7,6 +7,7 @@ import { adminApi } from '../lib/api';
 import { User } from '../types';
 import { Shield, Plus, Edit2, Check, X, Key, Copy } from 'lucide-react';
 import { SlackSettingsPanel } from '../components/SlackSettingsPanel';
+import { VERTICALS } from '../constants/verticals';
 
 export function AdminPage() {
   const [users, setUsers] = useState<User[]>([]);
@@ -23,6 +24,7 @@ export function AdminPage() {
     upload_limit_monthly: 100,
     assigned_verticals: [] as string[],
   });
+  const [verticalSearch, setVerticalSearch] = useState('');
   const [error, setError] = useState('');
 
   // Password reset state
@@ -274,8 +276,14 @@ export function AdminPage() {
                   {['team_lead', 'assistant_team_lead', 'creative'].includes(formData.role) && (
                     <div className="space-y-2 col-span-2">
                       <label className="text-sm font-medium">Assigned Verticals</label>
-                      <div className="flex flex-wrap gap-2">
-                        {['bizop', 'auto', 'home', 'guns', 'refi', 'medicare'].map(v => (
+                      <Input
+                        placeholder="Search verticals..."
+                        value={verticalSearch}
+                        onChange={(e) => setVerticalSearch(e.target.value)}
+                        className="mb-1"
+                      />
+                      <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
+                        {[...VERTICALS].filter(v => !verticalSearch || v.toLowerCase().includes(verticalSearch.toLowerCase())).map(v => (
                           <label key={v} className="flex items-center gap-1.5 px-2 py-1 rounded border border-input hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer">
                             <input
                               type="checkbox"
@@ -289,10 +297,13 @@ export function AdminPage() {
                               }}
                               className="rounded border-gray-300 text-blue-600"
                             />
-                            <span className="text-sm capitalize">{v}</span>
+                            <span className="text-sm">{v}</span>
                           </label>
                         ))}
                       </div>
+                      {formData.assigned_verticals.length > 0 && (
+                        <p className="text-xs text-blue-600">{formData.assigned_verticals.length} vertical(s) selected</p>
+                      )}
                     </div>
                   )}
                   <div className="space-y-2 col-span-2">
@@ -421,9 +432,16 @@ export function AdminPage() {
                         {['team_lead', 'assistant_team_lead', 'creative'].includes(formData.role) && (
                           <div className="col-span-4 mt-2">
                             <label className="text-sm font-medium text-muted-foreground mb-1 block">Assigned Verticals</label>
-                            <div className="flex flex-wrap gap-2">
-                              {['bizop', 'auto', 'home', 'guns', 'refi', 'medicare'].map((v) => (
-                                <label key={v} className="flex items-center gap-1 text-sm capitalize">
+                            <input
+                              type="text"
+                              placeholder="Search verticals..."
+                              value={verticalSearch}
+                              onChange={(e) => setVerticalSearch(e.target.value)}
+                              className="w-full h-8 px-2 mb-1 text-sm border border-input rounded-md bg-background"
+                            />
+                            <div className="flex flex-wrap gap-2 max-h-28 overflow-y-auto">
+                              {[...VERTICALS].filter(v => !verticalSearch || v.toLowerCase().includes(verticalSearch.toLowerCase())).map((v) => (
+                                <label key={v} className="flex items-center gap-1 text-sm px-2 py-0.5 rounded border border-input hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer">
                                   <input
                                     type="checkbox"
                                     checked={formData.assigned_verticals?.includes(v)}
@@ -439,6 +457,9 @@ export function AdminPage() {
                                 </label>
                               ))}
                             </div>
+                            {formData.assigned_verticals?.length > 0 && (
+                              <p className="text-xs text-blue-600 mt-1">{formData.assigned_verticals.length} selected</p>
+                            )}
                           </div>
                         )}
                       </div>

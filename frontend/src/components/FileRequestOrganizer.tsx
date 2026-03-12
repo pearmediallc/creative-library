@@ -30,6 +30,7 @@ interface FileRequestOrganizerProps {
   viewMode?: 'list' | 'grid' | 'tile';
   selectedUploads: Set<string>;
   onToggleSelect: (id: string, shiftKey?: boolean) => void;
+  onBatchSelect?: (ids: string[]) => void;
   onDownload: (upload: any) => any;
   onAddToLibrary?: (upload: any) => any;
   onRemoveFromRequest?: (upload: any) => any;
@@ -45,6 +46,7 @@ export function FileRequestOrganizer({
   viewMode = 'list',
   selectedUploads,
   onToggleSelect,
+  onBatchSelect,
   onDownload,
   onAddToLibrary,
   onRemoveFromRequest,
@@ -114,6 +116,7 @@ export function FileRequestOrganizer({
       // Select all cards that intersect the lasso rectangle
       const rect = getLassoRect();
       if (rect && (Math.abs(rect.right - rect.left) > 5 || Math.abs(rect.bottom - rect.top) > 5)) {
+        const intersectingIds: string[] = [];
         cardRefsMap.current.forEach((el, id) => {
           const cardRect = el.getBoundingClientRect();
           const intersects =
@@ -121,10 +124,13 @@ export function FileRequestOrganizer({
             cardRect.right > rect.left &&
             cardRect.top < rect.bottom &&
             cardRect.bottom > rect.top;
-          if (intersects && !selectedUploads.has(id)) {
-            onToggleSelect(id);
+          if (intersects) {
+            intersectingIds.push(id);
           }
         });
+        if (intersectingIds.length > 0 && onBatchSelect) {
+          onBatchSelect(intersectingIds);
+        }
       }
       setLassoActive(false);
       setLassoStart(null);
@@ -137,7 +143,7 @@ export function FileRequestOrganizer({
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [lassoActive, getLassoRect, selectedUploads, onToggleSelect]);
+  }, [lassoActive, getLassoRect, onBatchSelect]);
 
   const lassoStyle = useMemo(() => {
     if (!lassoActive || !lassoStart || !lassoEnd) return null;

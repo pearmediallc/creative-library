@@ -13,22 +13,38 @@ class WorkloadController {
    */
   async getOverview(req, res, next) {
     try {
-      // Get summary from view
+      // Calculate workload dynamically instead of relying on stale editor_capacity
       const result = await query(`
         SELECT
-          editor_id,
-          editor_name,
-          display_name,
-          load_percentage,
-          status,
-          max_concurrent_requests,
-          avg_completion_time_hours,
-          is_available,
-          active_requests,
-          completed_requests,
-          total_requests
-        FROM editor_workload_summary
-        ORDER BY load_percentage DESC, editor_name ASC
+          e.id AS editor_id,
+          e.name AS editor_name,
+          e.display_name,
+          COALESCE(ec.max_concurrent_requests, 10) AS max_concurrent_requests,
+          COALESCE(ec.avg_completion_time_hours, 0) AS avg_completion_time_hours,
+          COALESCE(ec.is_available, TRUE) AS is_available,
+          COUNT(CASE WHEN fre.status IN ('pending', 'assigned', 'in_progress') AND fr.is_active = TRUE THEN 1 END)::int AS active_requests,
+          COUNT(CASE WHEN fre.status = 'completed' THEN 1 END)::int AS completed_requests,
+          COUNT(fre.id)::int AS total_requests,
+          CASE
+            WHEN COALESCE(ec.max_concurrent_requests, 10) > 0
+            THEN ROUND(
+              (COUNT(CASE WHEN fre.status IN ('pending', 'assigned', 'in_progress') AND fr.is_active = TRUE THEN 1 END)::decimal
+               / COALESCE(ec.max_concurrent_requests, 10)::decimal) * 100, 1
+            )
+            ELSE 0
+          END AS load_percentage,
+          CASE
+            WHEN COUNT(CASE WHEN fre.status IN ('pending', 'assigned', 'in_progress') AND fr.is_active = TRUE THEN 1 END) = 0 THEN 'available'
+            WHEN COUNT(CASE WHEN fre.status IN ('pending', 'assigned', 'in_progress') AND fr.is_active = TRUE THEN 1 END) >= COALESCE(ec.max_concurrent_requests, 10) * 0.8 THEN 'overloaded'
+            ELSE 'busy'
+          END AS status
+        FROM editors e
+        LEFT JOIN file_request_editors fre ON fre.editor_id = e.id
+        LEFT JOIN file_requests fr ON fr.id = fre.request_id
+        LEFT JOIN editor_capacity ec ON ec.editor_id = e.id
+        WHERE e.is_active = TRUE
+        GROUP BY e.id, e.name, e.display_name, ec.max_concurrent_requests, ec.avg_completion_time_hours, ec.is_available
+        ORDER BY load_percentage DESC, e.name ASC
       `);
 
       const editors = result.rows;
@@ -181,7 +197,12 @@ class WorkloadController {
           fr.created_at,
           fr.completed_at,
           fr.created_at as assigned_at,
-          f.name AS folder_name
+          f.name AS folder_name,
+          fre.num_creatives_assigned,
+          fre.deliverables_uploaded,
+          (SELECT COUNT(*)::int FROM file_request_uploads fru
+           WHERE fru.file_request_id = fr.id AND fru.editor_id = fre.editor_id
+             AND COALESCE(fru.is_deleted, FALSE) = FALSE) AS actual_uploads
         FROM file_requests fr
         JOIN file_request_editors fre ON fr.id = fre.request_id
         LEFT JOIN folders f ON fr.folder_id = f.id
@@ -222,7 +243,9 @@ class WorkloadController {
             id: editor.id,
             name: editor.name,
             displayName: editor.display_name,
-            loadPercentage: parseFloat(editor.current_load_percentage || 0),
+            loadPercentage: editor.max_concurrent_requests > 0
+              ? Math.round((activeRequests.length / parseInt(editor.max_concurrent_requests || 10)) * 1000) / 10
+              : 0,
             status: editor.status,
             maxConcurrentRequests: parseInt(editor.max_concurrent_requests || 10),
             maxHoursPerWeek: parseFloat(editor.max_hours_per_week || 40),
@@ -232,18 +255,26 @@ class WorkloadController {
             unavailableUntil: editor.unavailable_until,
             unavailableReason: editor.unavailable_reason
           },
-          requests: requests.map(r => ({
-            id: r.id,
-            title: r.title,
-            description: r.description,
-            requestType: r.request_type,
-            status: r.status,
-            requestedDate: r.created_at,
-            completedDate: r.completed_at,
-            createdAt: r.created_at,
-            assignedAt: r.assigned_at,
-            folderName: r.folder_name
-          })),
+          requests: requests.map(r => {
+            const assigned = parseInt(r.num_creatives_assigned) || 0;
+            const uploaded = parseInt(r.actual_uploads) || 0;
+            const progress = assigned > 0 ? Math.min(Math.round((uploaded / assigned) * 100), 100) : (uploaded > 0 ? 100 : 0);
+            return {
+              id: r.id,
+              title: r.title,
+              description: r.description,
+              requestType: r.request_type,
+              status: r.status,
+              requestedDate: r.created_at,
+              completedDate: r.completed_at,
+              createdAt: r.created_at,
+              assignedAt: r.assigned_at,
+              folderName: r.folder_name,
+              progress,
+              uploaded,
+              assigned,
+            };
+          }),
           stats: {
             totalRequests: requests.length,
             activeRequests: activeRequests.length,

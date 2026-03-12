@@ -663,7 +663,7 @@ class LaunchRequestController {
     const provLabel     = san(lr.provisioner_name || 'Admin').slice(0, 30);
     const requestLabel  = san(lr.title || lr.request_type || 'Launch-Request').slice(0, 50);
 
-    const datedFolderName = `${buyerLabel}-${dateStr}`;
+    const datedFolderName = `${dateStr}-${buyerLabel}`;
     const subfolderName   = `${provLabel}-${requestLabel}`;
 
     // ── "Launch Requests" category root ────────────────────────────────────

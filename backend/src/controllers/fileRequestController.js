@@ -1965,27 +1965,39 @@ class FileRequestController {
           [fileRequest.id, editorId]
         );
 
-        // Heuristic for workload accuracy:
-        // If the request's num_creatives matches the number of assigned editors, treat 1 upload as fulfillment for that editor.
+        // Auto-complete editor assignment when they've uploaded enough files
         try {
-          const assignedCountRes = await query(
-            'SELECT COUNT(*)::int AS cnt FROM file_request_editors WHERE request_id = $1',
-            [fileRequest.id]
+          const editorAssignment = await query(
+            'SELECT num_creatives_assigned, deliverables_uploaded FROM file_request_editors WHERE request_id = $1 AND editor_id = $2',
+            [fileRequest.id, editorId]
           );
-          const assignedCount = assignedCountRes.rows[0]?.cnt || 0;
-          const numCreatives = fileRequest.num_creatives ? Number(fileRequest.num_creatives) : null;
+          if (editorAssignment.rows.length > 0) {
+            const assigned = editorAssignment.rows[0];
+            const numAssigned = parseInt(assigned.num_creatives_assigned) || 0;
+            const uploaded = (parseInt(assigned.deliverables_uploaded) || 0) + 1; // +1 for current upload
 
-          if (numCreatives && assignedCount === numCreatives) {
-            await query(
-              `UPDATE file_request_editors
-               SET status = 'completed',
-                   completed_at = COALESCE(completed_at, NOW())
-               WHERE request_id = $1 AND editor_id = $2`,
+            // Count actual uploaded files by this editor for this request
+            const actualUploads = await query(
+              `SELECT COUNT(*)::int AS cnt FROM file_request_uploads
+               WHERE file_request_id = $1 AND editor_id = $2 AND COALESCE(is_deleted, FALSE) = FALSE`,
               [fileRequest.id, editorId]
             );
+            const actualCount = actualUploads.rows[0]?.cnt || 0;
+
+            // Complete if: editor uploaded >= their assigned quota, OR if no quota set and they uploaded at least 1
+            if ((numAssigned > 0 && actualCount >= numAssigned) || (numAssigned === 0 && actualCount >= 1)) {
+              await query(
+                `UPDATE file_request_editors
+                 SET status = 'completed',
+                     completed_at = COALESCE(completed_at, NOW()),
+                     deliverables_uploaded = $3
+                 WHERE request_id = $1 AND editor_id = $2 AND status != 'completed'`,
+                [fileRequest.id, editorId, actualCount]
+              );
+            }
           }
         } catch (e) {
-          logger.warn('Auto-complete editor assignment heuristic failed (non-fatal)', { requestId: fileRequest.id, editorId, error: e.message });
+          logger.warn('Auto-complete editor assignment failed (non-fatal)', { requestId: fileRequest.id, editorId, error: e.message });
         }
       }
 

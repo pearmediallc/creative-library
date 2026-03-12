@@ -8,6 +8,7 @@ interface ShareDialogProps {
   onClose: () => void;
   resourceType: 'file' | 'folder';
   resourceId: string;
+  resourceIds?: string[];
   resourceName: string;
 }
 
@@ -41,6 +42,7 @@ export function ShareDialog({
   onClose,
   resourceType,
   resourceId,
+  resourceIds,
   resourceName
 }: ShareDialogProps) {
   const [activeTab, setActiveTab] = useState<'people' | 'link' | 'slack'>('people');
@@ -54,7 +56,8 @@ export function ShareDialog({
 
   // Share with people form state
   const [shareType, setShareType] = useState<'user' | 'team'>('user'); // Teams disabled - always 'user'
-  const [selectedId, setSelectedId] = useState('');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [userSearch, setUserSearch] = useState('');
   const [selectedPermissions, setSelectedPermissions] = useState<Set<'view' | 'download' | 'edit' | 'delete'>>(new Set(['view' as const]));
   const [expiresAt, setExpiresAt] = useState('');
   const [notifyViaSlack, setNotifyViaSlack] = useState(false);
@@ -156,8 +159,8 @@ export function ShareDialog({
   const handleShare = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!selectedId) {
-      setError(`Please select a ${shareType}`);
+    if (selectedIds.size === 0) {
+      setError('Please select at least one user');
       return;
     }
 
@@ -171,40 +174,48 @@ export function ShareDialog({
     setSuccess('');
 
     try {
-      // Grant each selected permission
-      await Promise.all(
-        Array.from(selectedPermissions).map(permType =>
-          permissionApi.grant({
-            resource_type: resourceType,
-            resource_id: resourceId,
-            grantee_type: shareType,
-            grantee_id: selectedId,
-            permission_type: permType,
-            expires_at: expiresAt || undefined
-          })
-        )
-      );
+      // Share with all selected users across all resource IDs
+      const allResourceIds = resourceIds && resourceIds.length > 0 ? resourceIds : [resourceId];
+      const grantPromises: Promise<any>[] = [];
+      for (const resId of allResourceIds) {
+        for (const userId of Array.from(selectedIds)) {
+          for (const permType of Array.from(selectedPermissions)) {
+            grantPromises.push(
+              permissionApi.grant({
+                resource_type: resourceType,
+                resource_id: resId,
+                grantee_type: shareType,
+                grantee_id: userId,
+                permission_type: permType,
+                expires_at: expiresAt || undefined
+              })
+            );
+          }
+        }
+      }
+      await Promise.all(grantPromises);
 
       // Send Slack notification if requested
-      if (notifyViaSlack && shareType === 'user') {
+      if (notifyViaSlack) {
         try {
           const fileUrl = resourceType === 'file'
             ? `${window.location.origin}/media/${resourceId}`
             : `${window.location.origin}/media?folderId=${resourceId}`;
 
           await slackApi.sendManualNotification({
-            userIds: [selectedId],
+            userIds: Array.from(selectedIds),
             fileName: resourceName,
             fileUrl
           });
         } catch (slackErr) {
           console.error('Failed to send Slack notification:', slackErr);
-          // Don't fail the whole operation if Slack notification fails
         }
       }
 
-      setSuccess(`Shared successfully with ${shareType === 'user' ? 'user' : 'team'}!${notifyViaSlack ? ' Slack notification sent.' : ''}`);
-      setSelectedId('');
+      const userCount = selectedIds.size;
+      const fileCount = allResourceIds.length;
+      setSuccess(`Shared ${fileCount} file${fileCount > 1 ? 's' : ''} with ${userCount} user${userCount > 1 ? 's' : ''}!${notifyViaSlack ? ' Slack notification sent.' : ''}`);
+      setSelectedIds(new Set());
       setSelectedPermissions(new Set(['view' as const]));
       setExpiresAt('');
       setNotifyViaSlack(false);
@@ -525,48 +536,45 @@ export function ShareDialog({
                 </div>
 
                 <div className="grid grid-cols-1 gap-3">
-                  {/* Searchable User Selection */}
-                  <div className="relative">
+                  {/* Multi-select User Selection with Search */}
+                  <div>
                     <input
                       type="text"
                       placeholder="Search users by name or email..."
-                      onChange={(e) => {
-                        const search = e.target.value.toLowerCase();
-                        const el = e.target.nextElementSibling as HTMLElement;
-                        if (el) el.style.display = search ? 'block' : 'none';
-                        // Filter and show
-                        const items = el?.querySelectorAll('[data-user-item]');
-                        items?.forEach((item: any) => {
-                          const text = item.textContent?.toLowerCase() || '';
-                          item.style.display = text.includes(search) ? 'flex' : 'none';
-                        });
-                      }}
-                      onFocus={(e) => {
-                        const el = e.target.nextElementSibling as HTMLElement;
-                        if (el && e.target.value) el.style.display = 'block';
-                      }}
+                      value={userSearch}
+                      onChange={(e) => setUserSearch(e.target.value)}
                       disabled={sharing}
-                      className="w-full h-10 px-3 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
+                      className="w-full h-10 px-3 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 mb-1"
                     />
-                    <div className="absolute z-20 left-0 right-0 top-full mt-1 max-h-40 overflow-y-auto bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg" style={{ display: 'none' }}>
-                      {availableUsers.map(user => (
-                        <div
+                    {selectedIds.size > 0 && (
+                      <p className="text-xs text-blue-600 dark:text-blue-400 mb-1">{selectedIds.size} user(s) selected</p>
+                    )}
+                    <div className="max-h-36 overflow-y-auto border border-gray-200 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700">
+                      {availableUsers.filter(u => {
+                        if (!userSearch.trim()) return true;
+                        const s = userSearch.toLowerCase();
+                        return u.name.toLowerCase().includes(s) || u.email.toLowerCase().includes(s);
+                      }).map(user => (
+                        <label
                           key={user.id}
-                          data-user-item
-                          onClick={() => {
-                            setSelectedId(user.id);
-                            setShareType('user');
-                            const input = document.querySelector('[placeholder="Search users by name or email..."]') as HTMLInputElement;
-                            if (input) { input.value = `${user.name} (${user.email})`; }
-                            const el = input?.nextElementSibling as HTMLElement;
-                            if (el) el.style.display = 'none';
-                          }}
-                          className={`flex items-center gap-2 px-3 py-2 text-sm cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 ${selectedId === user.id ? 'bg-blue-50 dark:bg-blue-900/30' : ''}`}
+                          className={`flex items-center gap-2 px-3 py-2 text-sm cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 ${selectedIds.has(user.id) ? 'bg-blue-50 dark:bg-blue-900/30' : ''}`}
                         >
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.has(user.id)}
+                            onChange={() => {
+                              const next = new Set(selectedIds);
+                              if (next.has(user.id)) next.delete(user.id);
+                              else next.add(user.id);
+                              setSelectedIds(next);
+                            }}
+                            disabled={sharing}
+                            className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          />
                           <UserIcon className="w-4 h-4 text-gray-400 flex-shrink-0" />
                           <span className="text-gray-900 dark:text-white">{user.name}</span>
                           <span className="text-gray-500 text-xs">({user.email})</span>
-                        </div>
+                        </label>
                       ))}
                     </div>
                   </div>
@@ -662,7 +670,7 @@ export function ShareDialog({
                       type="submit"
                       size="sm"
                       className="w-full"
-                      disabled={sharing || !selectedId || selectedPermissions.size === 0}
+                      disabled={sharing || selectedIds.size === 0 || selectedPermissions.size === 0}
                     >
                       {sharing ? 'Sharing...' : 'Share'}
                     </Button>

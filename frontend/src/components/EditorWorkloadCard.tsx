@@ -104,7 +104,11 @@ export function EditorWorkloadCard({ editor, onViewDetails }: EditorWorkloadCard
             <span>Avg. Time</span>
           </div>
           <span className="font-semibold text-gray-900 dark:text-white">
-            {editor.avgCompletionTimeHours ? `${Math.round(editor.avgCompletionTimeHours)}h` : 'N/A'}
+            {editor.avgCompletionTimeHours ? (
+              editor.avgCompletionTimeHours >= 24
+                ? `${Math.floor(editor.avgCompletionTimeHours / 24)}d ${Math.round(editor.avgCompletionTimeHours % 24)}h`
+                : `${Math.round(editor.avgCompletionTimeHours)}h`
+            ) : 'N/A'}
           </span>
         </div>
 

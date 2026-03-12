@@ -1688,6 +1688,7 @@ export function MediaLibraryPage() {
           isOpen={true}
           onClose={() => setShareDialogFile(null)}
           resourceId={shareDialogFile.id}
+          resourceIds={selectedFiles.length > 1 ? selectedFiles : undefined}
           resourceName={shareDialogFile.name}
           resourceType={shareDialogFile.type}
         />

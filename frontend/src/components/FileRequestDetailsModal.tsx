@@ -2161,6 +2161,11 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
                 viewMode={uploadViewMode}
                 selectedUploads={selectedUploads}
                 onToggleSelect={toggleSelectUpload}
+                onBatchSelect={(ids: string[]) => {
+                  const newSelected = new Set(selectedUploads);
+                  ids.forEach(id => newSelected.add(id));
+                  setSelectedUploads(newSelected);
+                }}
                 onDownload={handleDownload}
                 onAddToLibrary={user?.role !== 'creative' ? handleAddToLibrary : undefined}
                 onRemoveFromRequest={user?.role === 'creative' ? handleRemoveFromRequest : undefined}

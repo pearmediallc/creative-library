@@ -18,6 +18,9 @@ interface Request {
   completedDate: string | null;
   createdAt: string;
   folderName: string;
+  progress: number;
+  uploaded: number;
+  assigned: number;
 }
 
 export function EditorDetailModal({ editorId, onClose, onUpdate }: EditorDetailModalProps) {
@@ -110,7 +113,11 @@ export function EditorDetailModal({ editorId, onClose, onUpdate }: EditorDetailM
           <div>
             <p className="text-sm text-gray-600 dark:text-gray-400">Avg. Time</p>
             <p className="text-2xl font-bold text-gray-900 dark:text-white">
-              {editor.avgCompletionTimeHours ? `${Math.round(editor.avgCompletionTimeHours)}h` : 'N/A'}
+              {editor.avgCompletionTimeHours ? (
+                editor.avgCompletionTimeHours >= 24
+                  ? `${Math.floor(editor.avgCompletionTimeHours / 24)}d ${Math.round(editor.avgCompletionTimeHours % 24)}h`
+                  : `${Math.round(editor.avgCompletionTimeHours)}h`
+              ) : 'N/A'}
             </p>
           </div>
           <div>
@@ -148,6 +155,9 @@ export function EditorDetailModal({ editorId, onClose, onUpdate }: EditorDetailM
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
                       Completed Date
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                      Progress
                     </th>
                   </tr>
                 </thead>
@@ -187,6 +197,22 @@ export function EditorDetailModal({ editorId, onClose, onUpdate }: EditorDetailM
                         ) : (
                           <span className="text-xs text-gray-400">In progress</span>
                         )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <div className="w-20 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                            <div
+                              className="h-2 rounded-full transition-all"
+                              style={{
+                                width: `${request.progress}%`,
+                                backgroundColor: request.progress >= 100 ? '#10b981' : request.progress > 0 ? '#3b82f6' : '#d1d5db'
+                              }}
+                            />
+                          </div>
+                          <span className="text-xs text-gray-500 whitespace-nowrap">
+                            {request.uploaded}/{request.assigned || '?'}
+                          </span>
+                        </div>
                       </td>
                     </tr>
                   ))}
