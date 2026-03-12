@@ -240,41 +240,52 @@ export function MediaLibraryPage() {
     const target = e.target as HTMLElement;
     // Don't start lasso if clicking on a card, button, input, or interactive element
     if (target.closest('.media-card-item, button, input, a, [role="button"]')) return;
+    e.preventDefault();
     setLassoActive(true);
     setLassoStart({ x: e.clientX, y: e.clientY });
     setLassoEnd({ x: e.clientX, y: e.clientY });
   }, []);
 
-  const handleLassoMouseMove = useCallback((e: React.MouseEvent) => {
+  // Use window-level listeners for move/up so lasso works even when mouse leaves container
+  useEffect(() => {
     if (!lassoActive) return;
-    setLassoEnd({ x: e.clientX, y: e.clientY });
-  }, [lassoActive]);
 
-  const handleLassoMouseUp = useCallback(() => {
-    if (!lassoActive) return;
-    const rect = getLassoRect();
-    if (rect && (Math.abs(rect.right - rect.left) > 5 || Math.abs(rect.bottom - rect.top) > 5)) {
-      const intersectingIds: string[] = [];
-      cardRefsMap.current.forEach((el, id) => {
-        const cardRect = el.getBoundingClientRect();
-        const intersects =
-          cardRect.left < rect.right &&
-          cardRect.right > rect.left &&
-          cardRect.top < rect.bottom &&
-          cardRect.bottom > rect.top;
-        if (intersects) intersectingIds.push(id);
-      });
-      if (intersectingIds.length > 0) {
-        setSelectedFiles(prev => {
-          const newSet = new Set(prev);
-          intersectingIds.forEach(id => newSet.add(id));
-          return Array.from(newSet);
+    const handleMouseMove = (e: MouseEvent) => {
+      setLassoEnd({ x: e.clientX, y: e.clientY });
+    };
+
+    const handleMouseUp = () => {
+      const rect = getLassoRect();
+      if (rect && (Math.abs(rect.right - rect.left) > 5 || Math.abs(rect.bottom - rect.top) > 5)) {
+        const intersectingIds: string[] = [];
+        cardRefsMap.current.forEach((el, id) => {
+          const cardRect = el.getBoundingClientRect();
+          const intersects =
+            cardRect.left < rect.right &&
+            cardRect.right > rect.left &&
+            cardRect.top < rect.bottom &&
+            cardRect.bottom > rect.top;
+          if (intersects) intersectingIds.push(id);
         });
+        if (intersectingIds.length > 0) {
+          setSelectedFiles(prev => {
+            const newSet = new Set(prev);
+            intersectingIds.forEach(id => newSet.add(id));
+            return Array.from(newSet);
+          });
+        }
       }
-    }
-    setLassoActive(false);
-    setLassoStart(null);
-    setLassoEnd(null);
+      setLassoActive(false);
+      setLassoStart(null);
+      setLassoEnd(null);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
   }, [lassoActive, getLassoRect]);
 
   const lassoRect = getLassoRect();
@@ -1277,9 +1288,6 @@ export function MediaLibraryPage() {
                       ref={gridContainerRef}
                       className="relative select-none"
                       onMouseDown={handleLassoMouseDown}
-                      onMouseMove={handleLassoMouseMove}
-                      onMouseUp={handleLassoMouseUp}
-                      onMouseLeave={handleLassoMouseUp}
                     >
                       {/* Lasso overlay */}
                       {lassoActive && lassoRect && (

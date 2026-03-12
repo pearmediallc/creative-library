@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { FolderPlus, ChevronDown, ChevronRight, Trash2, Edit3, Check, X, GripVertical, Play } from 'lucide-react';
+import { FolderPlus, ChevronDown, ChevronRight, Trash2, Edit3, Check, X, GripVertical, Play, Share2, Download, Archive } from 'lucide-react';
 import { Button } from './ui/Button';
 import { UploadedFileCard } from './UploadedFileCard';
 import { VideoPlayer } from './VideoPlayer';
-import { fileRequestApi } from '../lib/api';
+import { fileRequestApi, mediaApi } from '../lib/api';
+import { ShareDialog } from './ShareDialog';
 import { formatBytes, formatDate } from '../lib/utils';
 
 interface Upload {
@@ -64,6 +65,8 @@ export function FileRequestOrganizer({
   const [reorderingFolder, setReorderingFolder] = useState<string | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [previewUpload, setPreviewUpload] = useState<Upload | null>(null);
+  const [downloadingZipFolder, setDownloadingZipFolder] = useState<string | null>(null);
+  const [shareFolderData, setShareFolderData] = useState<{ fileIds: string[]; folderName: string } | null>(null);
   const dragItemRef = useRef<{ uploadSessionId: string; sourceFolderId: string; index: number } | null>(null);
 
   // --- Lasso (rubber-band) selection ---
@@ -487,6 +490,41 @@ export function FileRequestOrganizer({
     );
   };
 
+  const handleShareFolder = (folderUploads: Upload[], folderName: string) => {
+    const fileIds = folderUploads.map(u => u.id);
+    if (fileIds.length === 0) return;
+    setShareFolderData({ fileIds, folderName });
+  };
+
+  const handleDownloadAllFolder = (folderUploads: Upload[]) => {
+    folderUploads.forEach(upload => onDownload(upload));
+  };
+
+  const handleDownloadFolderZip = async (folderId: string, folderName: string, folderUploads: Upload[]) => {
+    const fileIds = folderUploads.map(u => u.id);
+    if (fileIds.length === 0) return;
+
+    setDownloadingZipFolder(folderId);
+    try {
+      const response = await mediaApi.bulkDownloadZip(fileIds);
+      const date = new Date().toISOString().split('T')[0];
+      const zipFilename = `${folderName}-${date}.zip`;
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = zipFilename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error: any) {
+      console.error('Failed to download folder as ZIP:', error);
+      alert(error.response?.data?.error || 'Failed to download folder as ZIP');
+    } finally {
+      setDownloadingZipFolder(null);
+    }
+  };
+
   const renderFolderSection = (folderId: string, folderName: string, folderUploads: Upload[], isUnfiled = false) => {
     const isExpanded = expandedFolders.has(folderId);
     const isDragOver = dragOverFolder === folderId;
@@ -543,25 +581,60 @@ export function FileRequestOrganizer({
             </span>
           </div>
 
-          {canOrganize && !isUnfiled && editingFolderId !== folderId && (
+          {editingFolderId !== folderId && (
             <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-              <button
-                type="button"
-                onClick={() => {
-                  setEditingFolderId(folderId);
-                  setEditFolderName(folderName);
-                }}
-                className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
-              >
-                <Edit3 className="w-3.5 h-3.5 text-gray-500" />
-              </button>
-              <button
-                type="button"
-                onClick={() => handleDeleteFolder(folderId)}
-                className="p-1 hover:bg-red-100 dark:hover:bg-red-900/30 rounded"
-              >
-                <Trash2 className="w-3.5 h-3.5 text-red-500" />
-              </button>
+              {folderUploads.length > 0 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => handleShareFolder(folderUploads, folderName)}
+                    className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
+                    title="Share folder"
+                  >
+                    <Share2 className="w-3.5 h-3.5 text-gray-500" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDownloadAllFolder(folderUploads)}
+                    className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
+                    title="Download all files"
+                  >
+                    <Download className="w-3.5 h-3.5 text-gray-500" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDownloadFolderZip(folderId, folderName, folderUploads)}
+                    disabled={downloadingZipFolder === folderId}
+                    className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded disabled:opacity-50"
+                    title="Download as ZIP"
+                  >
+                    <Archive className="w-3.5 h-3.5 text-gray-500" />
+                  </button>
+                </>
+              )}
+              {canOrganize && !isUnfiled && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingFolderId(folderId);
+                      setEditFolderName(folderName);
+                    }}
+                    className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
+                    title="Rename folder"
+                  >
+                    <Edit3 className="w-3.5 h-3.5 text-gray-500" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteFolder(folderId)}
+                    className="p-1 hover:bg-red-100 dark:hover:bg-red-900/30 rounded"
+                    title="Delete folder"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                  </button>
+                </>
+              )}
             </div>
           )}
         </div>
@@ -697,6 +770,25 @@ export function FileRequestOrganizer({
       </div>
       {lassoStyle && <div style={lassoStyle} />}
       {previewModal}
+      {shareFolderData && (
+        <ShareDialog
+          isOpen={true}
+          onClose={() => setShareFolderData(null)}
+          resourceId={shareFolderData.fileIds[0]}
+          resourceIds={shareFolderData.fileIds.length > 1 ? shareFolderData.fileIds : undefined}
+          resourceName={shareFolderData.folderName}
+          resourceType="file"
+        />
+      )}
+      {downloadingZipFolder && (
+        <div className="fixed bottom-4 right-4 z-50 bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg text-sm flex items-center gap-2">
+          <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+          </svg>
+          Creating ZIP...
+        </div>
+      )}
     </>
   );
 }

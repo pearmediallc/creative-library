@@ -198,7 +198,8 @@ class WorkloadController {
           fr.completed_at,
           fr.created_at as assigned_at,
           f.name AS folder_name,
-          fre.num_creatives_assigned,
+          fr.is_active,
+          COALESCE(NULLIF(fre.num_creatives_assigned, 0), fr.num_creatives, 0) as num_creatives_assigned,
           fre.deliverables_uploaded,
           (SELECT COUNT(*)::int FROM file_request_uploads fru
            WHERE fru.file_request_id = fr.id AND fru.editor_id = fre.editor_id
@@ -233,7 +234,7 @@ class WorkloadController {
 
       // Calculate additional metrics
       const requests = requestsResult.rows;
-      const activeRequests = requests.filter(r => ['pending', 'assigned', 'in_progress'].includes(r.status));
+      const activeRequests = requests.filter(r => ['pending', 'assigned', 'in_progress'].includes(r.status) && r.is_active !== false);
       const completedRequests = requests.filter(r => r.status === 'completed');
 
       res.json({
@@ -243,8 +244,8 @@ class WorkloadController {
             id: editor.id,
             name: editor.name,
             displayName: editor.display_name,
-            loadPercentage: editor.max_concurrent_requests > 0
-              ? Math.round((activeRequests.length / parseInt(editor.max_concurrent_requests || 10)) * 1000) / 10
+            loadPercentage: parseInt(editor.max_concurrent_requests || 10) > 0
+              ? Math.round((activeRequests.length / parseInt(editor.max_concurrent_requests || 10)) * 100)
               : 0,
             status: editor.status,
             maxConcurrentRequests: parseInt(editor.max_concurrent_requests || 10),

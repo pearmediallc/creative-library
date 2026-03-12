@@ -1702,7 +1702,7 @@ class FileRequestController {
   async uploadToRequest(req, res, next) {
     try {
       const { token } = req.params;
-      const { uploader_email, uploader_name, editor_id, comments } = req.body;
+      const { uploader_email, uploader_name, editor_id, comments, folder_path } = req.body;
 
       if (!req.file) {
         return res.status(400).json({
@@ -2031,11 +2031,37 @@ class FileRequestController {
 
       const uploadType = folder_path && String(folder_path).trim() ? 'folder' : 'file';
 
+      // Auto-create a file_request_folder for folder uploads so they display grouped in the organizer
+      let requestFolderId = null;
+      if (folder_path && String(folder_path).trim()) {
+        const rootFolderName = String(folder_path).trim().split('/')[0];
+        if (rootFolderName) {
+          try {
+            // Check if folder already exists for this request
+            const existingFolder = await query(
+              `SELECT id FROM file_request_folders WHERE request_id = $1 AND folder_name = $2 LIMIT 1`,
+              [fileRequest.id, rootFolderName]
+            );
+            if (existingFolder.rows.length > 0) {
+              requestFolderId = existingFolder.rows[0].id;
+            } else {
+              const newFolder = await query(
+                `INSERT INTO file_request_folders (request_id, folder_name, created_by) VALUES ($1, $2, $3) RETURNING id`,
+                [fileRequest.id, rootFolderName, userId]
+              );
+              requestFolderId = newFolder.rows[0].id;
+            }
+          } catch (folderErr) {
+            logger.warn('Auto-create request folder failed (non-fatal)', { error: folderErr.message });
+          }
+        }
+      }
+
       // 🆕 Create upload session to track this upload (one session can contain 1+ files)
       const uploadSessionResult = await query(
         `INSERT INTO file_request_uploads
-         (file_request_id, uploaded_by, upload_type, file_count, total_size_bytes, folder_path, comments, editor_id, files_metadata)
-         VALUES ($1, $2, $3, 1, $4, $5, $6, $7, $8)
+         (file_request_id, uploaded_by, upload_type, file_count, total_size_bytes, folder_path, comments, editor_id, folder_id, files_metadata)
+         VALUES ($1, $2, $3, 1, $4, $5, $6, $7, $8, $9)
          RETURNING id`,
         [
           fileRequest.id,
@@ -2045,6 +2071,7 @@ class FileRequestController {
           folder_path || null,
           comments || null,
           editorId,
+          requestFolderId,
           JSON.stringify([
             {
               file_id: null,
@@ -3353,11 +3380,36 @@ class FileRequestController {
         );
       }
 
+      // Auto-create a file_request_folder for folder uploads (chunked)
+      let chunkedRequestFolderId = null;
+      if (folder_path && String(folder_path).trim()) {
+        const rootFolderName = String(folder_path).trim().split('/')[0];
+        if (rootFolderName) {
+          try {
+            const existingFolder = await query(
+              `SELECT id FROM file_request_folders WHERE request_id = $1 AND folder_name = $2 LIMIT 1`,
+              [id, rootFolderName]
+            );
+            if (existingFolder.rows.length > 0) {
+              chunkedRequestFolderId = existingFolder.rows[0].id;
+            } else {
+              const newFolder = await query(
+                `INSERT INTO file_request_folders (request_id, folder_name, created_by) VALUES ($1, $2, $3) RETURNING id`,
+                [id, rootFolderName, userId]
+              );
+              chunkedRequestFolderId = newFolder.rows[0].id;
+            }
+          } catch (folderErr) {
+            logger.warn('Auto-create request folder for chunked upload failed (non-fatal)', { error: folderErr.message });
+          }
+        }
+      }
+
       // 🆕 Create upload session to track this chunked upload
       const uploadSessionResult = await query(
         `INSERT INTO file_request_uploads
-         (file_request_id, uploaded_by, upload_type, file_count, total_size_bytes, folder_path, comments, editor_id, files_metadata)
-         VALUES ($1, $2, 'file', 1, $3, $4, $5, $6, $7)
+         (file_request_id, uploaded_by, upload_type, file_count, total_size_bytes, folder_path, comments, editor_id, folder_id, files_metadata)
+         VALUES ($1, $2, 'file', 1, $3, $4, $5, $6, $7, $8)
          RETURNING id`,
         [
           id,
@@ -3366,6 +3418,7 @@ class FileRequestController {
           folder_path || null,
           comments || null,
           editorId,
+          chunkedRequestFolderId,
           JSON.stringify([
             {
               file_id: null,
