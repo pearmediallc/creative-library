@@ -8,6 +8,7 @@ import { MediaFile, Editor } from '../types';
 import { formatBytes, formatDate } from '../lib/utils';
 import { Image as ImageIcon, Video, X, Download, Trash2, Info, PackageOpen, Calendar, Filter, Clock, FolderInput, Share2, Star, LayoutGrid, List, FileText, Tag, FolderPlus, BarChart3 } from 'lucide-react';
 import { useAuth, isAdminRole } from '../contexts/AuthContext';
+import { useRBAC } from '../hooks/useRBAC';
 import { BulkMetadataEditor } from '../components/BulkMetadataEditor';
 import { MetadataViewer } from '../components/MetadataViewer';
 import { AnalyticsMetricsPanel } from '../components/AnalyticsMetricsPanel';
@@ -290,10 +291,11 @@ export function MediaLibraryPage() {
 
   const lassoRect = getLassoRect();
 
-  // Role-based permissions
+  // Role-based permissions (RBAC)
+  const { can } = useRBAC();
   const isAdmin = isAdminRole(user?.role);
-  const canUpload = isAdminRole(user?.role) || user?.role === 'creative';
-  const canDelete = isAdminRole(user?.role);
+  const canUpload = can('media', 'upload');
+  const canDeleteFile = (file: MediaFile) => can('media', 'delete') || file.editor_id === user?.id;
 
   // Filtered files based on search and vertical
   const filteredFiles = useMemo(() => {
@@ -1033,16 +1035,14 @@ export function MediaLibraryPage() {
                       <Share2 className="w-4 h-4 mr-2" />
                       Share ({selectedFiles.length})
                     </Button>
-                    {canDelete && (
-                      <Button
-                        variant="outline"
-                        className="text-destructive hover:text-destructive"
-                        onClick={handleBulkDelete}
-                      >
-                        <Trash2 className="w-4 h-4 mr-2" />
-                        Delete {selectedFiles.length}
-                      </Button>
-                    )}
+                    <Button
+                      variant="outline"
+                      className="text-destructive hover:text-destructive"
+                      onClick={handleBulkDelete}
+                    >
+                      <Trash2 className="w-4 h-4 mr-2" />
+                      Delete {selectedFiles.length}
+                    </Button>
                     <Button
                       variant="outline"
                       onClick={() => setSelectedFiles([])}
@@ -1534,7 +1534,7 @@ export function MediaLibraryPage() {
                                       Versions
                                     </Button>
                                   )}
-                                  {canDelete && (
+                                  {canDeleteFile(file) && (
                                     <Button
                                       variant="outline"
                                       size="sm"
@@ -1727,7 +1727,7 @@ export function MediaLibraryPage() {
                                       >
                                         <Star className={`w-4 h-4 ${file.is_starred ? 'fill-yellow-500 text-yellow-500' : ''}`} />
                                       </button>
-                                      {canDelete && (
+                                      {canDeleteFile(file) && (
                                         <button
                                           onClick={() => setDeleteConfirmId(file.id)}
                                           className="p-1.5 hover:bg-destructive/10 rounded transition-colors text-destructive"
@@ -1883,7 +1883,7 @@ export function MediaLibraryPage() {
           onActivity={handleFileActivity}
           onProperties={handleFileProperties}
           onComments={handleFileComments}
-          onDelete={canDelete ? handleFileDelete : undefined}
+          onDelete={contextMenuFile && canDeleteFile(contextMenuFile) ? handleFileDelete : undefined}
           isAdmin={isAdmin}
         />
       )}
@@ -1964,9 +1964,9 @@ export function MediaLibraryPage() {
           files={files}
           initialIndex={lightbox.initialIndex}
           onClose={() => setLightbox({ ...lightbox, isOpen: false })}
-          onDelete={canDelete ? async (fileId) => {
+          onDelete={async (fileId) => {
             await handleDelete(fileId);
-          } : undefined}
+          }}
           onStar={async (fileId) => {
             const file = files.find(f => f.id === fileId);
             if (file) {

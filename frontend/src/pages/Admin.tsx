@@ -7,6 +7,7 @@ import { adminApi } from '../lib/api';
 import { User } from '../types';
 import { Shield, Plus, Edit2, Check, X, Key, Copy } from 'lucide-react';
 import { SlackSettingsPanel } from '../components/SlackSettingsPanel';
+import { RBACPermissionsMatrix } from '../components/RBACPermissionsMatrix';
 import { VERTICALS } from '../constants/verticals';
 
 export function AdminPage() {
@@ -225,6 +226,9 @@ export function AdminPage() {
         {/* Slack Integration */}
         <SlackSettingsPanel />
 
+        {/* RBAC Permission Matrix */}
+        <RBACPermissionsMatrix />
+
         {/* Add User Form */}
         {showAddForm && (
           <Card>
@@ -271,6 +275,7 @@ export function AdminPage() {
                     >
                       <option value="creative">Creative</option>
                       <option value="buyer">Buyer</option>
+                      <option value="vertical_head">Vertical Head</option>
                       <option value="team_lead">Team Lead</option>
                       <option value="assistant_team_lead">Assistant Team Lead (ATL)</option>
                       <option value="admin">Admin</option>
@@ -279,7 +284,7 @@ export function AdminPage() {
                   <div className="space-y-2 col-span-2">
                     <label className="text-sm font-medium">Additional Roles (optional)</label>
                     <div className="flex flex-wrap gap-2">
-                      {['creative', 'buyer', 'team_lead', 'assistant_team_lead', 'admin'].filter(r => r !== formData.role).map(r => (
+                      {['creative', 'buyer', 'team_lead', 'assistant_team_lead', 'vertical_head', 'admin'].filter(r => r !== formData.role).map(r => (
                         <label key={r} className="flex items-center gap-1.5 px-2 py-1 rounded border border-input hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer">
                           <input
                             type="checkbox"
@@ -293,7 +298,7 @@ export function AdminPage() {
                             }}
                             className="rounded border-gray-300 text-blue-600"
                           />
-                          <span className="text-sm capitalize">{r.replace('_', ' ')}</span>
+                          <span className="text-sm capitalize">{r.replaceAll('_', ' ')}</span>
                         </label>
                       ))}
                     </div>
@@ -447,6 +452,7 @@ export function AdminPage() {
                         >
                           <option value="creative">Creative</option>
                           <option value="buyer">Buyer</option>
+                          <option value="vertical_head">Vertical Head</option>
                           <option value="team_lead">Team Lead</option>
                           <option value="assistant_team_lead">ATL</option>
                           <option value="admin">Admin</option>
@@ -460,7 +466,7 @@ export function AdminPage() {
                         <div className="col-span-4 mt-2">
                           <label className="text-sm font-medium text-muted-foreground mb-1 block">Additional Roles</label>
                           <div className="flex flex-wrap gap-2">
-                            {['creative', 'buyer', 'team_lead', 'assistant_team_lead', 'admin'].filter(r => r !== formData.role).map(r => (
+                            {['creative', 'buyer', 'team_lead', 'assistant_team_lead', 'vertical_head', 'admin'].filter(r => r !== formData.role).map(r => (
                               <label key={r} className="flex items-center gap-1 text-sm px-2 py-0.5 rounded border border-input hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer">
                                 <input
                                   type="checkbox"
@@ -473,7 +479,7 @@ export function AdminPage() {
                                     }
                                   }}
                                 />
-                                <span className="capitalize">{r.replace('_', ' ')}</span>
+                                <span className="capitalize">{r.replaceAll('_', ' ')}</span>
                               </label>
                             ))}
                           </div>
@@ -528,7 +534,7 @@ export function AdminPage() {
                           <span className="font-medium capitalize">{user.role}</span>
                           {(user as any).additional_roles?.length > 0 && (
                             <span className="text-xs text-blue-600 ml-1">
-                              +{(user as any).additional_roles.map((r: string) => r.replace('_', ' ')).join(', ')}
+                              +{(user as any).additional_roles.map((r: string) => r.replaceAll('_', ' ')).join(', ')}
                             </span>
                           )}
                         </div>

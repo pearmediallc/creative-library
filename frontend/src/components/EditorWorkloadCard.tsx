@@ -9,6 +9,8 @@ interface EditorWorkloadCardProps {
     activeRequests: number;
     completedRequests: number;
     totalRequests: number;
+    totalAssignedCreatives?: number;
+    totalUploadedCreatives?: number;
     loadPercentage: number;
     status: string;
     maxConcurrentRequests: number;
@@ -76,7 +78,7 @@ export function EditorWorkloadCard({ editor, onViewDetails }: EditorWorkloadCard
           />
         </div>
         <p className="text-xs mt-1 opacity-80">
-          {editor.activeRequests} of {editor.maxConcurrentRequests} concurrent requests
+          {editor.totalAssignedCreatives ?? editor.activeRequests} of {editor.maxConcurrentRequests} assigned creatives
         </p>
       </div>
 
@@ -85,31 +87,25 @@ export function EditorWorkloadCard({ editor, onViewDetails }: EditorWorkloadCard
         <div className="flex items-center justify-between text-sm">
           <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
             <FileText size={16} />
-            <span>Active Requests</span>
+            <span>Assigned Creatives</span>
           </div>
-          <span className="font-semibold text-purple-600">{editor.activeRequests}</span>
+          <span className="font-semibold text-purple-600">{editor.totalAssignedCreatives ?? editor.activeRequests}</span>
         </div>
 
         <div className="flex items-center justify-between text-sm">
           <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
             <CheckCircle size={16} />
-            <span>Completed</span>
+            <span>Uploaded Creatives</span>
           </div>
-          <span className="font-semibold text-green-600">{editor.completedRequests}</span>
+          <span className="font-semibold text-green-600">{editor.totalUploadedCreatives ?? editor.completedRequests}</span>
         </div>
 
         <div className="flex items-center justify-between text-sm">
           <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
             <Clock size={16} />
-            <span>Avg. Time</span>
+            <span>Active Requests</span>
           </div>
-          <span className="font-semibold text-gray-900 dark:text-white">
-            {editor.avgCompletionTimeHours ? (
-              editor.avgCompletionTimeHours >= 24
-                ? `${Math.floor(editor.avgCompletionTimeHours / 24)}d ${Math.round(editor.avgCompletionTimeHours % 24)}h`
-                : `${Math.round(editor.avgCompletionTimeHours)}h`
-            ) : 'N/A'}
-          </span>
+          <span className="font-semibold text-gray-900 dark:text-white">{editor.activeRequests}</span>
         </div>
 
         <div className="flex items-center justify-between text-sm">

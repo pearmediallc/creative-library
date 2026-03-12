@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { FolderPlus, ChevronDown, ChevronRight, Trash2, Edit3, Check, X, GripVertical, Play, Share2, Download, Archive } from 'lucide-react';
+import { FolderPlus, ChevronDown, ChevronRight, Trash2, Edit3, Check, X, GripVertical, Play, Share2, Download, Archive, Folder, FolderOpen, LayoutGrid, List, GitBranch } from 'lucide-react';
 import { Button } from './ui/Button';
 import { UploadedFileCard } from './UploadedFileCard';
 import { VideoPlayer } from './VideoPlayer';
@@ -67,6 +67,7 @@ export function FileRequestOrganizer({
   const [previewUpload, setPreviewUpload] = useState<Upload | null>(null);
   const [downloadingZipFolder, setDownloadingZipFolder] = useState<string | null>(null);
   const [shareFolderData, setShareFolderData] = useState<{ fileIds: string[]; folderName: string } | null>(null);
+  const [folderViewMode, setFolderViewMode] = useState<'tree' | 'cards'>('tree');
   const dragItemRef = useRef<{ uploadSessionId: string; sourceFolderId: string; index: number } | null>(null);
 
   // --- Lasso (rubber-band) selection ---
@@ -525,137 +526,273 @@ export function FileRequestOrganizer({
     }
   };
 
-  const renderFolderSection = (folderId: string, folderName: string, folderUploads: Upload[], isUnfiled = false) => {
+  const renderFolderActions = (folderId: string, folderName: string, folderUploads: Upload[], isUnfiled: boolean) => (
+    <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+      {folderUploads.length > 0 && (
+        <>
+          <button
+            type="button"
+            onClick={() => handleShareFolder(folderUploads, folderName)}
+            className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
+            title="Share folder"
+          >
+            <Share2 className="w-3.5 h-3.5 text-gray-500" />
+          </button>
+          <button
+            type="button"
+            onClick={() => handleDownloadAllFolder(folderUploads)}
+            className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
+            title="Download all files"
+          >
+            <Download className="w-3.5 h-3.5 text-gray-500" />
+          </button>
+          <button
+            type="button"
+            onClick={() => handleDownloadFolderZip(folderId, folderName, folderUploads)}
+            disabled={downloadingZipFolder === folderId}
+            className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded disabled:opacity-50"
+            title="Download as ZIP"
+          >
+            <Archive className="w-3.5 h-3.5 text-gray-500" />
+          </button>
+        </>
+      )}
+      {canOrganize && !isUnfiled && (
+        <>
+          <button
+            type="button"
+            onClick={() => {
+              setEditingFolderId(folderId);
+              setEditFolderName(folderName);
+            }}
+            className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
+            title="Rename folder"
+          >
+            <Edit3 className="w-3.5 h-3.5 text-gray-500" />
+          </button>
+          <button
+            type="button"
+            onClick={() => handleDeleteFolder(folderId)}
+            className="p-1 hover:bg-red-100 dark:hover:bg-red-900/30 rounded"
+            title="Delete folder"
+          >
+            <Trash2 className="w-3.5 h-3.5 text-red-500" />
+          </button>
+        </>
+      )}
+    </div>
+  );
+
+  const renderFolderContents = (folderId: string, folderUploads: Upload[]) => (
+    <div className={`${
+      viewMode === 'grid' ? 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2'
+      : viewMode === 'tile' ? 'grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-1'
+      : 'space-y-2'
+    }`}>
+      {folderUploads.length > 0 ? (
+        folderUploads.map((upload, index) => renderUploadCard(upload, folderId, index))
+      ) : (
+        <p className={`text-xs text-gray-500 dark:text-gray-400 text-center py-2 italic ${viewMode !== 'list' ? 'col-span-full' : ''}`}>
+          {canOrganize ? 'Drag files here to organize' : 'No files in this folder'}
+        </p>
+      )}
+    </div>
+  );
+
+  const renderFolderNameOrEdit = (folderId: string, folderName: string) => {
+    if (editingFolderId === folderId) {
+      return (
+        <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+          <input
+            type="text"
+            value={editFolderName}
+            onChange={(e) => setEditFolderName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleRenameFolder(folderId);
+              if (e.key === 'Escape') setEditingFolderId(null);
+            }}
+            className="px-2 py-0.5 text-sm border rounded bg-white dark:bg-gray-700 dark:text-white"
+            autoFocus
+          />
+          <button type="button" onClick={() => handleRenameFolder(folderId)}>
+            <Check className="w-4 h-4 text-green-500" />
+          </button>
+          <button type="button" onClick={() => setEditingFolderId(null)}>
+            <X className="w-4 h-4 text-red-500" />
+          </button>
+        </div>
+      );
+    }
+    return (
+      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+        {folderName}
+      </span>
+    );
+  };
+
+  // Tree view: renders folder as a tree node with tree lines and indentation
+  const renderFolderTree = (folderId: string, folderName: string, folderUploads: Upload[], isUnfiled = false, isLast = false) => {
     const isExpanded = expandedFolders.has(folderId);
     const isDragOver = dragOverFolder === folderId;
 
     return (
       <div
         key={folderId}
-        className={`border rounded-lg overflow-hidden transition-colors ${
-          isDragOver
-            ? 'border-blue-400 bg-blue-50 dark:bg-blue-900/20'
-            : 'border-gray-200 dark:border-gray-700'
-        }`}
+        className="relative"
         onDragOver={(e) => canOrganize ? handleFolderDragOver(e, folderId) : undefined}
         onDragLeave={canOrganize ? handleFolderDragLeave : undefined}
         onDrop={(e) => canOrganize ? handleFolderDrop(e, folderId) : undefined}
       >
-        <div
-          className="flex items-center justify-between px-3 py-2 bg-gray-50 dark:bg-gray-800 cursor-pointer"
-          onClick={() => toggleFolder(folderId)}
-        >
-          <div className="flex items-center gap-2">
-            {isExpanded ? (
-              <ChevronDown className="w-4 h-4 text-gray-500" />
-            ) : (
-              <ChevronRight className="w-4 h-4 text-gray-500" />
-            )}
-            {editingFolderId === folderId ? (
-              <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                <input
-                  type="text"
-                  value={editFolderName}
-                  onChange={(e) => setEditFolderName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleRenameFolder(folderId);
-                    if (e.key === 'Escape') setEditingFolderId(null);
-                  }}
-                  className="px-2 py-0.5 text-sm border rounded bg-white dark:bg-gray-700 dark:text-white"
-                  autoFocus
-                />
-                <button type="button" onClick={() => handleRenameFolder(folderId)}>
-                  <Check className="w-4 h-4 text-green-500" />
-                </button>
-                <button type="button" onClick={() => setEditingFolderId(null)}>
-                  <X className="w-4 h-4 text-red-500" />
-                </button>
-              </div>
-            ) : (
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                {folderName}
-              </span>
-            )}
-            <span className="text-xs text-gray-500 dark:text-gray-400">
-              ({folderUploads.length})
-            </span>
+        {/* Tree connector line from parent */}
+        <div className="flex items-stretch">
+          {/* Tree line column */}
+          <div className="relative flex-shrink-0" style={{ width: '24px' }}>
+            {/* Vertical line */}
+            <div
+              className={`absolute left-3 top-0 w-px bg-gray-300 dark:bg-gray-600 ${isLast ? 'h-4' : 'h-full'}`}
+            />
+            {/* Horizontal branch line */}
+            <div className="absolute left-3 top-4 h-px w-3 bg-gray-300 dark:bg-gray-600" />
           </div>
 
-          {editingFolderId !== folderId && (
-            <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-              {folderUploads.length > 0 && (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => handleShareFolder(folderUploads, folderName)}
-                    className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
-                    title="Share folder"
-                  >
-                    <Share2 className="w-3.5 h-3.5 text-gray-500" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleDownloadAllFolder(folderUploads)}
-                    className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
-                    title="Download all files"
-                  >
-                    <Download className="w-3.5 h-3.5 text-gray-500" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleDownloadFolderZip(folderId, folderName, folderUploads)}
-                    disabled={downloadingZipFolder === folderId}
-                    className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded disabled:opacity-50"
-                    title="Download as ZIP"
-                  >
-                    <Archive className="w-3.5 h-3.5 text-gray-500" />
-                  </button>
-                </>
-              )}
-              {canOrganize && !isUnfiled && (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEditingFolderId(folderId);
-                      setEditFolderName(folderName);
-                    }}
-                    className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
-                    title="Rename folder"
-                  >
-                    <Edit3 className="w-3.5 h-3.5 text-gray-500" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteFolder(folderId)}
-                    className="p-1 hover:bg-red-100 dark:hover:bg-red-900/30 rounded"
-                    title="Delete folder"
-                  >
-                    <Trash2 className="w-3.5 h-3.5 text-red-500" />
-                  </button>
-                </>
+          {/* Folder node */}
+          <div className="flex-1 min-w-0">
+            <div
+              className={`flex items-center justify-between py-1.5 px-2 rounded-md cursor-pointer transition-colors group ${
+                isDragOver
+                  ? 'bg-blue-50 dark:bg-blue-900/30 ring-1 ring-blue-400'
+                  : 'hover:bg-gray-100 dark:hover:bg-gray-800/60'
+              }`}
+              onClick={() => toggleFolder(folderId)}
+            >
+              <div className="flex items-center gap-1.5 min-w-0">
+                {/* Expand/collapse chevron */}
+                {isExpanded ? (
+                  <ChevronDown className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                ) : (
+                  <ChevronRight className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                )}
+                {/* Folder icon */}
+                {isExpanded ? (
+                  <FolderOpen className={`w-4 h-4 flex-shrink-0 ${isUnfiled ? 'text-gray-400' : 'text-amber-500'}`} />
+                ) : (
+                  <Folder className={`w-4 h-4 flex-shrink-0 ${isUnfiled ? 'text-gray-400' : 'text-amber-500'}`} />
+                )}
+                {/* Folder name */}
+                {renderFolderNameOrEdit(folderId, folderName)}
+                <span className="text-xs text-gray-400 dark:text-gray-500 flex-shrink-0">
+                  {folderUploads.length}
+                </span>
+              </div>
+
+              {/* Actions - visible on hover */}
+              {editingFolderId !== folderId && (
+                <div className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                  {renderFolderActions(folderId, folderName, folderUploads, isUnfiled)}
+                </div>
               )}
             </div>
-          )}
+
+            {/* Expanded contents with tree indentation */}
+            {isExpanded && (
+              <div className="relative ml-3 pl-4 py-1 border-l border-gray-200 dark:border-gray-700">
+                {renderFolderContents(folderId, folderUploads)}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Card view: renders folder as a visual card
+  const renderFolderCard = (folderId: string, folderName: string, folderUploads: Upload[], isUnfiled = false) => {
+    const isExpanded = expandedFolders.has(folderId);
+    const isDragOver = dragOverFolder === folderId;
+
+    // Get thumbnail previews (up to 4) for the folder card
+    const previews = folderUploads.filter(u => u.thumbnail_url).slice(0, 4);
+
+    return (
+      <div
+        key={folderId}
+        className="flex flex-col"
+        onDragOver={(e) => canOrganize ? handleFolderDragOver(e, folderId) : undefined}
+        onDragLeave={canOrganize ? handleFolderDragLeave : undefined}
+        onDrop={(e) => canOrganize ? handleFolderDrop(e, folderId) : undefined}
+      >
+        {/* Folder card */}
+        <div
+          className={`group relative rounded-lg border-2 overflow-hidden cursor-pointer transition-all hover:shadow-md ${
+            isDragOver
+              ? 'border-blue-400 bg-blue-50 dark:bg-blue-900/20 shadow-md'
+              : isExpanded
+                ? 'border-amber-300 dark:border-amber-600 bg-amber-50/50 dark:bg-amber-900/10'
+                : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900'
+          }`}
+          onClick={() => toggleFolder(folderId)}
+        >
+          {/* Thumbnail preview grid */}
+          <div className="aspect-[4/3] bg-gray-100 dark:bg-gray-800 relative overflow-hidden">
+            {previews.length > 0 ? (
+              <div className={`w-full h-full grid ${previews.length === 1 ? 'grid-cols-1' : 'grid-cols-2'} gap-px`}>
+                {previews.map((u, i) => (
+                  <img
+                    key={u.id}
+                    src={u.thumbnail_url}
+                    alt=""
+                    className="w-full h-full object-cover"
+                  />
+                ))}
+                {previews.length < 4 && previews.length > 1 && Array.from({ length: 4 - previews.length }).map((_, i) => (
+                  <div key={`empty-${i}`} className="bg-gray-200 dark:bg-gray-700" />
+                ))}
+              </div>
+            ) : (
+              <div className="w-full h-full flex items-center justify-center">
+                <Folder className={`w-12 h-12 ${isUnfiled ? 'text-gray-300 dark:text-gray-600' : 'text-amber-300 dark:text-amber-600'}`} />
+              </div>
+            )}
+            {/* File count badge */}
+            <div className="absolute bottom-2 right-2 bg-black/60 text-white text-xs px-2 py-0.5 rounded-full">
+              {folderUploads.length} file{folderUploads.length !== 1 ? 's' : ''}
+            </div>
+          </div>
+
+          {/* Folder info */}
+          <div className="px-3 py-2 flex items-center justify-between">
+            <div className="flex items-center gap-2 min-w-0 flex-1">
+              {isExpanded ? (
+                <FolderOpen className={`w-4 h-4 flex-shrink-0 ${isUnfiled ? 'text-gray-400' : 'text-amber-500'}`} />
+              ) : (
+                <Folder className={`w-4 h-4 flex-shrink-0 ${isUnfiled ? 'text-gray-400' : 'text-amber-500'}`} />
+              )}
+              {renderFolderNameOrEdit(folderId, folderName)}
+            </div>
+            {editingFolderId !== folderId && (
+              <div className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                {renderFolderActions(folderId, folderName, folderUploads, isUnfiled)}
+              </div>
+            )}
+          </div>
         </div>
 
+        {/* Expanded contents below the card */}
         {isExpanded && (
-          <div className={`p-3 ${
-            viewMode === 'grid' ? 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2'
-            : viewMode === 'tile' ? 'grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-1'
-            : 'space-y-2'
-          }`}>
-            {folderUploads.length > 0 ? (
-              folderUploads.map((upload, index) => renderUploadCard(upload, folderId, index))
-            ) : (
-              <p className={`text-xs text-gray-500 dark:text-gray-400 text-center py-2 italic ${viewMode !== 'list' ? 'col-span-full' : ''}`}>
-                {canOrganize ? 'Drag files here to organize' : 'No files in this folder'}
-              </p>
-            )}
+          <div className="mt-2 ml-2 pl-3 border-l-2 border-amber-200 dark:border-amber-800">
+            {renderFolderContents(folderId, folderUploads)}
           </div>
         )}
       </div>
     );
+  };
+
+  // Legacy flat-style rendering (kept for backward compat reference, now unused)
+  const renderFolderSection = (folderId: string, folderName: string, folderUploads: Upload[], isUnfiled = false, isLast = false) => {
+    if (folderViewMode === 'cards') {
+      return renderFolderCard(folderId, folderName, folderUploads, isUnfiled);
+    }
+    return renderFolderTree(folderId, folderName, folderUploads, isUnfiled, isLast);
   };
 
   const isImageFile = (upload: Upload) =>
@@ -724,49 +861,96 @@ export function FileRequestOrganizer({
   return (
     <>
       <div ref={containerRef} onMouseDown={handleLassoMouseDown} className="space-y-3">
-        {canOrganize && (
+        {/* Toolbar: New Folder + Folder View Toggle */}
+        <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            {showNewFolder ? (
-              <div className="flex items-center gap-2 flex-1">
-                <input
-                  type="text"
-                  value={newFolderName}
-                  onChange={(e) => setNewFolderName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleCreateFolder();
-                    if (e.key === 'Escape') setShowNewFolder(false);
-                  }}
-                  placeholder="Folder name (e.g., Approved, Needs Revision)"
-                  className="flex-1 px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500"
-                  autoFocus
-                  disabled={creating}
-                />
-                <Button size="sm" onClick={handleCreateFolder} disabled={creating || !newFolderName.trim()}>
-                  Create
-                </Button>
-                <Button size="sm" variant="outline" onClick={() => { setShowNewFolder(false); setNewFolderName(''); }}>
-                  Cancel
-                </Button>
-              </div>
-            ) : (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setShowNewFolder(true)}
-                className="flex items-center gap-1"
-              >
-                <FolderPlus className="w-4 h-4" />
-                New Folder
-              </Button>
+            {canOrganize && (
+              <>
+                {showNewFolder ? (
+                  <div className="flex items-center gap-2 flex-1">
+                    <input
+                      type="text"
+                      value={newFolderName}
+                      onChange={(e) => setNewFolderName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleCreateFolder();
+                        if (e.key === 'Escape') setShowNewFolder(false);
+                      }}
+                      placeholder="Folder name (e.g., Approved, Needs Revision)"
+                      className="flex-1 px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500"
+                      autoFocus
+                      disabled={creating}
+                    />
+                    <Button size="sm" onClick={handleCreateFolder} disabled={creating || !newFolderName.trim()}>
+                      Create
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => { setShowNewFolder(false); setNewFolderName(''); }}>
+                      Cancel
+                    </Button>
+                  </div>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setShowNewFolder(true)}
+                    className="flex items-center gap-1"
+                  >
+                    <FolderPlus className="w-4 h-4" />
+                    New Folder
+                  </Button>
+                )}
+              </>
             )}
           </div>
-        )}
 
-        {folders.map(folder =>
-          renderFolderSection(folder.id, folder.folder_name, groupedUploads[folder.id] || [])
-        )}
+          {/* Folder view toggle */}
+          <div className="flex items-center gap-1 bg-gray-100 dark:bg-gray-800 rounded-md p-0.5">
+            <button
+              type="button"
+              onClick={() => setFolderViewMode('tree')}
+              className={`p-1.5 rounded transition-colors ${
+                folderViewMode === 'tree'
+                  ? 'bg-white dark:bg-gray-700 shadow-sm text-gray-900 dark:text-white'
+                  : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+              }`}
+              title="Tree view"
+            >
+              <GitBranch className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setFolderViewMode('cards')}
+              className={`p-1.5 rounded transition-colors ${
+                folderViewMode === 'cards'
+                  ? 'bg-white dark:bg-gray-700 shadow-sm text-gray-900 dark:text-white'
+                  : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+              }`}
+              title="Card view"
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
 
-        {renderFolderSection('unfiled', 'Unfiled', groupedUploads['unfiled'] || [], true)}
+        {/* Folders */}
+        {folderViewMode === 'tree' ? (
+          // Tree view layout
+          <div className="relative">
+            {folders.map((folder, index) => {
+              const isLast = index === folders.length - 1 && (groupedUploads['unfiled'] || []).length === 0;
+              return renderFolderSection(folder.id, folder.folder_name, groupedUploads[folder.id] || [], false, isLast);
+            })}
+            {renderFolderSection('unfiled', 'Unfiled', groupedUploads['unfiled'] || [], true, true)}
+          </div>
+        ) : (
+          // Card view layout - grid of folder cards
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+            {folders.map(folder =>
+              renderFolderSection(folder.id, folder.folder_name, groupedUploads[folder.id] || [])
+            )}
+            {renderFolderSection('unfiled', 'Unfiled', groupedUploads['unfiled'] || [], true)}
+          </div>
+        )}
       </div>
       {lassoStyle && <div style={lassoStyle} />}
       {previewModal}

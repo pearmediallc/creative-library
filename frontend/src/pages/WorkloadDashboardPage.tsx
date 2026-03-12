@@ -12,6 +12,8 @@ interface EditorWorkload {
   activeRequests: number;
   completedRequests: number;
   totalRequests: number;
+  totalAssignedCreatives?: number;
+  totalUploadedCreatives?: number;
   loadPercentage: number;
   status: string;
   maxConcurrentRequests: number;
@@ -23,6 +25,7 @@ interface WorkloadSummary {
   totalEditors: number;
   activeEditors: number;
   totalActiveRequests: number;
+  totalAssignedCreatives?: number;
   averageLoad: number;
   overloadedEditors: number;
 }

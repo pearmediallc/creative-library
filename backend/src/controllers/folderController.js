@@ -81,14 +81,19 @@ class FolderController {
     try {
       const { parent_id, include_deleted } = req.query;
 
-      const folders = await Folder.getTree(req.user.id, {
-        parent_id: parent_id || null,
-        include_deleted: isAdminRole(req.user.role) && include_deleted === 'true'
-      });
+      const [folders, sharedFolders] = await Promise.all([
+        Folder.getTree(req.user.id, {
+          parent_id: parent_id || null,
+          include_deleted: isAdminRole(req.user.role) && include_deleted === 'true'
+        }),
+        // Only fetch shared folders when loading the full tree (no parent_id filter)
+        !parent_id ? Folder.getSharedFolders(req.user.id) : Promise.resolve([])
+      ]);
 
       res.json({
         success: true,
-        data: folders
+        data: folders,
+        shared_folders: sharedFolders
       });
     } catch (error) {
       logger.error('Get folder tree failed', {

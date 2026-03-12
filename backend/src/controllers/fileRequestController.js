@@ -1779,19 +1779,48 @@ class FileRequestController {
       console.log('✅ Upload complete - File ID:', mediaFile.id);
       console.log('  └─ Folder ID in database:', mediaFile.folder_id);
 
+      // Auto-create file_request_folder for folder uploads (public)
+      let publicRequestFolderId = null;
+      const publicUploadType = folder_path && String(folder_path).trim() ? 'folder' : 'file';
+      if (folder_path && String(folder_path).trim()) {
+        const rootFolderName = String(folder_path).trim().split('/')[0];
+        if (rootFolderName) {
+          try {
+            const existingFolder = await query(
+              `SELECT id FROM file_request_folders WHERE request_id = $1 AND folder_name = $2 LIMIT 1`,
+              [fileRequest.id, rootFolderName]
+            );
+            if (existingFolder.rows.length > 0) {
+              publicRequestFolderId = existingFolder.rows[0].id;
+            } else {
+              const newFolder = await query(
+                `INSERT INTO file_request_folders (request_id, folder_name, created_by) VALUES ($1, $2, $3) RETURNING id`,
+                [fileRequest.id, rootFolderName, fileRequest.creator_id]
+              );
+              publicRequestFolderId = newFolder.rows[0].id;
+            }
+          } catch (folderErr) {
+            logger.warn('Auto-create request folder failed for public upload (non-fatal)', { error: folderErr.message });
+          }
+        }
+      }
+
       // Track the upload as an upload session (public uploads may not have an authenticated user)
       const uploadSessionResult = await query(
         `INSERT INTO file_request_uploads
-         (file_request_id, uploaded_by, uploaded_by_email, uploaded_by_name, upload_type, file_count, total_size_bytes, folder_path, comments, editor_id, files_metadata)
-         VALUES ($1, NULL, $2, $3, 'file', 1, $4, NULL, $5, $6, $7)
+         (file_request_id, uploaded_by, uploaded_by_email, uploaded_by_name, upload_type, file_count, total_size_bytes, folder_path, comments, editor_id, folder_id, files_metadata)
+         VALUES ($1, NULL, $2, $3, $4, 1, $5, $6, $7, $8, $9, $10)
          RETURNING id`,
         [
           fileRequest.id,
           uploader_email || null,
           uploader_name || null,
+          publicUploadType,
           mediaFile.file_size,
+          folder_path || null,
           comments || null,
           uploadEditorId,
+          publicRequestFolderId,
           JSON.stringify([
             {
               file_id: mediaFile.id,
@@ -2243,14 +2272,29 @@ class FileRequestController {
         );
         const { total_assigned, total_completed } = progressCheck.rows[0] || {};
         if (total_assigned > 0 && total_completed >= total_assigned) {
+          // Auto-mark request as 'uploaded' (completed from editor side) when progress hits 100%
           await query(
             `UPDATE file_requests
-             SET completed_at = COALESCE(completed_at, NOW()),
-                 updated_at = NOW()
-             WHERE id = $1 AND completed_at IS NULL`,
+             SET status = CASE
+               WHEN status IN ('launched','closed') THEN status
+               ELSE 'uploaded'
+             END,
+             completed_at = COALESCE(completed_at, NOW()),
+             updated_at = NOW()
+             WHERE id = $1`,
             [fileRequest.id]
           );
-          logger.info('Auto-set completed_at: all creatives uploaded', { requestId: fileRequest.id, total_assigned, total_completed });
+          // Also mark all active editor assignments as completed
+          await query(
+            `UPDATE file_request_editors
+             SET status = 'completed',
+                 completed_at = COALESCE(completed_at, NOW()),
+                 updated_at = CURRENT_TIMESTAMP
+             WHERE request_id = $1
+               AND status IN ('pending', 'assigned', 'in_progress', 'picked_up', 'accepted')`,
+            [fileRequest.id]
+          );
+          logger.info('Auto-completed: all creatives uploaded, progress hit 100%', { requestId: fileRequest.id, total_assigned, total_completed });
         }
       } catch (compErr) {
         logger.warn('Auto-completion check failed (non-fatal)', { error: compErr.message });
@@ -4131,6 +4175,55 @@ class FileRequestController {
          WHERE upload_session_id = $1`,
         [uploadId]
       );
+
+      // Recalculate progress after deletion - update editor status and request status
+      try {
+        const upload = uploadResult.rows[0];
+        if (upload.editor_id) {
+          // Decrement creatives_completed for the editor by the upload's file_count
+          const deleteCount = parseInt(upload.file_count) || 1;
+          await query(
+            `UPDATE file_request_editors
+             SET creatives_completed = GREATEST(COALESCE(creatives_completed, 0) - $3, 0),
+                 deliverables_uploaded = GREATEST(COALESCE(deliverables_uploaded, 0) - $3, 0),
+                 status = CASE
+                   WHEN GREATEST(COALESCE(creatives_completed, 0) - $3, 0) = 0 AND status = 'completed' THEN 'in_progress'
+                   WHEN GREATEST(COALESCE(creatives_completed, 0) - $3, 0) < COALESCE(NULLIF(num_creatives_assigned, 0), 999999) AND status = 'completed' THEN 'in_progress'
+                   ELSE status
+                 END,
+                 completed_at = CASE
+                   WHEN GREATEST(COALESCE(creatives_completed, 0) - $3, 0) < COALESCE(NULLIF(num_creatives_assigned, 0), 999999) THEN NULL
+                   ELSE completed_at
+                 END,
+                 updated_at = CURRENT_TIMESTAMP
+             WHERE request_id = $1 AND editor_id = $2`,
+            [id, upload.editor_id, deleteCount]
+          );
+        }
+
+        // Check remaining uploads - if zero, revert request status to open/in_progress
+        const remainingUploads = await query(
+          `SELECT COUNT(*)::int as cnt FROM file_request_uploads
+           WHERE file_request_id = $1 AND COALESCE(is_deleted, FALSE) = FALSE`,
+          [id]
+        );
+        const remainingCount = remainingUploads.rows[0]?.cnt || 0;
+        if (remainingCount === 0 && fileRequest.status === 'uploaded') {
+          // All uploads deleted - revert to in_progress
+          await query(
+            `UPDATE file_requests
+             SET status = 'in_progress',
+                 completed_at = NULL,
+                 uploaded_at = NULL,
+                 updated_at = NOW()
+             WHERE id = $1`,
+            [id]
+          );
+          logger.info('All uploads deleted - reverted request status to in_progress', { requestId: id });
+        }
+      } catch (progressErr) {
+        logger.warn('Progress recalculation after delete failed (non-fatal)', { error: progressErr.message });
+      }
 
       await logActivity({
         req,

@@ -1,5 +1,6 @@
 const permissionService = require('../services/permissionService');
 const { query } = require('../config/database');
+const { RBAC_PERMISSIONS, RESOURCE_TYPES, ALL_ACTIONS, ROLES, hasPermission, getMergedPermissions } = require('../config/rbacPermissions');
 
 /**
  * RBAC (Role-Based Access Control) Controller
@@ -660,7 +661,35 @@ async function cleanupExpiredPermissions(req, res) {
   }
 }
 
+/**
+ * Get the full RBAC permission matrix
+ * GET /api/rbac/permissions
+ */
+async function getPermissionMatrix(req, res) {
+  try {
+    res.json({
+      success: true,
+      data: {
+        permissions: RBAC_PERMISSIONS,
+        roles: ROLES,
+        resources: RESOURCE_TYPES,
+        allActions: ALL_ACTIONS,
+      }
+    });
+  } catch (error) {
+    console.error('Error getting permission matrix:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get permission matrix',
+      message: error.message
+    });
+  }
+}
+
 module.exports = {
+  // Permission matrix
+  getPermissionMatrix,
+
   // User endpoints
   getMyPermissions,
   getMyUIPermissions,

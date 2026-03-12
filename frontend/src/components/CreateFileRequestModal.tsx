@@ -9,10 +9,27 @@ import { FILE_REQUEST_TYPES } from '../constants/fileRequestTypes';
 import { PLATFORMS } from '../constants/platforms';
 import { VERTICALS } from '../constants/verticals';
 
+interface DuplicateData {
+  requestType?: string;
+  platforms?: string[];
+  verticals?: string[];
+  conceptNotes?: string;
+  numCreatives?: string;
+  folderId?: string;
+  deadline?: string;
+  allowMultipleUploads?: boolean;
+  requireEmail?: boolean;
+  customMessage?: string;
+  assignedBuyerIds?: string[];
+  canvasHeadline?: string;
+  canvasScript?: string;
+}
+
 interface CreateFileRequestModalProps {
   onClose: () => void;
   onSuccess: () => void;
   teamId?: string;
+  initialData?: DuplicateData;
 }
 
 interface Folder {
@@ -58,19 +75,19 @@ interface Template {
   is_active?: boolean;
 }
 
-export function CreateFileRequestModal({ onClose, onSuccess, teamId }: CreateFileRequestModalProps) {
-  const [requestType, setRequestType] = useState('');
-  const [platforms, setPlatforms] = useState<string[]>([]); // 🆕 Changed to array
-  const [verticals, setVerticals] = useState<string[]>([]); // 🆕 Changed to array
-  const [conceptNotes, setConceptNotes] = useState('');
-  const [numCreatives, setNumCreatives] = useState<string>(''); // Changed to string for empty placeholder
-  const [folderId, setFolderId] = useState<string>('');
-  const [deadline, setDeadline] = useState('');
-  const [allowMultipleUploads, setAllowMultipleUploads] = useState(true);
-  const [requireEmail, setRequireEmail] = useState(false);
-  const [customMessage, setCustomMessage] = useState('');
+export function CreateFileRequestModal({ onClose, onSuccess, teamId, initialData }: CreateFileRequestModalProps) {
+  const [requestType, setRequestType] = useState(initialData?.requestType || '');
+  const [platforms, setPlatforms] = useState<string[]>(initialData?.platforms || []);
+  const [verticals, setVerticals] = useState<string[]>(initialData?.verticals || []);
+  const [conceptNotes, setConceptNotes] = useState(initialData?.conceptNotes || '');
+  const [numCreatives, setNumCreatives] = useState<string>(initialData?.numCreatives || '');
+  const [folderId, setFolderId] = useState<string>(initialData?.folderId || '');
+  const [deadline, setDeadline] = useState(initialData?.deadline || '');
+  const [allowMultipleUploads, setAllowMultipleUploads] = useState(initialData?.allowMultipleUploads ?? true);
+  const [requireEmail, setRequireEmail] = useState(initialData?.requireEmail ?? false);
+  const [customMessage, setCustomMessage] = useState(initialData?.customMessage || '');
   const [selectedEditorIds, setSelectedEditorIds] = useState<string[]>([]);
-  const [assignedBuyerIds, setAssignedBuyerIds] = useState<string[]>([]);
+  const [assignedBuyerIds, setAssignedBuyerIds] = useState<string[]>(initialData?.assignedBuyerIds || []);
   const [buyerSearch, setBuyerSearch] = useState('');
   const [folders, setFolders] = useState<Folder[]>([]);
   const [editors, setEditors] = useState<Editor[]>([]);
@@ -92,8 +109,8 @@ export function CreateFileRequestModal({ onClose, onSuccess, teamId }: CreateFil
   const [createdRequestId, setCreatedRequestId] = useState<string | null>(null);
 
   // Inline canvas brief fields
-  const [canvasHeadline, setCanvasHeadline] = useState('');
-  const [canvasScript, setCanvasScript] = useState('');
+  const [canvasHeadline, setCanvasHeadline] = useState(initialData?.canvasHeadline || '');
+  const [canvasScript, setCanvasScript] = useState(initialData?.canvasScript || '');
   const [canvasFiles, setCanvasFiles] = useState<File[]>([]);
   const [canvasFileInstructions, setCanvasFileInstructions] = useState<Record<number, string>>({});
 
@@ -434,7 +451,7 @@ export function CreateFileRequestModal({ onClose, onSuccess, teamId }: CreateFil
           <div className="flex items-center gap-2">
             <Inbox className="w-5 h-5 text-blue-500" />
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-              Create File Request
+              {initialData ? 'Duplicate File Request' : 'Create File Request'}
             </h2>
           </div>
           <button

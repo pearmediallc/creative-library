@@ -229,6 +229,12 @@ export const adminApi = {
   removeAllowedEmail: (id: string) => api.delete(`/admin/allowed-emails/${id}`),
 };
 
+// RBAC endpoints
+export const rbacApi = {
+  getPermissionMatrix: () => api.get('/rbac/permissions'),
+  getMyPermissions: () => api.get('/rbac/permissions/me'),
+};
+
 // Activity Logs endpoints (Admin only)
 export const activityLogApi = {
   getLogs: (params?: {

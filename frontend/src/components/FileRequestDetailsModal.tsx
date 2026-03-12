@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { X, Copy, Calendar, Folder, Mail, CheckCircle, Clock, FileText, Upload as UploadIcon, Rocket, XCircle, RotateCcw, UserPlus, Edit2, ChevronDown, ChevronRight, Download, Eye, Play, List, Grid3X3, LayoutGrid } from 'lucide-react';
+import { X, Copy, Calendar, Folder, Mail, CheckCircle, Clock, FileText, Upload as UploadIcon, Rocket, XCircle, RotateCcw, UserPlus, Edit2, ChevronDown, ChevronRight, Download, Eye, Play, List, Grid3X3, LayoutGrid, Trash2 } from 'lucide-react';
 import { Button } from './ui/Button';
 import { fileRequestApi, mediaApi } from '../lib/api';
 import { formatDate, linkifyText } from '../lib/utils';
@@ -9,6 +9,7 @@ import { UploadHistoryTimeline } from './UploadHistoryTimeline';
 import { ReassignFileRequestModal } from './ReassignFileRequestModal';
 import { FileRequestOrganizer } from './FileRequestOrganizer';
 import { VideoPlayer } from './VideoPlayer';
+import { CreateFileRequestModal } from './CreateFileRequestModal';
 import { useAuth, isAdminRole } from '../contexts/AuthContext';
 import { getFileRequestStatusColor, getVerticalBadgeClasses } from '../constants/statusColors';
 
@@ -328,6 +329,9 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
   const [editedRequest, setEditedRequest] = useState<any>({});
   const [isSavingEdit, setIsSavingEdit] = useState(false);
 
+  // Duplicate modal state
+  const [showDuplicateModal, setShowDuplicateModal] = useState(false);
+
   useEffect(() => {
     fetchRequestDetails();
     fetchReassignments();
@@ -636,6 +640,43 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
     } catch (error: any) {
       console.error('Bulk add to library error:', error);
       alert('Failed to add files to Media Library. Please try again.');
+    } finally {
+      setBulkActionInProgress(false);
+    }
+  };
+
+  const handleBulkRemoveFromRequest = async () => {
+    if (!request || selectedUploads.size === 0) return;
+
+    const count = selectedUploads.size;
+    if (!window.confirm(`Remove ${count} selected file${count !== 1 ? 's' : ''} from this request? This will be tracked in history.`)) {
+      return;
+    }
+
+    setBulkActionInProgress(true);
+    try {
+      const uploadsToRemove = request.uploads.filter(u => selectedUploads.has(u.id) && u.upload_session_id);
+
+      const results = await Promise.allSettled(
+        uploadsToRemove.map(upload =>
+          fileRequestApi.deleteUploadSession(requestId, upload.upload_session_id!)
+        )
+      );
+
+      const successful = results.filter(r => r.status === 'fulfilled').length;
+      const failed = results.filter(r => r.status === 'rejected').length;
+
+      if (failed > 0) {
+        alert(`Removed ${successful} file(s). ${failed} file(s) failed to remove.`);
+      } else {
+        alert(`Successfully removed ${successful} file(s) from the request.`);
+      }
+
+      setSelectedUploads(new Set());
+      await fetchRequestDetails();
+    } catch (error: any) {
+      console.error('Bulk remove error:', error);
+      alert('Failed to remove files. Please try again.');
     } finally {
       setBulkActionInProgress(false);
     }
@@ -1078,35 +1119,9 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
     }
   };
 
-  const handleDuplicateRequest = async () => {
-    try {
-      const API_BASE_URL = (process.env.REACT_APP_API_URL || 'http://localhost:3001/api');
-      const token = localStorage.getItem('token');
-      const response = await fetch(`${API_BASE_URL}/file-requests/${requestId}/duplicate`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to duplicate request');
-      }
-
-      const result = await response.json();
-
-      // Show success message
-      alert(`Request duplicated successfully! New request ID: ${result.data.id}`);
-
-      // Refresh and notify parent
-      onUpdate();
-      onClose();
-
-    } catch (error) {
-      console.error('Error duplicating request:', error);
-      alert('Failed to duplicate request. Please try again.');
-    }
+  const handleDuplicateRequest = () => {
+    // Open create modal pre-filled with current request data
+    setShowDuplicateModal(true);
   };
 
   // Determine if user can reassign
@@ -1217,12 +1232,17 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
                   )
                 )}
 
-                {/* Duplicate Button - Only for buyers and admins */}
-                {(user?.role === 'buyer' || isAdminRole(user?.role)) && (
+                {/* Copy Link Button */}
+                {request?.request_token && (
                   <button
-                    onClick={() => handleDuplicateRequest()}
+                    onClick={() => {
+                      const baseUrl = window.location.origin;
+                      const link = `${baseUrl}/upload/${request.request_token}`;
+                      navigator.clipboard.writeText(link);
+                      alert('Upload link copied to clipboard!');
+                    }}
                     className="p-2 text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 dark:text-gray-400 rounded-lg transition-colors"
-                    title="Duplicate Request"
+                    title="Copy Upload Link"
                   >
                     <Copy className="w-4 h-4" />
                   </button>
@@ -1392,7 +1412,7 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
             <div className="bg-gradient-to-r from-gray-50 to-blue-50 dark:from-gray-800 dark:to-blue-900/20 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
               <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">Actions</h3>
               <div className="flex flex-wrap gap-2">
-                {/* Mark as Uploaded - Only for assigned editors when status is open/in_progress */}
+                {/* 1. Mark as Uploaded - Only for assigned editors when status is open/in_progress */}
                 {request.assigned_editors?.some(e => e.id === user.id) &&
                   (request.status === 'open' || request.status === 'in_progress') && (
                   <Button
@@ -1405,8 +1425,8 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
                   </Button>
                 )}
 
-                {/* Launch - Only for creator/assigned buyer when status is uploaded */}
-                {(request.created_by === user.id || request.assigned_buyer_id === user.id) &&
+                {/* 2. Launch - For creator/assigned buyer when status is uploaded */}
+                {(request.created_by === user.id || request.assigned_buyer_id === user.id || request.assigned_buyer_ids?.includes(user.id) || isAdminRole(user.role)) &&
                   request.status === 'uploaded' && (
                   <Button
                     onClick={handleLaunch}
@@ -1418,10 +1438,22 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
                   </Button>
                 )}
 
-                {/* Close step removed: Launch is equivalent to Close in this workflow */}
+                {/* 3. Close - For creator/buyer/admin when not already closed */}
+                {(request.created_by === user.id || request.assigned_buyer_id === user.id || request.assigned_buyer_ids?.includes(user.id) || isAdminRole(user.role)) &&
+                  request.status !== 'closed' && request.status !== 'launched' && (
+                  <Button
+                    onClick={handleClose}
+                    size="sm"
+                    variant="outline"
+                    className="border-gray-400 text-gray-600 hover:bg-gray-100 dark:border-gray-500 dark:text-gray-400"
+                  >
+                    <XCircle className="w-4 h-4 mr-2" />
+                    Close
+                  </Button>
+                )}
 
-                {/* Reopen - Only for creator/assigned buyer when status is closed */}
-                {(request.created_by === user.id || request.assigned_buyer_id === user.id) &&
+                {/* 4. Reopen - For creator/assigned buyer when status is closed */}
+                {(request.created_by === user.id || request.assigned_buyer_id === user.id || request.assigned_buyer_ids?.includes(user.id) || isAdminRole(user.role)) &&
                   request.status === 'closed' && (
                   <Button
                     onClick={handleReopen}
@@ -1433,7 +1465,7 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
                   </Button>
                 )}
 
-                {/* Reassign - Only for vertical head or assigned editors */}
+                {/* 5. Reassign */}
                 {canReassign && request.status !== 'closed' && (
                   <Button
                     onClick={() => setShowReassignModal(true)}
@@ -1443,6 +1475,19 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
                   >
                     <UserPlus className="w-4 h-4 mr-2" />
                     Reassign
+                  </Button>
+                )}
+
+                {/* 6. Duplicate Request - Opens create modal pre-filled */}
+                {(user?.role === 'buyer' || isAdminRole(user?.role)) && (
+                  <Button
+                    onClick={handleDuplicateRequest}
+                    size="sm"
+                    variant="outline"
+                    className="border-purple-400 text-purple-600 hover:bg-purple-50 dark:border-purple-500 dark:text-purple-400"
+                  >
+                    <Copy className="w-4 h-4 mr-2" />
+                    Duplicate Request
                   </Button>
                 )}
               </div>
@@ -2165,6 +2210,16 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
                           Add Selected to Library
                         </Button>
                       )}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-destructive hover:text-destructive"
+                        onClick={handleBulkRemoveFromRequest}
+                        disabled={bulkActionInProgress}
+                      >
+                        <Trash2 className="w-4 h-4 mr-1" />
+                        Delete ({selectedUploads.size})
+                      </Button>
                     </>
                   )}
                 </div>
@@ -2303,6 +2358,31 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
           onSave={handleSave3StepCanvas}
           onClose={() => setShow3StepCanvas(false)}
           readOnly={user?.role === 'creative'}
+        />
+      )}
+
+      {/* Duplicate Request Modal - Opens CreateFileRequestModal pre-filled */}
+      {showDuplicateModal && request && (
+        <CreateFileRequestModal
+          onClose={() => setShowDuplicateModal(false)}
+          onSuccess={() => {
+            setShowDuplicateModal(false);
+            onUpdate();
+            onClose();
+          }}
+          initialData={{
+            requestType: request.request_type || '',
+            platforms: request.platforms || (request.platform ? [request.platform] : []),
+            verticals: request.verticals || (request.vertical ? [request.vertical] : []),
+            conceptNotes: request.description || '',
+            numCreatives: request.num_creatives_requested ? String(request.num_creatives_requested) : '',
+            allowMultipleUploads: request.allow_multiple_uploads,
+            requireEmail: request.require_email,
+            customMessage: request.custom_message || '',
+            assignedBuyerIds: request.assigned_buyer_ids || (request.assigned_buyer_id ? [request.assigned_buyer_id] : []),
+            canvasHeadline: canvas?.content?.headline || '',
+            canvasScript: canvas?.content?.script || '',
+          }}
         />
       )}
     </div>

@@ -13,29 +13,41 @@ class WorkloadController {
    */
   async getOverview(req, res, next) {
     try {
-      // Calculate workload dynamically instead of relying on stale editor_capacity
+      // Calculate workload based on total assigned creatives (limit 25 per editor)
+      const CREATIVES_LIMIT = 25;
       const result = await query(`
         SELECT
           e.id AS editor_id,
           e.name AS editor_name,
           e.display_name,
-          COALESCE(ec.max_concurrent_requests, 10) AS max_concurrent_requests,
+          COALESCE(ec.max_concurrent_requests, ${CREATIVES_LIMIT}) AS max_concurrent_requests,
           COALESCE(ec.avg_completion_time_hours, 0) AS avg_completion_time_hours,
           COALESCE(ec.is_available, TRUE) AS is_available,
           COUNT(CASE WHEN fre.status IN ('pending', 'assigned', 'in_progress') AND fr.is_active = TRUE THEN 1 END)::int AS active_requests,
           COUNT(CASE WHEN fre.status = 'completed' THEN 1 END)::int AS completed_requests,
           COUNT(fre.id)::int AS total_requests,
+          COALESCE(SUM(CASE WHEN fre.status IN ('pending', 'assigned', 'in_progress') AND fr.is_active = TRUE
+            THEN COALESCE(NULLIF(fre.num_creatives_assigned, 0), fr.num_creatives, 0) ELSE 0 END), 0)::int AS total_assigned_creatives,
+          COALESCE(SUM(CASE WHEN fre.status IN ('pending', 'assigned', 'in_progress') AND fr.is_active = TRUE
+            THEN (SELECT COUNT(*)::int FROM file_request_uploads fru
+                  WHERE fru.file_request_id = fr.id AND fru.editor_id = fre.editor_id
+                  AND COALESCE(fru.is_deleted, FALSE) = FALSE)
+            ELSE 0 END), 0)::int AS total_uploaded_creatives,
           CASE
-            WHEN COALESCE(ec.max_concurrent_requests, 10) > 0
+            WHEN COALESCE(ec.max_concurrent_requests, ${CREATIVES_LIMIT}) > 0
             THEN ROUND(
-              (COUNT(CASE WHEN fre.status IN ('pending', 'assigned', 'in_progress') AND fr.is_active = TRUE THEN 1 END)::decimal
-               / COALESCE(ec.max_concurrent_requests, 10)::decimal) * 100, 1
+              (COALESCE(SUM(CASE WHEN fre.status IN ('pending', 'assigned', 'in_progress') AND fr.is_active = TRUE
+                THEN COALESCE(NULLIF(fre.num_creatives_assigned, 0), fr.num_creatives, 0) ELSE 0 END), 0)::decimal
+               / COALESCE(ec.max_concurrent_requests, ${CREATIVES_LIMIT})::decimal) * 100, 1
             )
             ELSE 0
           END AS load_percentage,
           CASE
-            WHEN COUNT(CASE WHEN fre.status IN ('pending', 'assigned', 'in_progress') AND fr.is_active = TRUE THEN 1 END) = 0 THEN 'available'
-            WHEN COUNT(CASE WHEN fre.status IN ('pending', 'assigned', 'in_progress') AND fr.is_active = TRUE THEN 1 END) >= COALESCE(ec.max_concurrent_requests, 10) * 0.8 THEN 'overloaded'
+            WHEN COALESCE(SUM(CASE WHEN fre.status IN ('pending', 'assigned', 'in_progress') AND fr.is_active = TRUE
+              THEN COALESCE(NULLIF(fre.num_creatives_assigned, 0), fr.num_creatives, 0) ELSE 0 END), 0) = 0 THEN 'available'
+            WHEN COALESCE(SUM(CASE WHEN fre.status IN ('pending', 'assigned', 'in_progress') AND fr.is_active = TRUE
+              THEN COALESCE(NULLIF(fre.num_creatives_assigned, 0), fr.num_creatives, 0) ELSE 0 END), 0)
+              >= COALESCE(ec.max_concurrent_requests, ${CREATIVES_LIMIT}) * 0.8 THEN 'overloaded'
             ELSE 'busy'
           END AS status
         FROM editors e
@@ -53,6 +65,7 @@ class WorkloadController {
       const totalEditors = editors.length;
       const activeEditors = editors.filter(e => e.is_available).length;
       const totalActiveRequests = editors.reduce((sum, e) => sum + parseInt(e.active_requests || 0), 0);
+      const totalAssignedCreatives = editors.reduce((sum, e) => sum + parseInt(e.total_assigned_creatives || 0), 0);
       const averageLoad = editors.length > 0
         ? editors.reduce((sum, e) => sum + parseFloat(e.load_percentage || 0), 0) / editors.length
         : 0;
@@ -82,6 +95,7 @@ class WorkloadController {
             totalEditors,
             activeEditors,
             totalActiveRequests,
+            totalAssignedCreatives,
             averageLoad: Math.round(averageLoad * 100) / 100,
             overloadedEditors
           },
@@ -92,9 +106,11 @@ class WorkloadController {
             activeRequests: parseInt(e.active_requests || 0),
             completedRequests: parseInt(e.completed_requests || 0),
             totalRequests: parseInt(e.total_requests || 0),
+            totalAssignedCreatives: parseInt(e.total_assigned_creatives || 0),
+            totalUploadedCreatives: parseInt(e.total_uploaded_creatives || 0),
             loadPercentage: parseFloat(e.load_percentage || 0),
             status: e.status || 'available',
-            maxConcurrentRequests: parseInt(e.max_concurrent_requests || 10),
+            maxConcurrentRequests: parseInt(e.max_concurrent_requests || 25),
             avgCompletionTimeHours: parseFloat(e.avg_completion_time_hours || 0),
             isAvailable: e.is_available
           })),
@@ -235,9 +251,16 @@ class WorkloadController {
       `, [editorId]);
 
       // Calculate additional metrics
+      const CREATIVES_LIMIT = 25;
       const requests = requestsResult.rows;
       const activeRequests = requests.filter(r => ['pending', 'assigned', 'in_progress'].includes(r.status) && r.is_active !== false);
       const completedRequests = requests.filter(r => r.status === 'completed');
+
+      // Calculate creatives-based load
+      const totalAssignedCreatives = activeRequests.reduce((sum, r) => sum + (parseInt(r.num_creatives_assigned) || 0), 0);
+      const totalUploadedCreatives = activeRequests.reduce((sum, r) => sum + (parseInt(r.actual_uploads) || 0), 0);
+      const maxCreatives = parseInt(editor.max_concurrent_requests || CREATIVES_LIMIT);
+      const loadPercentage = maxCreatives > 0 ? Math.round((totalAssignedCreatives / maxCreatives) * 100) : 0;
 
       res.json({
         success: true,
@@ -246,14 +269,14 @@ class WorkloadController {
             id: editor.id,
             name: editor.name,
             displayName: editor.display_name,
-            loadPercentage: parseInt(editor.max_concurrent_requests || 10) > 0
-              ? Math.round((activeRequests.length / parseInt(editor.max_concurrent_requests || 10)) * 100)
-              : 0,
+            loadPercentage,
             status: editor.status,
-            maxConcurrentRequests: parseInt(editor.max_concurrent_requests || 10),
+            maxConcurrentRequests: maxCreatives,
             maxHoursPerWeek: parseFloat(editor.max_hours_per_week || 40),
             avgCompletionTimeHours: parseFloat(editor.avg_completion_time_hours || 0),
             totalCompletedRequests: parseInt(editor.total_completed_requests || 0),
+            totalAssignedCreatives,
+            totalUploadedCreatives,
             isAvailable: editor.is_available,
             unavailableUntil: editor.unavailable_until,
             unavailableReason: editor.unavailable_reason
@@ -283,6 +306,8 @@ class WorkloadController {
             totalRequests: requests.length,
             activeRequests: activeRequests.length,
             completedRequests: completedRequests.length,
+            totalAssignedCreatives,
+            totalUploadedCreatives,
             completionRate: requests.length > 0
               ? Math.round((completedRequests.length / requests.length) * 100)
               : 0,
@@ -597,7 +622,7 @@ class WorkloadController {
             loadPercentage: parseFloat(e.current_load_percentage || 0),
             status: e.status,
             currentRequests: parseInt(e.current_requests || 0),
-            maxConcurrentRequests: parseInt(e.max_concurrent_requests || 10),
+            maxConcurrentRequests: parseInt(e.max_concurrent_requests || 25),
             avgCompletionTimeHours: parseFloat(e.avg_completion_time_hours || 0),
             recommended: parseFloat(e.current_load_percentage || 0) < 50
           })),

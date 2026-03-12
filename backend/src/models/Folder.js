@@ -126,6 +126,50 @@ class Folder extends BaseModel {
   }
 
   /**
+   * Get folders shared TO a user (via file_permissions)
+   * Returns folders where the user is a grantee but NOT the owner
+   */
+  async getSharedFolders(userId) {
+    try {
+      const sql = `
+        SELECT DISTINCT ON (f.id)
+          f.*,
+          (
+            SELECT COUNT(*)
+            FROM media_files mf
+            WHERE mf.folder_id = f.id
+              AND mf.is_deleted = FALSE
+          )::int as file_count,
+          0 as depth,
+          ARRAY[f.id] as path,
+          fp.permission_type,
+          fp.granted_at as shared_at,
+          granter.id as shared_by_id,
+          granter.name as shared_by_name,
+          granter.email as shared_by_email
+        FROM file_permissions fp
+        JOIN folders f ON fp.resource_type = 'folder' AND fp.resource_id = f.id
+        LEFT JOIN team_members tm ON fp.grantee_type = 'team' AND fp.grantee_id = tm.team_id
+        LEFT JOIN users granter ON fp.granted_by = granter.id
+        WHERE (
+          (fp.grantee_type = 'user' AND fp.grantee_id = $1)
+          OR (fp.grantee_type = 'team' AND tm.user_id = $1 AND tm.is_active = TRUE)
+        )
+        AND f.owner_id != $1
+        AND f.is_deleted = FALSE
+        AND (fp.expires_at IS NULL OR fp.expires_at > NOW())
+        ORDER BY f.id, fp.granted_at DESC
+      `;
+
+      const result = await query(sql, [userId]);
+      return result.rows || result;
+    } catch (error) {
+      logger.error('Get shared folders failed', { error: error.message, userId });
+      throw error;
+    }
+  }
+
+  /**
    * Check if user can access folder
    */
   async canAccess(userId, folderId, permissionType = 'view') {

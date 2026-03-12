@@ -16,7 +16,7 @@ const baseNavigation = [
   { name: 'Shared with me', href: '/shared-with-me', icon: UserCheck },
   { name: 'Trash', href: '/trash', icon: Trash2 },
   { name: 'Shared by You', href: '/shared-by-me', icon: Share2 },
-  // { name: 'Teams', href: '/teams', icon: Users }, // Teams feature disabled
+  { name: 'Teams', href: '/teams', icon: Users },
   { name: 'Settings', href: '/settings', icon: User },
   { name: 'FAQ / Help', href: '/faq', icon: HelpCircle },
 ];

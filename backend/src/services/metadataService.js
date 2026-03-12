@@ -212,32 +212,45 @@ class MetadataService {
    */
   async removeMetadataFromImage(buffer) {
     try {
-      const image = sharp(buffer);
-      const metadata = await image.metadata();
+      // First try to detect format, using a fresh sharp instance each time
+      let metadata;
+      try {
+        metadata = await sharp(buffer).metadata();
+      } catch (metaErr) {
+        logger.warn(`Could not read image metadata (returning original): ${metaErr.message}`);
+        return buffer; // Return original if we can't even read it
+      }
 
       logger.info(`Removing metadata from ${metadata.format} image`);
 
-      // This strips EXIF, XMP, IPTC, and other metadata
-      // By not calling withMetadata(), sharp automatically strips metadata
       let processedBuffer;
 
       if (metadata.format === 'png') {
-        processedBuffer = await image
-          .png({
-            compressionLevel: 9,
-            adaptiveFiltering: true
-          })
-          .toBuffer();
+        try {
+          // Use a fresh sharp instance for processing
+          processedBuffer = await sharp(buffer)
+            .png({
+              compressionLevel: 6,
+              adaptiveFiltering: false
+            })
+            .toBuffer();
+        } catch (pngErr) {
+          logger.warn(`PNG metadata strip failed (returning original): ${pngErr.message}`);
+          return buffer; // Return original if PNG processing fails (e.g. libspng error)
+        }
       } else if (metadata.format === 'jpeg' || metadata.format === 'jpg') {
-        processedBuffer = await image
+        processedBuffer = await sharp(buffer)
           .jpeg({
             quality: 95,
             mozjpeg: true
           })
           .toBuffer();
+      } else if (metadata.format === 'webp') {
+        processedBuffer = await sharp(buffer)
+          .webp({ quality: 90 })
+          .toBuffer();
       } else {
-        // For other formats
-        processedBuffer = await image.toBuffer();
+        processedBuffer = await sharp(buffer).toBuffer();
       }
 
       logger.info('✅ Successfully removed metadata from image');
@@ -245,7 +258,9 @@ class MetadataService {
 
     } catch (error) {
       logger.error(`Error removing image metadata: ${error.message}`);
-      throw new Error(`Error removing metadata from image: ${error.message}`);
+      // Graceful fallback: return original file rather than failing the download
+      logger.warn('Returning original file without metadata removal');
+      return buffer;
     }
   }
 

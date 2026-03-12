@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { folderApi } from '../lib/api';
-import { Folder, FolderOpen, ChevronRight, ChevronDown, Plus, MoreVertical } from 'lucide-react';
+import { Folder, FolderOpen, ChevronRight, ChevronDown, Plus, MoreVertical, Users, Share2 } from 'lucide-react';
 import { Button } from './ui/Button';
 import { TeamFolderBadge } from './TeamFolderBadge';
 
@@ -15,6 +15,22 @@ interface FolderNode {
   created_at: string;
   team_id?: string;
   team_name?: string;
+}
+
+interface SharedFolderNode {
+  id: string;
+  name: string;
+  parent_folder_id: string | null;
+  file_count?: number;
+  depth: number;
+  path: string[];
+  s3_path: string;
+  created_at: string;
+  permission_type: string;
+  shared_at: string;
+  shared_by_id: string;
+  shared_by_name: string;
+  shared_by_email: string;
 }
 
 interface FolderTreeProps {
@@ -33,7 +49,9 @@ export function FolderTree({
   refreshKey
 }: FolderTreeProps) {
   const [folders, setFolders] = useState<FolderNode[]>([]);
+  const [sharedFolders, setSharedFolders] = useState<SharedFolderNode[]>([]);
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
+  const [sharedSectionExpanded, setSharedSectionExpanded] = useState(true);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -45,6 +63,7 @@ export function FolderTree({
     try {
       const response = await folderApi.getTree();
       setFolders(response.data.data || []);
+      setSharedFolders(response.data.shared_folders || []);
     } catch (error) {
       console.error('Failed to fetch folders:', error);
     } finally {
@@ -132,6 +151,45 @@ export function FolderTree({
     );
   };
 
+  const renderSharedFolder = (folder: SharedFolderNode) => {
+    const isSelected = currentFolderId === folder.id;
+
+    return (
+      <div key={folder.id} className="select-none">
+        <div
+          className={`
+            flex items-center gap-1 px-2 py-1.5 rounded cursor-pointer group
+            hover:bg-gray-100 dark:hover:bg-gray-800
+            ${isSelected ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400' : ''}
+          `}
+          style={{ paddingLeft: '24px' }}
+          onClick={() => onFolderSelect(folder.id)}
+        >
+          {/* Folder Icon with share indicator */}
+          <div className="relative flex-shrink-0">
+            <Folder className="w-4 h-4 text-purple-500" />
+            <Share2 className="w-2.5 h-2.5 text-purple-400 absolute -bottom-0.5 -right-0.5" />
+          </div>
+
+          {/* Folder Name and Sharer Info */}
+          <div className="flex flex-col flex-1 min-w-0 ml-1">
+            <span className="text-sm truncate">{folder.name}</span>
+            <span className="text-[10px] text-gray-400 dark:text-gray-500 truncate">
+              from {folder.shared_by_name || folder.shared_by_email || 'Unknown'}
+            </span>
+          </div>
+
+          {/* File count badge */}
+          {folder.file_count != null && folder.file_count > 0 && (
+            <span className="text-[10px] text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 rounded px-1">
+              {folder.file_count}
+            </span>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   if (loading) {
     return (
       <div className="p-4">
@@ -176,12 +234,43 @@ export function FolderTree({
 
       {/* Folder Tree */}
       <div className="flex-1 overflow-y-auto p-2">
-        {rootFolders.length === 0 ? (
+        {rootFolders.length === 0 && sharedFolders.length === 0 ? (
           <div className="text-center text-sm text-gray-500 dark:text-gray-400 py-8">
             No folders yet
           </div>
         ) : (
-          rootFolders.map(folder => renderFolder(folder))
+          <>
+            {rootFolders.map(folder => renderFolder(folder))}
+
+            {/* Shared Folders Section */}
+            {sharedFolders.length > 0 && (
+              <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                <div
+                  className="flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800"
+                  onClick={() => setSharedSectionExpanded(!sharedSectionExpanded)}
+                >
+                  {sharedSectionExpanded ? (
+                    <ChevronDown className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+                  ) : (
+                    <ChevronRight className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+                  )}
+                  <Users className="w-4 h-4 text-purple-500" />
+                  <span className="text-sm font-medium text-gray-600 dark:text-gray-300">
+                    Shared Folders
+                  </span>
+                  <span className="text-[10px] text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 rounded-full px-1.5 py-0.5 ml-auto">
+                    {sharedFolders.length}
+                  </span>
+                </div>
+
+                {sharedSectionExpanded && (
+                  <div className="mt-1">
+                    {sharedFolders.map(folder => renderSharedFolder(folder))}
+                  </div>
+                )}
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>

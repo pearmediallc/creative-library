@@ -21,7 +21,7 @@ const adminRoutes = require('./routes/admin');
 const facebookRoutes = require('./routes/facebook');
 const activityLogRoutes = require('./routes/activityLogs');
 const folderRoutes = require('./routes/folders');
-// const teamRoutes = require('./routes/teams'); // Teams feature disabled
+const teamRoutes = require('./routes/teams');
 const permissionRoutes = require('./routes/permissions');
 const starredRoutes = require('./routes/starred');
 const commentRoutes = require('./routes/comments');
@@ -146,7 +146,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/facebook', facebookRoutes);
 app.use('/api/folders', folderRoutes);
 app.use('/api/activity-logs', activityLogRoutes);
-// app.use('/api/teams', teamRoutes); // Teams feature disabled
+app.use('/api/teams', teamRoutes);
 app.use('/api/permissions', permissionRoutes);
 app.use('/api/starred', starredRoutes);
 app.use('/api/comments', commentRoutes);

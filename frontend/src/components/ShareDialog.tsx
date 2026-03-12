@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { X, Share2, Users, Link as LinkIcon, Copy, Check, Mail, Calendar, Eye, Download, Edit, Trash2, User as UserIcon, Lock, Clock, BarChart, MessageSquare } from 'lucide-react';
 import { Button } from './ui/Button';
-import { permissionApi, authApi, publicLinkApi, slackApi } from '../lib/api';
+import { permissionApi, authApi, publicLinkApi, slackApi, teamApi } from '../lib/api';
 
 interface ShareDialogProps {
   isOpen: boolean;
@@ -48,14 +48,14 @@ export function ShareDialog({
   const [activeTab, setActiveTab] = useState<'people' | 'link' | 'slack'>('people');
   const [permissions, setPermissions] = useState<Permission[]>([]);
   const [allUsers, setAllUsers] = useState<User[]>([]);
-  const [allTeams, setAllTeams] = useState<Team[]>([]); // Teams disabled
+  const [allTeams, setAllTeams] = useState<Team[]>([]);
   const [loading, setLoading] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
   // Share with people form state
-  const [shareType, setShareType] = useState<'user' | 'team'>('user'); // Teams disabled - always 'user'
+  const [shareType, setShareType] = useState<'user' | 'team'>('user');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [userSearch, setUserSearch] = useState('');
   const [selectedPermissions, setSelectedPermissions] = useState<Set<'view' | 'download' | 'edit' | 'delete'>>(new Set(['view' as const]));
@@ -110,14 +110,22 @@ export function ShareDialog({
 
   const fetchUsersAndTeams = useCallback(async () => {
     try {
-      const usersRes = await authApi.getUsers();
+      const [usersRes, teamsRes] = await Promise.all([
+        authApi.getUsers(),
+        teamApi.getUserTeams()
+      ]);
       setAllUsers((usersRes.data.data || []).map((u: any) => ({
         id: u.id,
         name: u.name,
         email: u.email
       })));
+      setAllTeams((teamsRes.data.data || []).map((t: any) => ({
+        id: t.id,
+        name: t.name,
+        description: t.description
+      })));
     } catch (err) {
-      console.error('Failed to fetch users:', err);
+      console.error('Failed to fetch users and teams:', err);
     }
   }, []);
 
@@ -307,12 +315,16 @@ export function ShareDialog({
       let permId = permissions.find(p => p.resource_type === resourceType && p.resource_id === resourceId)?.id;
 
       if (!permId) {
-        // Create a self-permission first
+        // Create a permission for the current user to generate the public link
+        const meResponse = await fetch('/api/auth/me', { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } });
+        const meData = await meResponse.json();
+        const currentUserId = meData?.data?.user?.id || meData?.data?.id || meData?.user?.id;
+        if (!currentUserId) throw new Error('Could not determine current user');
         const permResponse = await permissionApi.grant({
           resource_type: resourceType,
           resource_id: resourceId,
           grantee_type: 'user',
-          grantee_id: 'self',
+          grantee_id: currentUserId,
           permission_type: 'view'
         });
         permId = permResponse.data.data.id;
@@ -536,7 +548,28 @@ export function ShareDialog({
                 </div>
 
                 <div className="grid grid-cols-1 gap-3">
+                  {/* Share type toggle: Users or Teams */}
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => { setShareType('user'); setSelectedIds(new Set()); }}
+                      className={`flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-md border ${shareType === 'user' ? 'bg-blue-100 dark:bg-blue-900/40 border-blue-300 dark:border-blue-700 text-blue-800 dark:text-blue-200' : 'border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
+                    >
+                      <UserIcon className="w-3.5 h-3.5" />
+                      Users
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setShareType('team'); setSelectedIds(new Set()); }}
+                      className={`flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-md border ${shareType === 'team' ? 'bg-blue-100 dark:bg-blue-900/40 border-blue-300 dark:border-blue-700 text-blue-800 dark:text-blue-200' : 'border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
+                    >
+                      <Users className="w-3.5 h-3.5" />
+                      Teams
+                    </button>
+                  </div>
+
                   {/* Multi-select User Selection with Search */}
+                  {shareType === 'user' && (
                   <div>
                     <input
                       type="text"
@@ -578,6 +611,46 @@ export function ShareDialog({
                       ))}
                     </div>
                   </div>
+                  )}
+
+                  {/* Multi-select Team Selection */}
+                  {shareType === 'team' && (
+                  <div>
+                    {selectedIds.size > 0 && (
+                      <p className="text-xs text-blue-600 dark:text-blue-400 mb-1">{selectedIds.size} team(s) selected</p>
+                    )}
+                    <div className="max-h-36 overflow-y-auto border border-gray-200 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700">
+                      {availableTeams.length === 0 ? (
+                        <p className="px-3 py-2 text-sm text-gray-500 dark:text-gray-400">No teams available. Create a team first.</p>
+                      ) : (
+                        availableTeams.map(team => (
+                          <label
+                            key={team.id}
+                            className={`flex items-center gap-2 px-3 py-2 text-sm cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 ${selectedIds.has(team.id) ? 'bg-blue-50 dark:bg-blue-900/30' : ''}`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={selectedIds.has(team.id)}
+                              onChange={() => {
+                                const next = new Set(selectedIds);
+                                if (next.has(team.id)) next.delete(team.id);
+                                else next.add(team.id);
+                                setSelectedIds(next);
+                              }}
+                              disabled={sharing}
+                              className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                            />
+                            <Users className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                            <span className="text-gray-900 dark:text-white">{team.name}</span>
+                            {team.description && (
+                              <span className="text-gray-500 text-xs truncate">({team.description})</span>
+                            )}
+                          </label>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                  )}
 
                   {/* Permission Selection */}
                   <div>

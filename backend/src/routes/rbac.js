@@ -4,6 +4,15 @@ const rbacController = require('../controllers/rbacController');
 const { authenticateToken: auth, requireSuperAdmin: requireStrictAdmin } = require('../middleware/auth');
 const { permissions, requireSuperAdmin } = require('../middleware/permissionMiddleware');
 
+// ==================== PUBLIC MATRIX ENDPOINT ====================
+
+/**
+ * @route   GET /api/rbac/permissions
+ * @desc    Get the full RBAC permission matrix (all roles and their permissions)
+ * @access  Private
+ */
+router.get('/permissions', auth, rbacController.getPermissionMatrix);
+
 // ==================== USER ENDPOINTS (Authenticated users) ====================
 
 /**

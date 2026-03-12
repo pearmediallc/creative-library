@@ -98,7 +98,7 @@ export function EditorDetailModal({ editorId, onClose, onUpdate }: EditorDetailM
         </div>
 
         {/* Stats Summary */}
-        <div className="grid grid-cols-4 gap-4 p-6 border-b border-gray-200 dark:border-gray-700">
+        <div className="grid grid-cols-5 gap-4 p-6 border-b border-gray-200 dark:border-gray-700">
           <div>
             <p className="text-sm text-gray-600 dark:text-gray-400">Load</p>
             <p className="text-2xl font-bold text-gray-900 dark:text-white">
@@ -106,19 +106,21 @@ export function EditorDetailModal({ editorId, onClose, onUpdate }: EditorDetailM
             </p>
           </div>
           <div>
-            <p className="text-sm text-gray-600 dark:text-gray-400">Max Capacity</p>
-            <p className="text-2xl font-bold text-gray-900 dark:text-white">
-              {editor.maxConcurrentRequests}
+            <p className="text-sm text-gray-600 dark:text-gray-400">Total Assigned</p>
+            <p className="text-2xl font-bold text-purple-600">
+              {editor.totalAssignedCreatives ?? 0}
             </p>
           </div>
           <div>
-            <p className="text-sm text-gray-600 dark:text-gray-400">Avg. Time</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400">Completed</p>
+            <p className="text-2xl font-bold text-green-600">
+              {editor.totalUploadedCreatives ?? 0}
+            </p>
+          </div>
+          <div>
+            <p className="text-sm text-gray-600 dark:text-gray-400">Max Capacity</p>
             <p className="text-2xl font-bold text-gray-900 dark:text-white">
-              {editor.avgCompletionTimeHours ? (
-                editor.avgCompletionTimeHours >= 24
-                  ? `${Math.floor(editor.avgCompletionTimeHours / 24)}d ${Math.round(editor.avgCompletionTimeHours % 24)}h`
-                  : `${Math.round(editor.avgCompletionTimeHours)}h`
-              ) : 'N/A'}
+              {editor.maxConcurrentRequests}
             </p>
           </div>
           <div>
