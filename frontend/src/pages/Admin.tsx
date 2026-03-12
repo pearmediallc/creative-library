@@ -23,6 +23,7 @@ export function AdminPage() {
     role: 'creative',
     upload_limit_monthly: 100,
     assigned_verticals: [] as string[],
+    additional_roles: [] as string[],
   });
   const [verticalSearch, setVerticalSearch] = useState('');
   const [error, setError] = useState('');
@@ -66,7 +67,7 @@ export function AdminPage() {
 
     try {
       await adminApi.createUser(formData);
-      setFormData({ name: '', email: '', password: '', role: 'creative', upload_limit_monthly: 100, assigned_verticals: [] });
+      setFormData({ name: '', email: '', password: '', role: 'creative', upload_limit_monthly: 100, assigned_verticals: [], additional_roles: [] });
       setShowAddForm(false);
       setError('');
       fetchData();
@@ -82,9 +83,10 @@ export function AdminPage() {
         role: formData.role as any,
         upload_limit_monthly: formData.upload_limit_monthly,
         assigned_verticals: formData.assigned_verticals,
-      });
+        additional_roles: formData.additional_roles,
+      } as any);
       setEditingId(null);
-      setFormData({ name: '', email: '', password: '', role: 'creative', upload_limit_monthly: 100, assigned_verticals: [] });
+      setFormData({ name: '', email: '', password: '', role: 'creative', upload_limit_monthly: 100, assigned_verticals: [], additional_roles: [] });
       fetchData();
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to update user');
@@ -100,6 +102,7 @@ export function AdminPage() {
       role: user.role,
       upload_limit_monthly: user.upload_limit_monthly,
       assigned_verticals: (user as any).assigned_verticals || [],
+      additional_roles: (user as any).additional_roles || [],
     });
   };
 
@@ -260,7 +263,7 @@ export function AdminPage() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-medium">Role</label>
+                    <label className="text-sm font-medium">Primary Role</label>
                     <select
                       value={formData.role}
                       onChange={(e) => setFormData({ ...formData, role: e.target.value })}
@@ -272,6 +275,31 @@ export function AdminPage() {
                       <option value="assistant_team_lead">Assistant Team Lead (ATL)</option>
                       <option value="admin">Admin</option>
                     </select>
+                  </div>
+                  <div className="space-y-2 col-span-2">
+                    <label className="text-sm font-medium">Additional Roles (optional)</label>
+                    <div className="flex flex-wrap gap-2">
+                      {['creative', 'buyer', 'team_lead', 'assistant_team_lead', 'admin'].filter(r => r !== formData.role).map(r => (
+                        <label key={r} className="flex items-center gap-1.5 px-2 py-1 rounded border border-input hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={formData.additional_roles.includes(r)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setFormData({ ...formData, additional_roles: [...formData.additional_roles, r] });
+                              } else {
+                                setFormData({ ...formData, additional_roles: formData.additional_roles.filter(x => x !== r) });
+                              }
+                            }}
+                            className="rounded border-gray-300 text-blue-600"
+                          />
+                          <span className="text-sm capitalize">{r.replace('_', ' ')}</span>
+                        </label>
+                      ))}
+                    </div>
+                    {formData.additional_roles.length > 0 && (
+                      <p className="text-xs text-blue-600">{formData.additional_roles.length} additional role(s) selected</p>
+                    )}
                   </div>
                   {['team_lead', 'assistant_team_lead', 'creative'].includes(formData.role) && (
                     <div className="space-y-2 col-span-2">
@@ -319,7 +347,7 @@ export function AdminPage() {
                   <Button onClick={handleAddUser}>Create User</Button>
                   <Button variant="outline" onClick={() => {
                     setShowAddForm(false);
-                    setFormData({ name: '', email: '', password: '', role: 'creative', upload_limit_monthly: 100, assigned_verticals: [] });
+                    setFormData({ name: '', email: '', password: '', role: 'creative', upload_limit_monthly: 100, assigned_verticals: [], additional_roles: [] });
                     setError('');
                   }}>
                     Cancel
@@ -429,6 +457,30 @@ export function AdminPage() {
                           onChange={(e) => setFormData({ ...formData, upload_limit_monthly: parseInt(e.target.value) })}
                           placeholder="Upload limit"
                         />
+                        <div className="col-span-4 mt-2">
+                          <label className="text-sm font-medium text-muted-foreground mb-1 block">Additional Roles</label>
+                          <div className="flex flex-wrap gap-2">
+                            {['creative', 'buyer', 'team_lead', 'assistant_team_lead', 'admin'].filter(r => r !== formData.role).map(r => (
+                              <label key={r} className="flex items-center gap-1 text-sm px-2 py-0.5 rounded border border-input hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={formData.additional_roles?.includes(r)}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setFormData({ ...formData, additional_roles: [...(formData.additional_roles || []), r] });
+                                    } else {
+                                      setFormData({ ...formData, additional_roles: (formData.additional_roles || []).filter(x => x !== r) });
+                                    }
+                                  }}
+                                />
+                                <span className="capitalize">{r.replace('_', ' ')}</span>
+                              </label>
+                            ))}
+                          </div>
+                          {formData.additional_roles?.length > 0 && (
+                            <p className="text-xs text-blue-600 mt-1">{formData.additional_roles.length} additional role(s)</p>
+                          )}
+                        </div>
                         {['team_lead', 'assistant_team_lead', 'creative'].includes(formData.role) && (
                           <div className="col-span-4 mt-2">
                             <label className="text-sm font-medium text-muted-foreground mb-1 block">Assigned Verticals</label>
@@ -474,6 +526,11 @@ export function AdminPage() {
                         <div>
                           <span className="text-muted-foreground">Role:</span>{' '}
                           <span className="font-medium capitalize">{user.role}</span>
+                          {(user as any).additional_roles?.length > 0 && (
+                            <span className="text-xs text-blue-600 ml-1">
+                              +{(user as any).additional_roles.map((r: string) => r.replace('_', ' ')).join(', ')}
+                            </span>
+                          )}
                         </div>
                         <div>
                           <span className="text-muted-foreground">Limit:</span>{' '}
@@ -499,7 +556,7 @@ export function AdminPage() {
                         <button
                           onClick={() => {
                             setEditingId(null);
-                            setFormData({ name: '', email: '', password: '', role: 'creative', upload_limit_monthly: 100, assigned_verticals: [] });
+                            setFormData({ name: '', email: '', password: '', role: 'creative', upload_limit_monthly: 100, assigned_verticals: [], additional_roles: [] });
                           }}
                           className="p-2 hover:bg-accent rounded"
                         >

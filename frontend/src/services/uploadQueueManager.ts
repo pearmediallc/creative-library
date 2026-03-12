@@ -36,7 +36,7 @@ class UploadQueueManager {
   /**
    * Add files to upload queue
    */
-  addToQueue(files: File[], requestId: string, comments?: string): string[] {
+  addToQueue(files: File[], requestId: string, comments?: string, targetSubfolder?: string): string[] {
     const taskIds: string[] = [];
 
     for (const file of files) {
@@ -45,9 +45,14 @@ class UploadQueueManager {
       // Preserve folder structure when user selected a directory
       // @ts-ignore
       const relativePath: string | undefined = (file as any).webkitRelativePath;
-      const folderPath = relativePath
+      let folderPath = relativePath
         ? relativePath.split('/').slice(0, -1).join('/')
         : undefined;
+
+      // If a target subfolder is specified, prepend it to the folder path
+      if (targetSubfolder) {
+        folderPath = folderPath ? `${targetSubfolder}/${folderPath}` : targetSubfolder;
+      }
 
       const task: UploadTask = {
         id: taskId,

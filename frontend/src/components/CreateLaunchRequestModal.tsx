@@ -3,6 +3,7 @@ import { X, FileText, ChevronDown, ChevronUp, Save } from 'lucide-react';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { MultiSelect } from './ui/MultiSelect';
+import { SearchableSelect } from './ui/SearchableSelect';
 import { launchRequestApi, editorApi, authApi } from '../lib/api';
 import { FILE_REQUEST_TYPES } from '../constants/fileRequestTypes';
 import { PLATFORMS } from '../constants/platforms';
@@ -290,16 +291,15 @@ export function CreateLaunchRequestModal({ onClose, onSuccess }: Props) {
             <label className="block text-sm font-medium mb-1.5">
               Request Type <span className="text-destructive">*</span>
             </label>
-            <select
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            <SearchableSelect
               value={requestType}
-              onChange={e => setRequestType(e.target.value)}
-            >
-              <option value="">Select type...</option>
-              {FILE_REQUEST_TYPES.map(t => (
-                <option key={t} value={t}>{t}</option>
-              ))}
-            </select>
+              onChange={setRequestType}
+              placeholder="Select type..."
+              options={[
+                { value: '', label: 'Select type...' },
+                ...FILE_REQUEST_TYPES.map(t => ({ value: t, label: t }))
+              ]}
+            />
           </div>
 
           {/* Platforms */}
@@ -390,29 +390,27 @@ export function CreateLaunchRequestModal({ onClose, onSuccess }: Props) {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium mb-1.5">Assign Creative Head</label>
-              <select
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              <SearchableSelect
                 value={creativeHeadId}
-                onChange={e => setCreativeHeadId(e.target.value)}
-              >
-                <option value="">— Select creative head —</option>
-                {creativeUsers.map(u => (
-                  <option key={u.id} value={u.id}>{u.name}</option>
-                ))}
-              </select>
+                onChange={setCreativeHeadId}
+                placeholder="— Select creative head —"
+                options={[
+                  { value: '', label: '— Select creative head —' },
+                  ...creativeUsers.map(u => ({ value: u.id, label: u.name }))
+                ]}
+              />
             </div>
             <div>
               <label className="block text-sm font-medium mb-1.5">Assign Buyer Head</label>
-              <select
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              <SearchableSelect
                 value={buyerHeadId}
-                onChange={e => setBuyerHeadId(e.target.value)}
-              >
-                <option value="">— Select buyer head —</option>
-                {buyers.map(b => (
-                  <option key={b.id} value={b.id}>{b.name}</option>
-                ))}
-              </select>
+                onChange={setBuyerHeadId}
+                placeholder="— Select buyer head —"
+                options={[
+                  { value: '', label: '— Select buyer head —' },
+                  ...buyers.map(b => ({ value: b.id, label: b.name }))
+                ]}
+              />
             </div>
           </div>
 

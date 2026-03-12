@@ -6,6 +6,7 @@ import { Card } from '../components/ui/Card';
 import { fileRequestApi, editorApi } from '../lib/api';
 import { formatDate, formatDateTime } from '../lib/utils';
 import { Inbox, Plus, Link as LinkIcon, Copy, XCircle, Trash2, CheckCircle, UserPlus, Search, Filter, List, Grid, Rocket, RotateCcw } from 'lucide-react';
+import { SearchableSelect } from '../components/ui/SearchableSelect';
 import { CreateFileRequestModal } from '../components/CreateFileRequestModal';
 import { FileRequestDetailsModal } from '../components/FileRequestDetailsModal';
 import { ReassignFileRequestModal } from '../components/ReassignFileRequestModal';
@@ -364,35 +365,29 @@ export function FileRequestsPage() {
                 {/* Platform Filter */}
                 <div>
                   <label className="block text-sm font-medium mb-2">Platform</label>
-                  <select
+                  <SearchableSelect
                     value={selectedPlatform}
-                    onChange={(e) => setSelectedPlatform(e.target.value)}
-                    className="w-full px-3 py-2 border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary"
-                  >
-                    <option value="All">All Platforms</option>
-                    {PLATFORMS.map((platform) => (
-                      <option key={platform} value={platform}>
-                        {platform}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={setSelectedPlatform}
+                    placeholder="All Platforms"
+                    options={[
+                      { value: 'All', label: 'All Platforms' },
+                      ...PLATFORMS.map(p => ({ value: p, label: p }))
+                    ]}
+                  />
                 </div>
 
                 {/* Vertical Filter (Dropdown) */}
                 <div>
-                  <label className="block text-sm font-medium mb-2">All Verticals</label>
-                  <select
+                  <label className="block text-sm font-medium mb-2">Vertical</label>
+                  <SearchableSelect
                     value={selectedVertical}
-                    onChange={(e) => setSelectedVertical(e.target.value)}
-                    className="w-full px-3 py-2 border rounded-lg bg-background focus:outline-none focus:ring-2 focus:ring-primary"
-                  >
-                    <option value="All">All Verticals</option>
-                    {VERTICALS.map((vertical) => (
-                      <option key={vertical} value={vertical}>
-                        {vertical}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={setSelectedVertical}
+                    placeholder="All Verticals"
+                    options={[
+                      { value: 'All', label: 'All Verticals' },
+                      ...[...VERTICALS].map(v => ({ value: v, label: v }))
+                    ]}
+                  />
                 </div>
 
                 {/* Date From */}

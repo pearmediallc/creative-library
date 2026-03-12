@@ -3,6 +3,7 @@ import { X, Inbox, FolderPlus, FileText } from 'lucide-react';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { MultiSelect } from './ui/MultiSelect';
+import { SearchableSelect } from './ui/SearchableSelect';
 import { fileRequestApi, folderApi, editorApi, authApi, teamApi } from '../lib/api';
 import { FILE_REQUEST_TYPES } from '../constants/fileRequestTypes';
 import { PLATFORMS } from '../constants/platforms';
@@ -545,19 +546,16 @@ export function CreateFileRequestModal({ onClose, onSuccess, teamId }: CreateFil
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Request Type *
             </label>
-            <select
+            <SearchableSelect
               value={requestType}
-              onChange={(e) => setRequestType(e.target.value)}
+              onChange={setRequestType}
               disabled={creating}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-            >
-              <option value="">Select Request Type</option>
-              {FILE_REQUEST_TYPES.map((type) => (
-                <option key={type} value={type}>
-                  {type}
-                </option>
-              ))}
-            </select>
+              placeholder="Select Request Type"
+              options={[
+                { value: '', label: 'Select Request Type' },
+                ...FILE_REQUEST_TYPES.map(type => ({ value: type, label: type }))
+              ]}
+            />
           </div>
 
           {/* Platforms - Multi-Select */}
@@ -717,19 +715,17 @@ export function CreateFileRequestModal({ onClose, onSuccess, teamId }: CreateFil
               Destination Folder
             </label>
             <div className="flex gap-2">
-              <select
+              <SearchableSelect
                 value={folderId}
-                onChange={(e) => setFolderId(e.target.value)}
+                onChange={setFolderId}
                 disabled={creating}
-                className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-              >
-                <option value="">Root / No folder</option>
-                {folders.map((folder) => (
-                  <option key={folder.id} value={folder.id}>
-                    {folder.name}
-                  </option>
-                ))}
-              </select>
+                placeholder="Root / No folder"
+                className="flex-1"
+                options={[
+                  { value: '', label: 'Root / No folder' },
+                  ...folders.map(f => ({ value: f.id, label: f.name }))
+                ]}
+              />
               <Button
                 type="button"
                 variant="outline"

@@ -297,6 +297,7 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
   const [showUploadForm, setShowUploadForm] = useState(true); // Show by default for better UX
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [uploadComments, setUploadComments] = useState('');
+  const [uploadTargetFolder, setUploadTargetFolder] = useState('');
   const [uploading, setUploading] = useState(false);
   const [uploadSuccess, setUploadSuccess] = useState(false);
   const [uploadError, setUploadError] = useState('');
@@ -701,7 +702,8 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
       const taskIds = uploadQueueManager.addToQueue(
         selectedFiles,
         requestId,
-        uploadComments || undefined
+        uploadComments || undefined,
+        uploadTargetFolder.trim() || undefined
       );
 
       console.log(`Added ${selectedFiles.length} files to upload queue`, taskIds);
@@ -710,6 +712,7 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
       setUploadSuccess(true);
       setSelectedFiles([]);
       setUploadComments('');
+      setUploadTargetFolder('');
 
       // Close form and refresh after short delay
       setTimeout(() => {
@@ -2025,6 +2028,24 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
                     )}
                   </div>
 
+                  {/* Target Folder */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Upload to Subfolder (optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={uploadTargetFolder}
+                      onChange={(e) => setUploadTargetFolder(e.target.value)}
+                      placeholder="e.g. Round 1, Final Cut, V2..."
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      disabled={uploading}
+                    />
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      Leave empty to upload directly to the request folder
+                    </p>
+                  </div>
+
                   {/* Comments */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -2074,6 +2095,7 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
                         setShowUploadForm(false);
                         setSelectedFiles([]);
                         setUploadComments('');
+                        setUploadTargetFolder('');
                         setUploadError('');
                       }}
                       disabled={uploading}

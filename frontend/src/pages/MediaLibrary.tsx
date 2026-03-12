@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { DashboardLayout } from '../components/layout/DashboardLayout';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
@@ -30,6 +30,8 @@ import { CommentsPanel } from '../components/CommentsPanel';
 import { FileTagsManager } from '../components/FileTagsManager';
 import { MediaLightbox } from '../components/MediaLightbox';
 import { AddToCollectionModal } from '../components/AddToCollectionModal';
+import { SearchableSelect } from '../components/ui/SearchableSelect';
+import { VERTICALS } from '../constants/verticals';
 
 interface FolderNode {
   id: string;
@@ -208,6 +210,75 @@ export function MediaLibraryPage() {
     fileRequestUploadId: ''
   });
 
+  // Admin org-wide browsing state
+  const [orgViewMode, setOrgViewMode] = useState<'personal' | 'org-wide'>('personal');
+  const [orgUsers, setOrgUsers] = useState<Array<{ id: string; name: string; email: string; role: string; file_count?: number }>>([]);
+  const [selectedOrgUser, setSelectedOrgUser] = useState<string | null>(null);
+  const [orgUserSearch, setOrgUserSearch] = useState('');
+
+  // Lasso selection state
+  const [lassoActive, setLassoActive] = useState(false);
+  const [lassoStart, setLassoStart] = useState<{ x: number; y: number } | null>(null);
+  const [lassoEnd, setLassoEnd] = useState<{ x: number; y: number } | null>(null);
+  const gridContainerRef = useRef<HTMLDivElement>(null);
+  const cardRefsMap = useRef<Map<string, HTMLElement>>(new Map());
+
+  const getLassoRect = useCallback(() => {
+    if (!lassoStart || !lassoEnd) return null;
+    return {
+      left: Math.min(lassoStart.x, lassoEnd.x),
+      top: Math.min(lassoStart.y, lassoEnd.y),
+      right: Math.max(lassoStart.x, lassoEnd.x),
+      bottom: Math.max(lassoStart.y, lassoEnd.y),
+    };
+  }, [lassoStart, lassoEnd]);
+
+  // Lasso mouse handlers
+  const handleLassoMouseDown = useCallback((e: React.MouseEvent) => {
+    // Only start lasso on left click directly on the grid container background
+    if (e.button !== 0) return;
+    const target = e.target as HTMLElement;
+    // Don't start lasso if clicking on a card, button, input, or interactive element
+    if (target.closest('.media-card-item, button, input, a, [role="button"]')) return;
+    setLassoActive(true);
+    setLassoStart({ x: e.clientX, y: e.clientY });
+    setLassoEnd({ x: e.clientX, y: e.clientY });
+  }, []);
+
+  const handleLassoMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!lassoActive) return;
+    setLassoEnd({ x: e.clientX, y: e.clientY });
+  }, [lassoActive]);
+
+  const handleLassoMouseUp = useCallback(() => {
+    if (!lassoActive) return;
+    const rect = getLassoRect();
+    if (rect && (Math.abs(rect.right - rect.left) > 5 || Math.abs(rect.bottom - rect.top) > 5)) {
+      const intersectingIds: string[] = [];
+      cardRefsMap.current.forEach((el, id) => {
+        const cardRect = el.getBoundingClientRect();
+        const intersects =
+          cardRect.left < rect.right &&
+          cardRect.right > rect.left &&
+          cardRect.top < rect.bottom &&
+          cardRect.bottom > rect.top;
+        if (intersects) intersectingIds.push(id);
+      });
+      if (intersectingIds.length > 0) {
+        setSelectedFiles(prev => {
+          const newSet = new Set(prev);
+          intersectingIds.forEach(id => newSet.add(id));
+          return Array.from(newSet);
+        });
+      }
+    }
+    setLassoActive(false);
+    setLassoStart(null);
+    setLassoEnd(null);
+  }, [lassoActive, getLassoRect]);
+
+  const lassoRect = getLassoRect();
+
   // Role-based permissions
   const isAdmin = isAdminRole(user?.role);
   const canUpload = isAdminRole(user?.role) || user?.role === 'creative';
@@ -294,10 +365,31 @@ export function MediaLibraryPage() {
     fetchInitialData();
   }, []);
 
+  // Fetch org users when org view is activated
+  useEffect(() => {
+    if (orgViewMode === 'org-wide' && isAdmin && orgUsers.length === 0) {
+      const fetchOrgUsers = async () => {
+        try {
+          const res = await adminApi.getUsers();
+          const allUsers = res.data.data || [];
+          setOrgUsers(allUsers.map((u: any) => ({
+            id: u.id,
+            name: u.name,
+            email: u.email,
+            role: u.role,
+          })));
+        } catch (err) {
+          console.error('Failed to fetch org users:', err);
+        }
+      };
+      fetchOrgUsers();
+    }
+  }, [orgViewMode, isAdmin]);
+
   useEffect(() => {
     fetchData();
     setCurrentPage(1);
-  }, [filters.filters, currentFolderId]);
+  }, [filters.filters, currentFolderId, selectedOrgUser]);
 
   // Handle opening file from URL parameter after files are loaded
   useEffect(() => {
@@ -341,6 +433,13 @@ export function MediaLibraryPage() {
         // This prevents files in subfolders from appearing at root level
         if (!queryParams.folder_id) {
           queryParams.folder_id = 'null';  // Special value to indicate "only root files"
+        }
+
+        // Admin org-wide: filter by selected user
+        if (selectedOrgUser && orgViewMode === 'org-wide') {
+          queryParams.uploaded_by = selectedOrgUser;
+          // When viewing a specific user's files, show all (not just root)
+          delete queryParams.folder_id;
         }
 
         const [filesRes, editorsRes] = await Promise.all([
@@ -843,6 +942,31 @@ export function MediaLibraryPage() {
               <div>
                 <h1 className="text-3xl font-bold">Media Library</h1>
                 <p className="text-muted-foreground">Manage your creative assets</p>
+                {/* Admin org-wide toggle */}
+                {isAdmin && (
+                  <div className="flex mt-2 border rounded-md overflow-hidden w-fit">
+                    <button
+                      onClick={() => { setOrgViewMode('personal'); setSelectedOrgUser(null); }}
+                      className={`px-3 py-1.5 text-sm font-medium transition-colors ${
+                        orgViewMode === 'personal'
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                      }`}
+                    >
+                      My Library
+                    </button>
+                    <button
+                      onClick={() => setOrgViewMode('org-wide')}
+                      className={`px-3 py-1.5 text-sm font-medium transition-colors ${
+                        orgViewMode === 'org-wide'
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                      }`}
+                    >
+                      Org-Wide Library
+                    </button>
+                  </div>
+                )}
               </div>
               {canUpload && (
                 <div className="flex gap-2 flex-wrap">
@@ -920,6 +1044,64 @@ export function MediaLibraryPage() {
               <Breadcrumb items={breadcrumb} onNavigate={handleFolderSelect} />
             )}
 
+            {/* Org-wide user browser */}
+            {isAdmin && orgViewMode === 'org-wide' && !selectedOrgUser && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <h2 className="text-lg font-semibold">Browse by User</h2>
+                  <input
+                    type="text"
+                    placeholder="Search users..."
+                    value={orgUserSearch}
+                    onChange={(e) => setOrgUserSearch(e.target.value)}
+                    className="px-3 py-1.5 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                  {orgUsers
+                    .filter(u => !orgUserSearch || u.name.toLowerCase().includes(orgUserSearch.toLowerCase()) || u.email.toLowerCase().includes(orgUserSearch.toLowerCase()))
+                    .map(u => (
+                    <div
+                      key={u.id}
+                      onClick={() => setSelectedOrgUser(u.id)}
+                      className="p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg cursor-pointer hover:shadow-md hover:border-blue-400 transition-all"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 font-semibold">
+                          {u.name.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-medium text-gray-900 dark:text-white truncate">{u.name}</p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{u.email}</p>
+                          <span className="inline-block mt-1 px-2 py-0.5 text-xs rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
+                            {u.role}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {orgUsers.length === 0 && (
+                  <p className="text-muted-foreground text-sm">Loading users...</p>
+                )}
+              </div>
+            )}
+
+            {/* Org-wide: selected user header */}
+            {isAdmin && orgViewMode === 'org-wide' && selectedOrgUser && (
+              <div className="flex items-center gap-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                <button
+                  onClick={() => setSelectedOrgUser(null)}
+                  className="px-3 py-1.5 text-sm bg-white dark:bg-gray-800 border rounded-md hover:bg-gray-100 dark:hover:bg-gray-700"
+                >
+                  ← Back to Users
+                </button>
+                <span className="text-sm font-medium text-blue-800 dark:text-blue-200">
+                  Viewing files for: {orgUsers.find(u => u.id === selectedOrgUser)?.name || 'Unknown User'}
+                </span>
+              </div>
+            )}
+
             {/* Selection Info */}
             {files.length > 0 && (
               <div className="flex items-center gap-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-md">
@@ -956,19 +1138,16 @@ export function MediaLibraryPage() {
               </div>
 
               {/* Vertical Filter Dropdown */}
-              <select
+              <SearchableSelect
                 value={selectedVertical}
-                onChange={(e) => setSelectedVertical(e.target.value)}
-                className="px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">All Verticals</option>
-                <option value="Home Insurance">Home Insurance</option>
-                <option value="Auto Insurance">Auto Insurance</option>
-                <option value="BizOp">BizOp</option>
-                <option value="Guns">Guns</option>
-                <option value="Refi">Refi</option>
-                <option value="Medicare">Medicare</option>
-              </select>
+                onChange={setSelectedVertical}
+                placeholder="All Verticals"
+                className="w-48"
+                options={[
+                  { value: '', label: 'All Verticals' },
+                  ...[...VERTICALS].map(v => ({ value: v, label: v }))
+                ]}
+              />
             </div>
 
             {/* Filters and View Toggle */}
@@ -1055,7 +1234,7 @@ export function MediaLibraryPage() {
             </div>
 
             {/* Content */}
-            {loading ? (
+            {orgViewMode === 'org-wide' && !selectedOrgUser ? null : loading ? (
               <div className="flex items-center justify-center h-96">
                 <p className="text-muted-foreground">Loading...</p>
               </div>
@@ -1094,6 +1273,30 @@ export function MediaLibraryPage() {
                   <>
                     {folders.length > 0 && <h2 className="text-lg font-semibold mb-4 mt-8">Files</h2>}
                     {viewMode === 'grid' ? (
+                    <div
+                      ref={gridContainerRef}
+                      className="relative select-none"
+                      onMouseDown={handleLassoMouseDown}
+                      onMouseMove={handleLassoMouseMove}
+                      onMouseUp={handleLassoMouseUp}
+                      onMouseLeave={handleLassoMouseUp}
+                    >
+                      {/* Lasso overlay */}
+                      {lassoActive && lassoRect && (
+                        <div
+                          style={{
+                            position: 'fixed',
+                            left: lassoRect.left,
+                            top: lassoRect.top,
+                            width: lassoRect.right - lassoRect.left,
+                            height: lassoRect.bottom - lassoRect.top,
+                            border: '2px dashed #3b82f6',
+                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                            pointerEvents: 'none',
+                            zIndex: 50,
+                          }}
+                        />
+                      )}
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                       {(() => {
                         const totalPages = Math.ceil(filteredFiles.length / filesPerPage);
@@ -1104,10 +1307,14 @@ export function MediaLibraryPage() {
                         return paginatedFiles.map((file) => (
                           <Card
                             key={file.id}
-                            className="overflow-hidden"
+                            className="overflow-hidden media-card-item"
                             draggable
                             onDragStart={(e) => handleFileDragStart(e, file.id)}
                             onContextMenu={(e) => handleFileContextMenu(file, e)}
+                            ref={(el: HTMLDivElement | null) => {
+                              if (el) cardRefsMap.current.set(file.id, el);
+                              else cardRefsMap.current.delete(file.id);
+                            }}
                           >
                             <div
                               className="aspect-video bg-muted relative cursor-pointer hover:opacity-90 transition-opacity group"
@@ -1331,6 +1538,7 @@ export function MediaLibraryPage() {
                           </Card>
                         ));
                       })()}
+                    </div>
                     </div>
                     ) : (
                       /* List View */

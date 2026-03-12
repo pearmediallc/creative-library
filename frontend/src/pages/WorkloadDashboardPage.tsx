@@ -3,6 +3,7 @@ import { Users, TrendingUp, AlertTriangle, Activity, BarChart3 } from 'lucide-re
 import { workloadApi } from '../lib/api';
 import { EditorWorkloadCard } from '../components/EditorWorkloadCard';
 import { EditorDetailModal } from '../components/EditorDetailModal';
+import { SearchableSelect } from '../components/ui/SearchableSelect';
 
 interface EditorWorkload {
   id: string;
@@ -202,26 +203,28 @@ export function WorkloadDashboardPage() {
           </div>
 
           <div className="flex gap-2">
-            <select
+            <SearchableSelect
               value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-            >
-              <option value="all">All Status</option>
-              <option value="available">Available (&lt;50%)</option>
-              <option value="busy">Busy (50-80%)</option>
-              <option value="overloaded">Overloaded (&gt;80%)</option>
-            </select>
+              onChange={setFilterStatus}
+              className="w-48"
+              options={[
+                { value: 'all', label: 'All Status' },
+                { value: 'available', label: 'Available (<50%)' },
+                { value: 'busy', label: 'Busy (50-80%)' },
+                { value: 'overloaded', label: 'Overloaded (>80%)' },
+              ]}
+            />
 
-            <select
+            <SearchableSelect
               value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as 'load' | 'active' | 'name')}
-              className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-            >
-              <option value="load">Sort by Load</option>
-              <option value="active">Sort by Active Requests</option>
-              <option value="name">Sort by Name</option>
-            </select>
+              onChange={(v) => setSortBy(v as 'load' | 'active' | 'name')}
+              className="w-52"
+              options={[
+                { value: 'load', label: 'Sort by Load' },
+                { value: 'active', label: 'Sort by Active Requests' },
+                { value: 'name', label: 'Sort by Name' },
+              ]}
+            />
           </div>
 
           <button

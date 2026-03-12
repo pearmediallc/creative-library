@@ -69,6 +69,16 @@ class AdminController {
         upload_limit_monthly
       });
 
+      // Save additional_roles if provided
+      const { additional_roles } = req.body;
+      if (additional_roles && Array.isArray(additional_roles) && additional_roles.length > 0) {
+        try {
+          await query('UPDATE users SET additional_roles = $1 WHERE id = $2', [additional_roles, user.id]);
+        } catch (arErr) {
+          logger.warn('Failed to save additional_roles', { error: arErr.message });
+        }
+      }
+
       logger.info('User created by admin', { userId: user.id, email, createdBy: req.user.id });
 
       // Auto-create Editor entity for creative users
@@ -164,6 +174,7 @@ class AdminController {
         updates.upload_limit_monthly = req.body.upload_limit_monthly;
       }
       if (req.body.is_active !== undefined) updates.is_active = req.body.is_active;
+      if (req.body.additional_roles !== undefined) updates.additional_roles = req.body.additional_roles;
 
       const updatedUser = await User.update(req.params.id, updates);
 

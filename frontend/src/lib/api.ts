@@ -104,6 +104,9 @@ export const mediaApi = {
     search?: string;
     limit?: number;
     offset?: number;
+    uploaded_by?: string;
+    folder_id?: string;
+    [key: string]: any;
   }) => api.get('/media', { params }),
   getOne: (id: string) => api.get(`/media/${id}`),
   update: (id: string, data: { editor_id?: string; tags?: string[]; description?: string }) =>
@@ -202,6 +205,7 @@ export const adminApi = {
     upload_limit_monthly: number;
     is_active: boolean;
     assigned_verticals: string[];
+    additional_roles: string[];
   }>) => api.patch(`/admin/users/${id}`, data),
   getStats: () => api.get('/admin/stats'),
 

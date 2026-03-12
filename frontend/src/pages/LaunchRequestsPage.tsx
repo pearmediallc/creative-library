@@ -7,6 +7,7 @@ import { formatDateTime } from '../lib/utils';
 import {
   Plus, Search, Rocket, Trash2, Copy, Link as LinkIcon, Filter, RefreshCw
 } from 'lucide-react';
+import { SearchableSelect } from '../components/ui/SearchableSelect';
 import { CreateLaunchRequestModal } from '../components/CreateLaunchRequestModal';
 import { LaunchRequestDetailsModal } from '../components/LaunchRequestDetailsModal';
 import { useAuth, isAdminRole } from '../contexts/AuthContext';
@@ -212,37 +213,39 @@ export function LaunchRequestsPage() {
             </div>
 
             {/* Status */}
-            <select
-              className="rounded-md border border-input bg-background px-3 py-1.5 text-sm"
+            <SearchableSelect
               value={statusFilter}
-              onChange={e => setStatusFilter(e.target.value)}
-            >
-              {STATUS_OPTIONS.map(o => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
+              onChange={setStatusFilter}
+              options={STATUS_OPTIONS}
+              placeholder="All Statuses"
+              className="w-48"
+            />
           </div>
 
           {/* Advanced filters */}
           {showFilters && (
             <div className="flex items-center gap-3 flex-wrap mt-3 pt-3 border-t">
-              <select
-                className="rounded-md border border-input bg-background px-3 py-1.5 text-sm"
+              <SearchableSelect
                 value={verticalFilter}
-                onChange={e => setVerticalFilter(e.target.value)}
-              >
-                <option value="">All Verticals</option>
-                {VERTICALS.map(v => <option key={v} value={v}>{v}</option>)}
-              </select>
+                onChange={setVerticalFilter}
+                placeholder="All Verticals"
+                className="w-48"
+                options={[
+                  { value: '', label: 'All Verticals' },
+                  ...[...VERTICALS].map(v => ({ value: v, label: v }))
+                ]}
+              />
 
-              <select
-                className="rounded-md border border-input bg-background px-3 py-1.5 text-sm"
+              <SearchableSelect
                 value={platformFilter}
-                onChange={e => setPlatformFilter(e.target.value)}
-              >
-                <option value="">All Platforms</option>
-                {PLATFORMS.map(p => <option key={p} value={p}>{p}</option>)}
-              </select>
+                onChange={setPlatformFilter}
+                placeholder="All Platforms"
+                className="w-48"
+                options={[
+                  { value: '', label: 'All Platforms' },
+                  ...[...PLATFORMS].map(p => ({ value: p, label: p }))
+                ]}
+              />
 
               {(verticalFilter || platformFilter || statusFilter !== 'all') && (
                 <Button

@@ -131,6 +131,8 @@ class MediaController {
         date_to: req.query.date_to,
         // ✨ NEW: Buyer assignment filter
         buyer_id: req.query.buyer_id,
+        // ✨ NEW: Filter by uploader (for admin org-wide view)
+        uploaded_by: req.query.uploaded_by,
         // ✨ NEW: Folder filter
         folder_id: req.query.folder_id,
         // ✨ NEW: File size filters
