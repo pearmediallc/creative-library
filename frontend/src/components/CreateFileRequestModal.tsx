@@ -70,6 +70,7 @@ export function CreateFileRequestModal({ onClose, onSuccess, teamId }: CreateFil
   const [customMessage, setCustomMessage] = useState('');
   const [selectedEditorIds, setSelectedEditorIds] = useState<string[]>([]);
   const [assignedBuyerIds, setAssignedBuyerIds] = useState<string[]>([]);
+  const [buyerSearch, setBuyerSearch] = useState('');
   const [folders, setFolders] = useState<Folder[]>([]);
   const [editors, setEditors] = useState<Editor[]>([]);
   const [buyers, setBuyers] = useState<Buyer[]>([]);
@@ -828,21 +829,18 @@ export function CreateFileRequestModal({ onClose, onSuccess, teamId }: CreateFil
                 <input
                   type="text"
                   placeholder="Search buyers by name or email..."
-                  onChange={(e) => {
-                    const list = e.target.nextElementSibling as HTMLElement;
-                    const search = e.target.value.toLowerCase();
-                    list?.querySelectorAll('[data-buyer-item]').forEach((el: any) => {
-                      const text = el.textContent?.toLowerCase() || '';
-                      el.style.display = text.includes(search) ? 'flex' : 'none';
-                    });
-                  }}
+                  value={buyerSearch}
+                  onChange={(e) => setBuyerSearch(e.target.value)}
                   className="w-full px-3 py-1.5 mb-1 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500"
                 />
                 <div className="max-h-40 overflow-y-auto border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 p-2 space-y-1">
-                  {buyers.map((buyer) => (
+                  {buyers.filter((b) => {
+                    if (!buyerSearch.trim()) return true;
+                    const s = buyerSearch.toLowerCase();
+                    return b.name.toLowerCase().includes(s) || b.email.toLowerCase().includes(s);
+                  }).map((buyer) => (
                     <label
                       key={buyer.id}
-                      data-buyer-item
                       className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer"
                     >
                       <input
