@@ -627,10 +627,13 @@ export function RBACAdminPanel() {
                           </td>
                           <td className="p-3">
                             <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
-                              log.action_type === 'grant_permission' ? 'bg-green-100 text-green-800' :
-                              log.action_type === 'revoke_permission' ? 'bg-red-100 text-red-800' :
-                              log.action_type === 'assign_role' ? 'bg-blue-100 text-blue-800' :
-                              log.action_type === 'remove_role' ? 'bg-orange-100 text-orange-800' :
+                              (log.action_type === 'grant_permission' || log.action_type === 'permission_granted') ? 'bg-green-100 text-green-800' :
+                              (log.action_type === 'revoke_permission' || log.action_type === 'permission_revoked') ? 'bg-red-100 text-red-800' :
+                              (log.action_type === 'assign_role' || log.action_type === 'role_assigned') ? 'bg-blue-100 text-blue-800' :
+                              (log.action_type === 'remove_role' || log.action_type === 'role_revoked') ? 'bg-orange-100 text-orange-800' :
+                              log.action_type === 'folder_admin_added' ? 'bg-purple-100 text-purple-800' :
+                              log.action_type === 'folder_admin_removed' ? 'bg-yellow-100 text-yellow-800' :
+                              log.action_type === 'ui_permission_set' ? 'bg-indigo-100 text-indigo-800' :
                               'bg-gray-100 text-gray-800'
                             }`}>
                               {log.action_type.replace(/_/g, ' ').toUpperCase()}
@@ -660,23 +663,45 @@ export function RBACAdminPanel() {
       {/* Assign Role Modal */}
       {showAssignRole && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-md w-full p-6">
+          <div className="bg-white rounded-lg max-w-md w-full p-6 max-h-[90vh] overflow-y-auto">
             <h3 className="text-lg font-semibold mb-4">Assign Role</h3>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium mb-1">Role</label>
-                <select
-                  className="w-full border rounded-lg px-3 py-2"
-                  value={assignRoleData.roleName}
-                  onChange={(e) => setAssignRoleData({ ...assignRoleData, roleName: e.target.value })}
-                >
-                  <option value="">Select role...</option>
+                <label className="block text-sm font-medium mb-2">Select Role</label>
+                <div className="border rounded-lg p-3 max-h-48 overflow-y-auto space-y-2 bg-gray-50">
+                  {/* System roles from DB */}
                   {roles.map((role) => (
-                    <option key={role.id} value={role.name}>
-                      {role.name}
-                    </option>
+                    <label key={role.id} className="flex items-center gap-2 cursor-pointer hover:bg-white p-1.5 rounded">
+                      <input
+                        type="radio"
+                        name="assignRole"
+                        value={role.name}
+                        checked={assignRoleData.roleName === role.name}
+                        onChange={(e) => setAssignRoleData({ ...assignRoleData, roleName: e.target.value })}
+                        className="w-4 h-4 text-blue-600"
+                      />
+                      <span className="text-sm">{role.name}</span>
+                      {role.is_system_role && <span className="text-[10px] bg-gray-200 px-1.5 py-0.5 rounded">System</span>}
+                    </label>
                   ))}
-                </select>
+                  {/* Application roles (always shown even if not in DB roles table) */}
+                  {['admin', 'buyer', 'creative', 'vertical_head', 'team_lead', 'assistant_team_lead'].filter(
+                    r => !roles.some(dbRole => dbRole.name.toLowerCase().replace(/\s+/g, '_') === r)
+                  ).map(roleName => (
+                    <label key={roleName} className="flex items-center gap-2 cursor-pointer hover:bg-white p-1.5 rounded">
+                      <input
+                        type="radio"
+                        name="assignRole"
+                        value={roleName}
+                        checked={assignRoleData.roleName === roleName}
+                        onChange={(e) => setAssignRoleData({ ...assignRoleData, roleName: e.target.value })}
+                        className="w-4 h-4 text-blue-600"
+                      />
+                      <span className="text-sm">{roleName.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</span>
+                      <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">App Role</span>
+                    </label>
+                  ))}
+                </div>
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">Scope Type</label>
@@ -728,38 +753,38 @@ export function RBACAdminPanel() {
             <h3 className="text-lg font-semibold mb-4">Grant Permission</h3>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium mb-1">Resource Type</label>
-                <select
-                  className="w-full border rounded-lg px-3 py-2"
-                  value={grantPermissionData.resourceType}
-                  onChange={(e) => setGrantPermissionData({ ...grantPermissionData, resourceType: e.target.value })}
-                >
-                  <option value="file_request">File Request</option>
-                  <option value="folder">Folder</option>
-                  <option value="media_file">Media File</option>
-                  <option value="canvas">Canvas</option>
-                  <option value="analytics">Analytics</option>
-                  <option value="user">User Management</option>
-                  <option value="admin_panel">Admin Panel</option>
-                </select>
+                <label className="block text-sm font-medium mb-2">Resource Type</label>
+                <div className="border rounded-lg p-3 max-h-40 overflow-y-auto space-y-1 bg-gray-50">
+                  {['file_request', 'folder', 'media_file', 'canvas', 'analytics', 'user', 'admin_panel', 'teams', 'workload', 'editors', 'collections', 'launch_request'].map(type => (
+                    <label key={type} className="flex items-center gap-2 cursor-pointer hover:bg-white p-1 rounded">
+                      <input
+                        type="radio"
+                        name="resourceType"
+                        value={type}
+                        checked={grantPermissionData.resourceType === type}
+                        onChange={(e) => setGrantPermissionData({ ...grantPermissionData, resourceType: e.target.value })}
+                        className="w-4 h-4 text-blue-600"
+                      />
+                      <span className="text-sm">{type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</span>
+                    </label>
+                  ))}
+                </div>
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1">Action</label>
-                <select
-                  className="w-full border rounded-lg px-3 py-2"
-                  value={grantPermissionData.action}
-                  onChange={(e) => setGrantPermissionData({ ...grantPermissionData, action: e.target.value })}
-                >
-                  <option value="view">View</option>
-                  <option value="create">Create</option>
-                  <option value="edit">Edit</option>
-                  <option value="delete">Delete</option>
-                  <option value="assign">Assign</option>
-                  <option value="upload">Upload</option>
-                  <option value="download">Download</option>
-                  <option value="share">Share</option>
-                  <option value="manage">Manage</option>
-                </select>
+                <label className="block text-sm font-medium mb-2">Action</label>
+                <div className="border rounded-lg p-3 max-h-48 overflow-y-auto space-y-1 bg-gray-50">
+                  {['view', 'create', 'edit', 'delete', 'assign', 'upload', 'download', 'share', 'manage', 'reassign', 'duplicate', 'close', 'launch', 'reopen', 'bulk_edit', 'bulk_delete', 'bulk_download', 'move', 'copy', 'rename', 'manage_capacity', 'assign_roles', 'manage_members'].map(action => (
+                    <label key={action} className="flex items-center gap-2 cursor-pointer hover:bg-white p-1 rounded">
+                      <input
+                        type="checkbox"
+                        checked={grantPermissionData.action === action}
+                        onChange={() => setGrantPermissionData({ ...grantPermissionData, action })}
+                        className="w-4 h-4 rounded text-blue-600"
+                      />
+                      <span className="text-sm">{action.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</span>
+                    </label>
+                  ))}
+                </div>
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">Permission</label>

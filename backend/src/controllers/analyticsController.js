@@ -382,10 +382,12 @@ class AnalyticsController {
       const userId = req.user.id;
       const userRole = req.user.role;
 
-      // Get user's assigned verticals (vertical head, team lead, or ATL)
+      // Get user's assigned verticals (vertical head, team lead, ATL, or any non-admin)
       let assignedVerticals = [];
-      if (!isAdminRole(userRole)) {
-        // Check vertical_heads table first
+      const isStrictAdmin = userRole === 'admin';
+
+      if (!isStrictAdmin) {
+        // For team_lead, VH, ATL, creative - check assigned verticals
         const verticalHeadsResult = await query(
           `SELECT vertical FROM vertical_heads WHERE head_editor_id = $1`,
           [userId]
@@ -402,17 +404,20 @@ class AnalyticsController {
           assignedVerticals = [...new Set([...assignedVerticals, ...uvaVerticals])];
         } catch (_) { /* table may not exist */ }
 
-        if (assignedVerticals.length === 0) {
-          // Not a vertical head/team lead/ATL and not admin - no access
+        if (assignedVerticals.length === 0 && !isAdminRole(userRole)) {
+          // Not admin-equivalent and no assigned verticals - no access
           return res.json({ success: true, data: [] });
         }
       }
 
-      // Build vertical filter condition (case-insensitive)
-      const verticalFilter = isAdminRole(userRole)
+      // Build vertical filter condition
+      // Strict admin sees all, team_lead with assigned verticals sees only theirs
+      // team_lead with no assigned verticals sees all (admin equivalent)
+      const showAll = isStrictAdmin || (isAdminRole(userRole) && assignedVerticals.length === 0);
+      const verticalFilter = showAll
         ? ''
         : `AND LOWER(frv.vertical) = ANY(ARRAY[${assignedVerticals.map((_, i) => `LOWER($${i + 1})`).join(',')}]::text[])`;
-      const queryParams = isAdminRole(userRole) ? [] : assignedVerticals;
+      const queryParams = showAll ? [] : assignedVerticals;
 
       // File Requests analytics by vertical
       // Use CTEs to pre-aggregate per request, avoiding row multiplication

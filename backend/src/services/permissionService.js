@@ -487,12 +487,12 @@ class PermissionService {
       const result = await query(
         `SELECT
            pal.*,
-           performer.name as performer_name,
-           performer.email as performer_email,
+           performer.name as performed_by_name,
+           performer.email as performed_by_email,
            target.name as target_user_name,
            target.email as target_user_email
          FROM permission_audit_log pal
-         JOIN users performer ON pal.performed_by = performer.id
+         LEFT JOIN users performer ON pal.performed_by = performer.id
          LEFT JOIN users target ON pal.target_user_id = target.id
          ${whereClause}
          ORDER BY pal.created_at DESC
@@ -500,7 +500,19 @@ class PermissionService {
         params
       );
 
-      return result.rows;
+      // Normalize: extract role_name, permission_action etc. from details/metadata JSONB
+      const rows = result.rows.map(row => {
+        const details = row.details || row.metadata || {};
+        return {
+          ...row,
+          performed_by_name: row.performed_by_name || 'Unknown',
+          role_name: details.roleName || details.role_name || row.role_assigned || null,
+          permission_action: details.action || details.permission_action || row.permission_granted || null,
+          scope_type: details.scopeType || details.scope_type || null,
+        };
+      });
+
+      return rows;
     } catch (error) {
       console.error('Error getting audit log:', error);
       throw error;
@@ -679,6 +691,7 @@ class PermissionService {
 
   async _logPermissionChange(actionType, performedBy, targetUserId, resourceType, resourceId, details) {
     try {
+      // Try with 'details' column first (009 migration schema)
       await query(
         `INSERT INTO permission_audit_log
           (action_type, performed_by, target_user_id, resource_type, resource_id, details)
@@ -686,8 +699,17 @@ class PermissionService {
         [actionType, performedBy, targetUserId, resourceType, resourceId, JSON.stringify(details)]
       );
     } catch (error) {
-      console.error('Error logging permission change:', error);
-      // Don't throw - logging should not break the operation
+      // Fallback: try with 'metadata' column (production migration schema)
+      try {
+        await query(
+          `INSERT INTO permission_audit_log
+            (action_type, performed_by, target_user_id, resource_type, resource_id, metadata)
+           VALUES ($1, $2, $3, $4, $5, $6)`,
+          [actionType, performedBy, targetUserId, resourceType, resourceId, JSON.stringify(details)]
+        );
+      } catch (fallbackError) {
+        console.error('Error logging permission change (both schemas failed):', fallbackError.message);
+      }
     }
   }
 }

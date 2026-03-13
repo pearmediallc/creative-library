@@ -58,6 +58,7 @@ export function FileRequestsPage() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'active' | 'closed'>('all');
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [duplicateData, setDuplicateData] = useState<any>(null);
   const [selectedRequest, setSelectedRequest] = useState<FileRequest | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [showReassignModal, setShowReassignModal] = useState(false);
@@ -633,7 +634,7 @@ export function FileRequestsPage() {
                             </Button>
                           )}
                           {/* 4. Reopen */}
-                          {(user?.id === request.created_by || user?.id === request.assigned_buyer_id) &&
+                          {(user?.id === request.created_by || user?.id === request.assigned_buyer_id || (request as any).assigned_buyer_ids?.includes(user?.id)) &&
                            request.status === 'closed' && (
                             <Button
                               variant="ghost"
@@ -668,7 +669,17 @@ export function FileRequestsPage() {
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => handleViewDetails(request)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDuplicateData({
+                                  requestType: request.request_type,
+                                  platforms: request.platforms || (request.platform ? [request.platform] : []),
+                                  verticals: request.verticals || (request.vertical ? [request.vertical] : []),
+                                  conceptNotes: request.concept_notes || '',
+                                  numCreatives: request.num_creatives ? String(request.num_creatives) : '',
+                                });
+                                setShowCreateModal(true);
+                              }}
                               title="Duplicate Request"
                             >
                               <Copy className="w-4 h-4 text-purple-500" />
@@ -812,7 +823,7 @@ export function FileRequestsPage() {
                         <LinkIcon className="w-3 h-3 mr-1" />
                         Details
                       </Button>
-                      {isAdminRole(user?.role) && (
+                      {(isAdminRole(user?.role) || (user?.role as string) === 'vertical_head' || (user?.role as string) === 'assistant_team_lead') && (
                         <Button
                           variant="outline"
                           size="sm"
@@ -823,7 +834,7 @@ export function FileRequestsPage() {
                         </Button>
                       )}
                       {/* Launch button - creator/buyer when status is uploaded */}
-                      {(user?.id === request.created_by || user?.id === request.assigned_buyer_id) &&
+                      {(user?.id === request.created_by || user?.id === request.assigned_buyer_id || (request as any).assigned_buyer_ids?.includes(user?.id)) &&
                        request.status === 'uploaded' && (
                         <Button
                           variant="outline"
@@ -836,7 +847,7 @@ export function FileRequestsPage() {
                         </Button>
                       )}
                       {/* Reopen button - creator/buyer when status is closed */}
-                      {(user?.id === request.created_by || user?.id === request.assigned_buyer_id) &&
+                      {(user?.id === request.created_by || user?.id === request.assigned_buyer_id || (request as any).assigned_buyer_ids?.includes(user?.id)) &&
                        request.status === 'closed' && (
                         <Button
                           variant="outline"
@@ -866,6 +877,25 @@ export function FileRequestsPage() {
                         <Trash2 className="w-3 h-3 mr-1" />
                         Delete
                       </Button>
+                      {(user?.role === 'buyer' || isAdminRole(user?.role)) && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setDuplicateData({
+                              requestType: request.request_type,
+                              platforms: request.platforms || (request.platform ? [request.platform] : []),
+                              verticals: request.verticals || (request.vertical ? [request.vertical] : []),
+                              conceptNotes: request.concept_notes || '',
+                              numCreatives: request.num_creatives ? String(request.num_creatives) : '',
+                            });
+                            setShowCreateModal(true);
+                          }}
+                        >
+                          <Copy className="w-3 h-3 mr-1 text-purple-500" />
+                          Duplicate
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </Card>
@@ -897,11 +927,13 @@ export function FileRequestsPage() {
       {/* Modals */}
       {showCreateModal && (
         <CreateFileRequestModal
-          onClose={() => setShowCreateModal(false)}
+          onClose={() => { setShowCreateModal(false); setDuplicateData(null); }}
           onSuccess={() => {
             setShowCreateModal(false);
+            setDuplicateData(null);
             fetchRequests();
           }}
+          initialData={duplicateData || undefined}
         />
       )}
 

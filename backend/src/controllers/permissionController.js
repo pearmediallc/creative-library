@@ -976,9 +976,19 @@ class PermissionController {
         resourceData = {
           id: folder.id,
           name: folder.name,
+          filename: folder.name,
           description: folder.description,
           color: folder.color
         };
+        // Get all files in this folder
+        const folderFiles = await query(
+          `SELECT id, original_filename as filename, file_type, file_size, thumbnail_url, s3_url, description
+           FROM media_files
+           WHERE folder_id = $1 AND is_deleted = FALSE
+           ORDER BY created_at DESC`,
+          [folder.id]
+        );
+        resourceData._files = (folderFiles.rows || folderFiles);
       }
 
       // Increment view count and log access
@@ -1004,11 +1014,16 @@ class PermissionController {
 
       logger.info('Public link accessed', { token, ip: req.ip });
 
+      // Extract files from resource data if folder
+      const files = resourceData?._files || null;
+      if (resourceData?._files) delete resourceData._files;
+
       res.json({
         success: true,
         data: {
           resource_type: permission.resource_type,
           resource: resourceData,
+          files: files,
           disable_download: permission.disable_download,
           expires_at: permission.link_expires_at
         }
@@ -1053,6 +1068,7 @@ class PermissionController {
 
       // Get resource details
       let resourceData = null;
+      let files = null;
       if (permission.resource_type === 'file') {
         const file = await MediaFile.findById(permission.resource_id);
         if (!file || file.is_deleted) {
@@ -1068,6 +1084,27 @@ class PermissionController {
           download_url: file.download_url,
           description: file.description
         };
+      } else if (permission.resource_type === 'folder') {
+        const folder = await Folder.findById(permission.resource_id);
+        if (!folder || folder.is_deleted) {
+          return res.status(404).json({ error: 'Folder not found or deleted' });
+        }
+        resourceData = {
+          id: folder.id,
+          name: folder.name,
+          filename: folder.name,
+          description: folder.description,
+          color: folder.color
+        };
+        // Get all files in this folder
+        const folderFiles = await query(
+          `SELECT id, original_filename as filename, file_type, file_size, thumbnail_url, s3_url, description
+           FROM media_files
+           WHERE folder_id = $1 AND is_deleted = FALSE
+           ORDER BY created_at DESC`,
+          [folder.id]
+        );
+        files = (folderFiles.rows || folderFiles);
       }
 
       res.json({
@@ -1075,6 +1112,7 @@ class PermissionController {
         data: {
           resource_type: permission.resource_type,
           resource: resourceData,
+          files: files,
           disable_download: permission.disable_download,
           expires_at: permission.link_expires_at
         }

@@ -2222,9 +2222,43 @@ class FileRequestController {
                 [fileRequest.id, uploaderEditorId]
               );
             } else {
-              // Uploader is not an editor (pure admin/buyer) - track via num_creatives on the request directly
-              // Update total uploaded count on the request so progress can be calculated
-              logger.info('Non-editor upload, tracking via request num_creatives only', { requestId: fileRequest.id, userId });
+              // Uploader is not in editors table (VH without editor record, or pure admin/buyer)
+              // Create an editor record for the user first, then track progress
+              try {
+                // Check if editor record exists first
+                let newEditorResult = await query(
+                  `SELECT id FROM editors WHERE user_id = $1 LIMIT 1`,
+                  [userId]
+                );
+                if (newEditorResult.rows.length === 0) {
+                  // Create editor record
+                  const userInfo = await query(`SELECT name FROM users WHERE id = $1`, [userId]);
+                  newEditorResult = await query(
+                    `INSERT INTO editors (user_id, name, is_active) VALUES ($1, $2, TRUE) RETURNING id`,
+                    [userId, userInfo.rows[0]?.name || 'Unknown']
+                  );
+                }
+                if (newEditorResult.rows.length > 0) {
+                  const newEditorId = newEditorResult.rows[0].id;
+                  await query(
+                    `INSERT INTO file_request_editors (request_id, editor_id, status, num_creatives_assigned, creatives_completed, deliverables_uploaded, started_at)
+                     VALUES ($1, $2, 'in_progress', COALESCE((SELECT num_creatives FROM file_requests WHERE id = $1), 0), 1, 1, NOW())
+                     ON CONFLICT (request_id, editor_id) DO UPDATE SET
+                       creatives_completed = COALESCE(file_request_editors.creatives_completed, 0) + 1,
+                       deliverables_uploaded = COALESCE(file_request_editors.deliverables_uploaded, 0) + 1,
+                       status = CASE
+                         WHEN COALESCE(NULLIF(file_request_editors.num_creatives_assigned, 0), 999999) <= COALESCE(file_request_editors.creatives_completed, 0) + 1 THEN 'completed'
+                         ELSE 'in_progress'
+                       END,
+                       started_at = COALESCE(file_request_editors.started_at, NOW()),
+                       updated_at = CURRENT_TIMESTAMP`,
+                    [fileRequest.id, newEditorId]
+                  );
+                  logger.info('Created editor record and tracked VH/admin upload progress', { requestId: fileRequest.id, userId, editorId: newEditorId });
+                }
+              } catch (editorCreateErr) {
+                logger.warn('Failed to create editor record for VH/admin uploader (non-fatal)', { error: editorCreateErr.message });
+              }
             }
           }
         }
@@ -2234,14 +2268,12 @@ class FileRequestController {
 
       // Auto-set completed_at when progress hits 100% (two checks: editor-based and request-based)
       try {
-        // Check 1: Editor-based progress (when editors are assigned)
+        // Check 1: Editor-based progress (using creatives_completed from file_request_editors directly)
         const progressCheck = await query(
           `SELECT
             COALESCE(SUM(fre.num_creatives_assigned), 0) as total_assigned,
-            COUNT(DISTINCT mf.id) FILTER (WHERE COALESCE(fru2.is_deleted, FALSE) = FALSE AND mf.is_deleted = FALSE) as total_completed
+            COALESCE(SUM(fre.creatives_completed), 0) as total_completed
           FROM file_request_editors fre
-          LEFT JOIN file_request_uploads fru2 ON fru2.file_request_id = $1 AND fru2.editor_id = fre.editor_id
-          LEFT JOIN media_files mf ON mf.upload_session_id = fru2.id
           WHERE fre.request_id = $1
             AND fre.status NOT IN ('reassigned', 'removed')`,
           [fileRequest.id]
