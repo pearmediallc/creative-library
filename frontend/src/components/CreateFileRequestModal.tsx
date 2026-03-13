@@ -503,34 +503,6 @@ export function CreateFileRequestModal({ onClose, onSuccess, teamId, initialData
                 )}
               </div>
             )}
-              {/* Team Selection */}
-              {teams.length > 0 && (
-                <div className="mb-3">
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Create for Team (Optional)
-                  </label>
-                  <select
-                    value={selectedTeamId}
-                    onChange={(e) => {
-                      setSelectedTeamId(e.target.value);
-                      setSelectedTemplateId('');
-                    }}
-                    disabled={creating}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-                  >
-                    <option value="">No team (individual request)</option>
-                    {teams.map((team: any) => (
-                      <option key={team.id} value={team.id}>
-                        {team.name} ({team.member_count || 0} members)
-                      </option>
-                    ))}
-                  </select>
-                  {selectedTeamId && (
-                    <p className="text-xs text-blue-600 mt-1">Request will be visible to all team members</p>
-                  )}
-                </div>
-              )}
-
               {/* Template Selection */}
               {templates.length > 0 && (
                 <div>
@@ -888,6 +860,36 @@ export function CreateFileRequestModal({ onClose, onSuccess, teamId, initialData
               <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
                 {assignedBuyerIds.length} buyer(s) selected - uploaded files will be accessible to them
               </p>
+            )}
+          </div>
+
+          {/* Assign to Team */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Assign to Team (optional)
+            </label>
+            {teams.length === 0 ? (
+              <p className="text-xs text-gray-500 dark:text-gray-400 italic">No teams available</p>
+            ) : (
+              <select
+                value={selectedTeamId}
+                onChange={(e) => {
+                  setSelectedTeamId(e.target.value);
+                  setSelectedTemplateId('');
+                }}
+                disabled={creating}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+              >
+                <option value="">No team (individual request)</option>
+                {teams.map((team: any) => (
+                  <option key={team.id} value={team.id}>
+                    {team.name} ({team.member_count || 0} members)
+                  </option>
+                ))}
+              </select>
+            )}
+            {selectedTeamId && (
+              <p className="text-xs text-blue-600 mt-1">Request will be visible to all team members</p>
             )}
           </div>
 

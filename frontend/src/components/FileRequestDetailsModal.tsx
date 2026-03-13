@@ -412,22 +412,38 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
   };
 
   const traverseFileTree = async (item: any, files: File[]): Promise<void> => {
-    return new Promise((resolve) => {
-      if (item.isFile) {
+    if (item.isFile) {
+      return new Promise((resolve) => {
         item.file((file: File) => {
           files.push(file);
           resolve();
         });
-      } else if (item.isDirectory) {
-        const dirReader = item.createReader();
-        dirReader.readEntries(async (entries: any[]) => {
-          for (const entry of entries) {
-            await traverseFileTree(entry, files);
-          }
-          resolve();
+      });
+    } else if (item.isDirectory) {
+      const dirReader = item.createReader();
+      // readEntries may not return all entries at once for large directories
+      // Keep calling until it returns an empty array
+      const readAllEntries = (): Promise<any[]> => {
+        return new Promise((resolve) => {
+          const allEntries: any[] = [];
+          const readBatch = () => {
+            dirReader.readEntries((entries: any[]) => {
+              if (entries.length === 0) {
+                resolve(allEntries);
+              } else {
+                allEntries.push(...entries);
+                readBatch();
+              }
+            });
+          };
+          readBatch();
         });
+      };
+      const entries = await readAllEntries();
+      for (const entry of entries) {
+        await traverseFileTree(entry, files);
       }
-    });
+    }
   };
 
   const fetchRequestDetails = async () => {
@@ -1049,6 +1065,30 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
           requestFolderId = createdRequestFolder.data.id;
         }
 
+        // Create "Creatives" subfolder inside request folder for canvas brief uploads
+        const existingCreativeFolder = allFolders.data?.find((f: any) =>
+          f.name === 'Creatives' && f.parent_id === requestFolderId
+        );
+
+        let creativeFolderId: string;
+        if (existingCreativeFolder) {
+          creativeFolderId = existingCreativeFolder.id;
+        } else {
+          const createCreativeFolderResponse = await fetch(`${API_BASE_URL}/folders`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              name: 'Creatives',
+              parent_id: requestFolderId
+            })
+          });
+          const createdCreativeFolder = await createCreativeFolderResponse.json();
+          creativeFolderId = createdCreativeFolder.data.id;
+        }
+
         // Upload files and collect their IDs
         const uploadedFileIds: string[] = [];
 
@@ -1059,7 +1099,7 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
           const formData = new FormData();
           formData.append('file', file);
           formData.append('editor_id', editorId);
-          formData.append('folder_id', requestFolderId);  // Upload to request folder
+          formData.append('folder_id', creativeFolderId);  // Upload to Creatives subfolder
           formData.append('description', `Canvas Brief - ${request?.title || 'Request'}: ${instruction}`);
           formData.append('tags', JSON.stringify(['canvas-brief', `request-${requestId}`]));
 

@@ -74,7 +74,7 @@ async function getUserTeams(req, res) {
     const userRole = req.user.role;
 
     // Admin-level roles can see ALL teams; others see only their teams
-    const adminRoles = ['admin', 'ceo', 'head_media_buying', 'creative_head', 'buyer', 'team_lead', 'assistant_team_lead', 'vertical_head'];
+    const adminRoles = ['admin', 'ceo', 'head_media_buying', 'creative_head', 'buyer', 'creative', 'team_lead', 'assistant_team_lead', 'vertical_head'];
     const isAdmin = adminRoles.includes(userRole);
 
     let result;
