@@ -217,11 +217,21 @@ export function FileRequestsPage() {
 
   const filteredRequests = requests.filter((request) => {
     // Search filter
-    if (searchQuery && !request.title.toLowerCase().includes(searchQuery.toLowerCase()) &&
-        !request.description?.toLowerCase().includes(searchQuery.toLowerCase()) &&
-        !request.buyer_name?.toLowerCase().includes(searchQuery.toLowerCase()) &&
-        !request.created_by_name?.toLowerCase().includes(searchQuery.toLowerCase())) {
-      return false;
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      const matches = [
+        request.title,
+        request.description,
+        request.buyer_name,
+        request.created_by_name,
+        request.concept_notes,
+        ...((request as any).editor_names || []),
+        ...(request.platforms || []),
+        ...(request.verticals || []),
+        request.vertical,
+        request.platform,
+      ].some(field => field?.toLowerCase().includes(q));
+      if (!matches) return false;
     }
 
     // Vertical filter - check both array and single value

@@ -15,18 +15,34 @@ interface FolderCardProps {
   };
   onClick: () => void;
   onContextMenu: (e: React.MouseEvent) => void;
+  isSelected?: boolean;
+  onToggleSelect?: (e: React.MouseEvent) => void;
+  cardRef?: (el: HTMLDivElement | null) => void;
 }
 
-export function FolderCard({ folder, onClick, onContextMenu }: FolderCardProps) {
+export function FolderCard({ folder, onClick, onContextMenu, isSelected, onToggleSelect, cardRef }: FolderCardProps) {
   return (
     <div
-      className="group relative bg-white dark:bg-gray-800 rounded-lg shadow hover:shadow-md transition-shadow cursor-pointer border border-gray-200 dark:border-gray-700"
+      ref={cardRef}
+      className={`group relative bg-white dark:bg-gray-800 rounded-lg shadow hover:shadow-md transition-shadow cursor-pointer border-2 ${isSelected ? 'border-blue-500 ring-2 ring-blue-200' : 'border-gray-200 dark:border-gray-700'}`}
       onClick={onClick}
       onContextMenu={(e) => {
         e.preventDefault();
         onContextMenu(e);
       }}
     >
+      {/* Selection checkbox */}
+      {onToggleSelect && (
+        <div className="absolute top-2 left-2 z-10" onClick={(e) => e.stopPropagation()}>
+          <input
+            type="checkbox"
+            checked={isSelected || false}
+            onChange={(e) => onToggleSelect(e as any)}
+            className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+          />
+        </div>
+      )}
+
       {/* Context menu button */}
       <button
         onClick={(e) => {

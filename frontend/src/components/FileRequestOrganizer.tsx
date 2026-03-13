@@ -162,9 +162,13 @@ export function FileRequestOrganizer({
   const fetchFolders = useCallback(async () => {
     try {
       const response = await fileRequestApi.getFolders(requestId);
-      setFolders(response.data.data || []);
-      const ids = new Set(['unfiled', ...(response.data.data || []).map((f: Folder) => f.id)]);
-      setExpandedFolders(ids);
+      const fetchedFolders = response.data.data || [];
+      setFolders(fetchedFolders);
+      // Keep folders collapsed by default - user clicks to expand
+      // Only expand unfiled on first load if there are no named folders
+      if (fetchedFolders.length === 0) {
+        setExpandedFolders(prev => prev.size <= 1 ? new Set(['unfiled']) : prev);
+      }
     } catch (error) {
       console.error('Failed to fetch folders:', error);
     }

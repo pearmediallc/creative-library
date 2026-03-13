@@ -32,9 +32,10 @@ export function TeamMembersModal({
   const [adding, setAdding] = useState(false);
   const [error, setError] = useState('');
 
-  // Add member form state
-  const [selectedUserId, setSelectedUserId] = useState('');
-  const [selectedRole, setSelectedRole] = useState<'admin' | 'member'>('member');
+  // Add member form state - multi-select
+  const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
+  const [selectedRole, setSelectedRole] = useState<'lead' | 'member' | 'guest'>('member');
+  const [memberSearch, setMemberSearch] = useState('');
 
   const fetchTeamData = useCallback(async () => {
     try {
@@ -95,14 +96,15 @@ export function TeamMembersModal({
   const handleAddMember = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!selectedUserId) {
-      setError('Please select a user');
+    if (selectedUserIds.length === 0) {
+      setError('Please select at least one user');
       return;
     }
 
-    // Check if already a member
-    if (members.some(m => m.user_id === selectedUserId)) {
-      setError('This user is already a team member');
+    // Filter out already-members
+    const newUserIds = selectedUserIds.filter(uid => !members.some(m => m.user_id === uid));
+    if (newUserIds.length === 0) {
+      setError('Selected users are already team members');
       return;
     }
 
@@ -110,14 +112,17 @@ export function TeamMembersModal({
     setError('');
 
     try {
-      await teamApi.addMember(teamId, {
-        userId: selectedUserId,
-        teamRole: selectedRole as 'lead' | 'member' | 'guest'
-      });
+      await Promise.all(newUserIds.map(userId =>
+        teamApi.addMember(teamId, {
+          userId,
+          teamRole: selectedRole
+        })
+      ));
 
       // Reset form
-      setSelectedUserId('');
+      setSelectedUserIds([]);
       setSelectedRole('member');
+      setMemberSearch('');
 
       // Refresh member list
       await fetchTeamData();
@@ -207,40 +212,80 @@ export function TeamMembersModal({
                 </h3>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div className="md:col-span-2">
-                  <select
-                    value={selectedUserId}
-                    onChange={(e) => setSelectedUserId(e.target.value)}
-                    disabled={adding}
-                    className="w-full h-10 px-3 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="">Select a user...</option>
-                    {availableUsers.map(user => (
-                      <option key={user.id} value={user.id}>
-                        {user.name} ({user.email})
-                      </option>
-                    ))}
-                  </select>
+              <div className="space-y-3">
+                {/* Search input */}
+                <input
+                  type="text"
+                  value={memberSearch}
+                  onChange={(e) => setMemberSearch(e.target.value)}
+                  placeholder="Search users by name or email..."
+                  disabled={adding}
+                  className="w-full h-9 px-3 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
+                />
+
+                {/* Checkbox list of users */}
+                <div className="border rounded-lg max-h-48 overflow-y-auto bg-white dark:bg-gray-700 p-1">
+                  {availableUsers
+                    .filter(u => {
+                      if (!memberSearch.trim()) return true;
+                      const q = memberSearch.toLowerCase();
+                      return u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q);
+                    })
+                    .map(user => (
+                    <label key={user.id} className="flex items-center gap-2 px-2 py-1.5 hover:bg-gray-50 dark:hover:bg-gray-600 rounded cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={selectedUserIds.includes(user.id)}
+                        onChange={() => {
+                          setSelectedUserIds(prev =>
+                            prev.includes(user.id) ? prev.filter(id => id !== user.id) : [...prev, user.id]
+                          );
+                        }}
+                        disabled={adding}
+                        className="w-4 h-4 rounded text-blue-600 border-gray-300"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <span className="text-sm text-gray-900 dark:text-white truncate block">{user.name}</span>
+                        <span className="text-[10px] text-gray-500 dark:text-gray-400 truncate block">{user.email}</span>
+                      </div>
+                    </label>
+                  ))}
+                  {availableUsers.length === 0 && (
+                    <p className="text-sm text-gray-500 text-center py-4">No available users</p>
+                  )}
                 </div>
 
+                {selectedUserIds.length > 0 && (
+                  <p className="text-xs text-blue-600">{selectedUserIds.length} user(s) selected</p>
+                )}
+
+                {/* Role + Add button */}
                 <div className="flex gap-2">
-                  <select
-                    value={selectedRole}
-                    onChange={(e) => setSelectedRole(e.target.value as 'admin' | 'member')}
-                    disabled={adding}
-                    className="flex-1 h-10 px-3 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="member">Member</option>
-                    <option value="admin">Admin</option>
-                  </select>
+                  <div className="flex items-center gap-3">
+                    <label className="flex items-center gap-1.5 cursor-pointer">
+                      <input type="radio" name="teamRole" value="member" checked={selectedRole === 'member'}
+                        onChange={() => setSelectedRole('member')} className="w-4 h-4 text-blue-600" />
+                      <span className="text-sm">Member</span>
+                    </label>
+                    <label className="flex items-center gap-1.5 cursor-pointer">
+                      <input type="radio" name="teamRole" value="lead" checked={selectedRole === 'lead'}
+                        onChange={() => setSelectedRole('lead')} className="w-4 h-4 text-blue-600" />
+                      <span className="text-sm">Lead</span>
+                    </label>
+                    <label className="flex items-center gap-1.5 cursor-pointer">
+                      <input type="radio" name="teamRole" value="guest" checked={selectedRole === 'guest'}
+                        onChange={() => setSelectedRole('guest')} className="w-4 h-4 text-blue-600" />
+                      <span className="text-sm">Guest</span>
+                    </label>
+                  </div>
 
                   <Button
                     type="submit"
                     size="sm"
-                    disabled={adding || !selectedUserId}
+                    disabled={adding || selectedUserIds.length === 0}
+                    className="ml-auto"
                   >
-                    {adding ? 'Adding...' : 'Add'}
+                    {adding ? 'Adding...' : `Add ${selectedUserIds.length > 0 ? selectedUserIds.length : ''} Member${selectedUserIds.length !== 1 ? 's' : ''}`}
                   </Button>
                 </div>
               </div>

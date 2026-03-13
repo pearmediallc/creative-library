@@ -70,27 +70,47 @@ export function RBACAdminPanel() {
     expiresAt: ''
   });
 
-  // Permission grant state
+  // Permission grant state - tree structure with multi-action per resource
   const [showGrantPermission, setShowGrantPermission] = useState(false);
   const [grantPermissionData, setGrantPermissionData] = useState({
     userId: '',
-    resourceType: 'file_request',
-    action: 'view',
+    // Map of resourceType -> Set of selected actions
+    selectedPermissions: {} as Record<string, Set<string>>,
+    expandedResources: new Set<string>(),
     permission: 'allow' as 'allow' | 'deny',
     resourceId: '',
     expiresAt: '',
     reason: ''
   });
 
-  // UI Permission state
+  // UI Permission state - matrix table for all elements
   const [showUIPermission, setShowUIPermission] = useState(false);
-  const [uiPermissionData, setUIPermissionData] = useState({
-    userId: '',
-    uiElement: 'dashboard',
-    isVisible: true,
-    isEnabled: true,
-    customLabel: ''
-  });
+  const [uiPermissionMatrix, setUIPermissionMatrix] = useState<Record<string, { isVisible: boolean; isEnabled: boolean; customLabel: string }>>({});
+  const UI_ELEMENTS = [
+    'dashboard', 'media_library', 'file_requests', 'launch_requests', 'starred', 'recents',
+    'shared_with_me', 'trash', 'shared_by_you', 'teams', 'settings', 'access_requests',
+    'canvas', 'analytics', 'admin_panel', 'editors', 'workload', 'metadata_extraction',
+    'rbac_permissions', 'activity_logs', 'log_exports', 'faq_help', 'collections'
+  ];
+
+  // Resource types and their actions for tree structure
+  const RESOURCE_ACTION_MAP: Record<string, string[]> = {
+    file_request: ['view', 'create', 'edit', 'delete', 'assign', 'upload', 'download', 'share', 'reassign', 'duplicate', 'close', 'launch', 'reopen'],
+    folder: ['view', 'create', 'edit', 'delete', 'share', 'rename', 'move', 'copy'],
+    media_file: ['view', 'upload', 'download', 'edit', 'delete', 'share', 'move', 'copy', 'bulk_edit', 'bulk_delete', 'bulk_download'],
+    canvas: ['view', 'create', 'edit', 'delete', 'share'],
+    analytics: ['view', 'manage'],
+    user: ['view', 'create', 'edit', 'delete', 'assign_roles'],
+    admin_panel: ['view', 'manage'],
+    teams: ['view', 'create', 'edit', 'delete', 'manage_members'],
+    workload: ['view', 'manage_capacity'],
+    editors: ['view', 'manage'],
+    collections: ['view', 'create', 'edit', 'delete'],
+    launch_request: ['view', 'create', 'edit', 'delete', 'launch', 'close'],
+  };
+
+  // Role assignment - multi-select
+  const [assignRoleSelections, setAssignRoleSelections] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     fetchData();
@@ -206,21 +226,37 @@ export function RBACAdminPanel() {
   const handleGrantPermission = async () => {
     try {
       const token = localStorage.getItem('token');
-      await axios.post(
-        `${process.env.REACT_APP_API_URL}/rbac/permissions/grant`,
-        {
-          userId: grantPermissionData.userId,
-          resourceType: grantPermissionData.resourceType,
-          action: grantPermissionData.action,
-          permission: grantPermissionData.permission,
-          resourceId: grantPermissionData.resourceId || null,
-          expiresAt: grantPermissionData.expiresAt || null,
-          reason: grantPermissionData.reason || null
-        },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      const promises: Promise<any>[] = [];
 
-      alert('Permission granted successfully!');
+      // Batch: for each resource type with selected actions, grant all actions
+      for (const [resourceType, actions] of Object.entries(grantPermissionData.selectedPermissions)) {
+        const actionsArray = Array.from(actions);
+        for (const action of actionsArray) {
+          promises.push(
+            axios.post(
+              `${process.env.REACT_APP_API_URL}/rbac/permissions/grant`,
+              {
+                userId: grantPermissionData.userId,
+                resourceType,
+                action,
+                permission: grantPermissionData.permission,
+                resourceId: grantPermissionData.resourceId || null,
+                expiresAt: grantPermissionData.expiresAt || null,
+                reason: grantPermissionData.reason || null
+              },
+              { headers: { Authorization: `Bearer ${token}` } }
+            )
+          );
+        }
+      }
+
+      if (promises.length === 0) {
+        alert('Please select at least one permission to grant');
+        return;
+      }
+
+      await Promise.all(promises);
+      alert(`${promises.length} permission(s) granted successfully!`);
       setShowGrantPermission(false);
       if (selectedUser) {
         fetchUserPermissions(selectedUser.id);
@@ -234,19 +270,25 @@ export function RBACAdminPanel() {
   const handleSetUIPermission = async () => {
     try {
       const token = localStorage.getItem('token');
-      await axios.post(
-        `${process.env.REACT_APP_API_URL}/rbac/ui-permissions`,
-        {
-          userId: uiPermissionData.userId,
-          uiElement: uiPermissionData.uiElement,
-          isVisible: uiPermissionData.isVisible,
-          isEnabled: uiPermissionData.isEnabled,
-          customLabel: uiPermissionData.customLabel || null
-        },
-        { headers: { Authorization: `Bearer ${token}` } }
+      const userId = selectedUser?.id;
+      if (!userId) return;
+
+      const promises = Object.entries(uiPermissionMatrix).map(([uiElement, settings]) =>
+        axios.post(
+          `${process.env.REACT_APP_API_URL}/rbac/ui-permissions`,
+          {
+            userId,
+            uiElement,
+            isVisible: settings.isVisible,
+            isEnabled: settings.isEnabled,
+            customLabel: settings.customLabel || null
+          },
+          { headers: { Authorization: `Bearer ${token}` } }
+        )
       );
 
-      alert('UI permission set successfully!');
+      await Promise.all(promises);
+      alert('UI permissions saved successfully!');
       setShowUIPermission(false);
       if (selectedUser) {
         fetchUserPermissions(selectedUser.id);
@@ -255,6 +297,59 @@ export function RBACAdminPanel() {
       console.error('Failed to set UI permission:', error);
       alert(error.response?.data?.message || 'Failed to set UI permission');
     }
+  };
+
+  // Handle multi-role assignment
+  const handleAssignMultipleRoles = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const userId = assignRoleData.userId;
+      const promises = Array.from(assignRoleSelections).map(roleName =>
+        axios.post(
+          `${process.env.REACT_APP_API_URL}/rbac/roles/assign`,
+          {
+            userId,
+            roleName,
+            scopeType: assignRoleData.scopeType,
+            scopeId: assignRoleData.scopeId || null,
+            expiresAt: assignRoleData.expiresAt || null
+          },
+          { headers: { Authorization: `Bearer ${token}` } }
+        )
+      );
+
+      if (promises.length === 0) {
+        alert('Please select at least one role');
+        return;
+      }
+
+      await Promise.all(promises);
+      alert(`${promises.length} role(s) assigned successfully!`);
+      setShowAssignRole(false);
+      setAssignRoleSelections(new Set());
+      fetchData();
+      if (selectedUser) {
+        fetchUserPermissions(selectedUser.id);
+      }
+    } catch (error: any) {
+      console.error('Failed to assign roles:', error);
+      alert(error.response?.data?.message || 'Failed to assign roles');
+    }
+  };
+
+  // Initialize UI permission matrix when opening modal
+  const initUIPermissionMatrix = () => {
+    const matrix: Record<string, { isVisible: boolean; isEnabled: boolean; customLabel: string }> = {};
+    const existingPerms = userDetailPermissions?.ui_permissions || [];
+    UI_ELEMENTS.forEach(el => {
+      const existing = existingPerms.find((p: any) => p.ui_element === el);
+      matrix[el] = {
+        isVisible: existing ? existing.is_visible : true,
+        isEnabled: existing ? existing.is_enabled : true,
+        customLabel: existing?.custom_label || ''
+      };
+    });
+    setUIPermissionMatrix(matrix);
   };
 
   const filteredUsers = users.filter(user =>
@@ -408,7 +503,7 @@ export function RBACAdminPanel() {
                             variant="outline"
                             onClick={() => {
                               setShowGrantPermission(true);
-                              setGrantPermissionData({ ...grantPermissionData, userId: selectedUser.id });
+                              setGrantPermissionData({ ...grantPermissionData, userId: selectedUser.id, selectedPermissions: {}, expandedResources: new Set() });
                             }}
                           >
                             <Shield className="w-4 h-4 mr-2" />
@@ -418,8 +513,8 @@ export function RBACAdminPanel() {
                             size="sm"
                             variant="outline"
                             onClick={() => {
+                              initUIPermissionMatrix();
                               setShowUIPermission(true);
-                              setUIPermissionData({ ...uiPermissionData, userId: selectedUser.id });
                             }}
                           >
                             <Eye className="w-4 h-4 mr-2" />
@@ -660,60 +755,75 @@ export function RBACAdminPanel() {
         )}
       </div>
 
-      {/* Assign Role Modal */}
+      {/* Assign Role Modal - Multi-select checkboxes */}
       {showAssignRole && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg max-w-md w-full p-6 max-h-[90vh] overflow-y-auto">
-            <h3 className="text-lg font-semibold mb-4">Assign Role</h3>
+            <h3 className="text-lg font-semibold mb-4">Assign Roles</h3>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium mb-2">Select Role</label>
-                <div className="border rounded-lg p-3 max-h-48 overflow-y-auto space-y-2 bg-gray-50">
+                <label className="block text-sm font-medium mb-2">Select Roles (multi-select)</label>
+                <div className="border rounded-lg p-3 max-h-64 overflow-y-auto space-y-2 bg-gray-50">
                   {/* System roles from DB */}
                   {roles.map((role) => (
                     <label key={role.id} className="flex items-center gap-2 cursor-pointer hover:bg-white p-1.5 rounded">
                       <input
-                        type="radio"
-                        name="assignRole"
-                        value={role.name}
-                        checked={assignRoleData.roleName === role.name}
-                        onChange={(e) => setAssignRoleData({ ...assignRoleData, roleName: e.target.value })}
-                        className="w-4 h-4 text-blue-600"
+                        type="checkbox"
+                        checked={assignRoleSelections.has(role.name)}
+                        onChange={() => {
+                          setAssignRoleSelections(prev => {
+                            const next = new Set(prev);
+                            if (next.has(role.name)) next.delete(role.name);
+                            else next.add(role.name);
+                            return next;
+                          });
+                        }}
+                        className="w-4 h-4 rounded text-blue-600"
                       />
                       <span className="text-sm">{role.name}</span>
                       {role.is_system_role && <span className="text-[10px] bg-gray-200 px-1.5 py-0.5 rounded">System</span>}
                     </label>
                   ))}
-                  {/* Application roles (always shown even if not in DB roles table) */}
-                  {['admin', 'buyer', 'creative', 'vertical_head', 'team_lead', 'assistant_team_lead'].filter(
+                  {/* Application roles */}
+                  {['admin', 'ceo', 'head_media_buying', 'creative_head', 'buyer', 'creative', 'vertical_head', 'team_lead', 'assistant_team_lead'].filter(
                     r => !roles.some(dbRole => dbRole.name.toLowerCase().replace(/\s+/g, '_') === r)
                   ).map(roleName => (
                     <label key={roleName} className="flex items-center gap-2 cursor-pointer hover:bg-white p-1.5 rounded">
                       <input
-                        type="radio"
-                        name="assignRole"
-                        value={roleName}
-                        checked={assignRoleData.roleName === roleName}
-                        onChange={(e) => setAssignRoleData({ ...assignRoleData, roleName: e.target.value })}
-                        className="w-4 h-4 text-blue-600"
+                        type="checkbox"
+                        checked={assignRoleSelections.has(roleName)}
+                        onChange={() => {
+                          setAssignRoleSelections(prev => {
+                            const next = new Set(prev);
+                            if (next.has(roleName)) next.delete(roleName);
+                            else next.add(roleName);
+                            return next;
+                          });
+                        }}
+                        className="w-4 h-4 rounded text-blue-600"
                       />
                       <span className="text-sm">{roleName.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</span>
                       <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">App Role</span>
                     </label>
                   ))}
                 </div>
+                {assignRoleSelections.size > 0 && (
+                  <p className="text-xs text-blue-600 mt-1">{assignRoleSelections.size} role(s) selected</p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">Scope Type</label>
-                <select
-                  className="w-full border rounded-lg px-3 py-2"
-                  value={assignRoleData.scopeType}
-                  onChange={(e) => setAssignRoleData({ ...assignRoleData, scopeType: e.target.value })}
-                >
-                  <option value="global">Global</option>
-                  <option value="folder">Folder</option>
-                  <option value="request">Request</option>
-                </select>
+                <div className="flex gap-3">
+                  {['global', 'folder', 'request'].map(scope => (
+                    <label key={scope} className="flex items-center gap-1.5 cursor-pointer">
+                      <input type="radio" name="scopeType" value={scope}
+                        checked={assignRoleData.scopeType === scope}
+                        onChange={(e) => setAssignRoleData({ ...assignRoleData, scopeType: e.target.value })}
+                        className="w-4 h-4 text-blue-600" />
+                      <span className="text-sm capitalize">{scope}</span>
+                    </label>
+                  ))}
+                </div>
               </div>
               {assignRoleData.scopeType !== 'global' && (
                 <div>
@@ -734,11 +844,11 @@ export function RBACAdminPanel() {
                 />
               </div>
               <div className="flex gap-2 justify-end">
-                <Button variant="outline" onClick={() => setShowAssignRole(false)}>
+                <Button variant="outline" onClick={() => { setShowAssignRole(false); setAssignRoleSelections(new Set()); }}>
                   Cancel
                 </Button>
-                <Button onClick={handleAssignRole}>
-                  Assign Role
+                <Button onClick={handleAssignMultipleRoles} disabled={assignRoleSelections.size === 0}>
+                  Assign {assignRoleSelections.size} Role(s)
                 </Button>
               </div>
             </div>
@@ -746,63 +856,122 @@ export function RBACAdminPanel() {
         </div>
       )}
 
-      {/* Grant Permission Modal */}
+      {/* Grant Permission Modal - Tree Structure */}
       {showGrantPermission && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-md w-full p-6 max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-lg max-w-lg w-full p-6 max-h-[90vh] overflow-y-auto">
             <h3 className="text-lg font-semibold mb-4">Grant Permission</h3>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium mb-2">Resource Type</label>
-                <div className="border rounded-lg p-3 max-h-40 overflow-y-auto space-y-1 bg-gray-50">
-                  {['file_request', 'folder', 'media_file', 'canvas', 'analytics', 'user', 'admin_panel', 'teams', 'workload', 'editors', 'collections', 'launch_request'].map(type => (
-                    <label key={type} className="flex items-center gap-2 cursor-pointer hover:bg-white p-1 rounded">
-                      <input
-                        type="radio"
-                        name="resourceType"
-                        value={type}
-                        checked={grantPermissionData.resourceType === type}
-                        onChange={(e) => setGrantPermissionData({ ...grantPermissionData, resourceType: e.target.value })}
-                        className="w-4 h-4 text-blue-600"
-                      />
-                      <span className="text-sm">{type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</span>
-                    </label>
-                  ))}
+                <label className="block text-sm font-medium mb-2">Permission Tree (click to expand, check actions)</label>
+                <div className="border rounded-lg bg-gray-50 max-h-72 overflow-y-auto">
+                  {Object.entries(RESOURCE_ACTION_MAP).map(([resourceType, actions]) => {
+                    const isExpanded = grantPermissionData.expandedResources.has(resourceType);
+                    const selectedActions = grantPermissionData.selectedPermissions[resourceType] || new Set<string>();
+                    const allChecked = actions.every(a => selectedActions.has(a));
+                    const someChecked = actions.some(a => selectedActions.has(a));
+
+                    return (
+                      <div key={resourceType} className="border-b last:border-b-0">
+                        <div
+                          className="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-white"
+                          onClick={() => {
+                            setGrantPermissionData(prev => {
+                              const next = new Set(prev.expandedResources);
+                              if (next.has(resourceType)) next.delete(resourceType);
+                              else next.add(resourceType);
+                              return { ...prev, expandedResources: next };
+                            });
+                          }}
+                        >
+                          <span className="text-gray-400 text-xs">{isExpanded ? '▼' : '▶'}</span>
+                          <input
+                            type="checkbox"
+                            checked={allChecked}
+                            ref={(el) => { if (el) el.indeterminate = someChecked && !allChecked; }}
+                            onChange={(e) => {
+                              e.stopPropagation();
+                              setGrantPermissionData(prev => {
+                                const newPerms = { ...prev.selectedPermissions };
+                                if (allChecked) {
+                                  delete newPerms[resourceType];
+                                } else {
+                                  newPerms[resourceType] = new Set(actions);
+                                }
+                                return { ...prev, selectedPermissions: newPerms };
+                              });
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                            className="w-4 h-4 rounded text-blue-600"
+                          />
+                          <span className="text-sm font-medium">{resourceType.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</span>
+                          {someChecked && (
+                            <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded ml-auto">
+                              {selectedActions.size}/{actions.length}
+                            </span>
+                          )}
+                        </div>
+                        {isExpanded && (
+                          <div className="pl-10 pr-3 pb-2 grid grid-cols-2 gap-1">
+                            {actions.map(action => (
+                              <label key={action} className="flex items-center gap-1.5 cursor-pointer hover:bg-white p-1 rounded text-xs">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedActions.has(action)}
+                                  onChange={() => {
+                                    setGrantPermissionData(prev => {
+                                      const newPerms = { ...prev.selectedPermissions };
+                                      const set = new Set(newPerms[resourceType] || []);
+                                      if (set.has(action)) set.delete(action);
+                                      else set.add(action);
+                                      if (set.size === 0) delete newPerms[resourceType];
+                                      else newPerms[resourceType] = set;
+                                      return { ...prev, selectedPermissions: newPerms };
+                                    });
+                                  }}
+                                  className="w-3.5 h-3.5 rounded text-blue-600"
+                                />
+                                <span>{action.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</span>
+                              </label>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
+                {(() => {
+                  const totalSelected = Object.values(grantPermissionData.selectedPermissions).reduce((acc, s) => acc + s.size, 0);
+                  return totalSelected > 0 ? (
+                    <p className="text-xs text-blue-600 mt-1">{totalSelected} permission(s) selected across {Object.keys(grantPermissionData.selectedPermissions).length} resource(s)</p>
+                  ) : null;
+                })()}
               </div>
               <div>
-                <label className="block text-sm font-medium mb-2">Action</label>
-                <div className="border rounded-lg p-3 max-h-48 overflow-y-auto space-y-1 bg-gray-50">
-                  {['view', 'create', 'edit', 'delete', 'assign', 'upload', 'download', 'share', 'manage', 'reassign', 'duplicate', 'close', 'launch', 'reopen', 'bulk_edit', 'bulk_delete', 'bulk_download', 'move', 'copy', 'rename', 'manage_capacity', 'assign_roles', 'manage_members'].map(action => (
-                    <label key={action} className="flex items-center gap-2 cursor-pointer hover:bg-white p-1 rounded">
-                      <input
-                        type="checkbox"
-                        checked={grantPermissionData.action === action}
-                        onChange={() => setGrantPermissionData({ ...grantPermissionData, action })}
-                        className="w-4 h-4 rounded text-blue-600"
-                      />
-                      <span className="text-sm">{action.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</span>
-                    </label>
-                  ))}
+                <label className="block text-sm font-medium mb-1">Permission Type</label>
+                <div className="flex gap-4">
+                  <label className="flex items-center gap-1.5 cursor-pointer">
+                    <input type="radio" name="permType" value="allow"
+                      checked={grantPermissionData.permission === 'allow'}
+                      onChange={() => setGrantPermissionData(prev => ({ ...prev, permission: 'allow' }))}
+                      className="w-4 h-4 text-green-600" />
+                    <span className="text-sm text-green-700">Allow</span>
+                  </label>
+                  <label className="flex items-center gap-1.5 cursor-pointer">
+                    <input type="radio" name="permType" value="deny"
+                      checked={grantPermissionData.permission === 'deny'}
+                      onChange={() => setGrantPermissionData(prev => ({ ...prev, permission: 'deny' }))}
+                      className="w-4 h-4 text-red-600" />
+                    <span className="text-sm text-red-700">Deny</span>
+                  </label>
                 </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Permission</label>
-                <select
-                  className="w-full border rounded-lg px-3 py-2"
-                  value={grantPermissionData.permission}
-                  onChange={(e) => setGrantPermissionData({ ...grantPermissionData, permission: e.target.value as 'allow' | 'deny' })}
-                >
-                  <option value="allow">Allow</option>
-                  <option value="deny">Deny</option>
-                </select>
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">Resource ID (optional)</label>
                 <Input
                   placeholder="Leave empty for all resources..."
                   value={grantPermissionData.resourceId}
-                  onChange={(e) => setGrantPermissionData({ ...grantPermissionData, resourceId: e.target.value })}
+                  onChange={(e) => setGrantPermissionData(prev => ({ ...prev, resourceId: e.target.value }))}
                 />
               </div>
               <div>
@@ -810,7 +979,7 @@ export function RBACAdminPanel() {
                 <Input
                   placeholder="Why is this permission being granted?"
                   value={grantPermissionData.reason}
-                  onChange={(e) => setGrantPermissionData({ ...grantPermissionData, reason: e.target.value })}
+                  onChange={(e) => setGrantPermissionData(prev => ({ ...prev, reason: e.target.value }))}
                 />
               </div>
               <div>
@@ -818,7 +987,7 @@ export function RBACAdminPanel() {
                 <Input
                   type="datetime-local"
                   value={grantPermissionData.expiresAt}
-                  onChange={(e) => setGrantPermissionData({ ...grantPermissionData, expiresAt: e.target.value })}
+                  onChange={(e) => setGrantPermissionData(prev => ({ ...prev, expiresAt: e.target.value }))}
                 />
               </div>
               <div className="flex gap-2 justify-end">
@@ -826,7 +995,7 @@ export function RBACAdminPanel() {
                   Cancel
                 </Button>
                 <Button onClick={handleGrantPermission}>
-                  Grant Permission
+                  Grant Permissions
                 </Button>
               </div>
             </div>
@@ -834,77 +1003,114 @@ export function RBACAdminPanel() {
         </div>
       )}
 
-      {/* UI Permission Modal */}
+      {/* UI Permission Modal - Matrix Table */}
       {showUIPermission && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-md w-full p-6">
-            <h3 className="text-lg font-semibold mb-4">Set UI Permission</h3>
+          <div className="bg-white rounded-lg max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto">
+            <h3 className="text-lg font-semibold mb-1">UI Permissions Matrix</h3>
+            <p className="text-sm text-gray-500 mb-4">Toggle visibility and access for {selectedUser?.name}</p>
             <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-1">UI Element</label>
-                <select
-                  className="w-full border rounded-lg px-3 py-2"
-                  value={uiPermissionData.uiElement}
-                  onChange={(e) => setUIPermissionData({ ...uiPermissionData, uiElement: e.target.value })}
-                >
-                  <option value="dashboard">Dashboard</option>
-                  <option value="media_library">Media Library</option>
-                  <option value="file_requests">File Requests</option>
-                  <option value="launch_requests">Launch Requests</option>
-                  <option value="starred">Starred</option>
-                  <option value="recents">Recents</option>
-                  <option value="shared_with_me">Shared with me</option>
-                  <option value="trash">Trash</option>
-                  <option value="shared_by_you">Shared by You</option>
-                  <option value="teams">Teams</option>
-                  <option value="settings">Settings</option>
-                  <option value="access_requests">Access Requests</option>
-                  <option value="canvas">Canvas</option>
-                  <option value="analytics">Analytics</option>
-                  <option value="admin_panel">Admin Panel</option>
-                  <option value="editors">Editors</option>
-                  <option value="workload">Workload</option>
-                  <option value="metadata_extraction">Metadata Extraction</option>
-                  <option value="rbac_permissions">RBAC Permissions</option>
-                  <option value="activity_logs">Activity Logs</option>
-                  <option value="log_exports">Log Exports</option>
-                  <option value="faq_help">FAQ / Help</option>
-                  <option value="collections">Collections</option>
-                </select>
+              <div className="border rounded-lg overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-gray-100 border-b">
+                      <th className="text-left px-3 py-2 font-medium">UI Element</th>
+                      <th className="text-center px-3 py-2 font-medium w-20">Visible</th>
+                      <th className="text-center px-3 py-2 font-medium w-20">Enabled</th>
+                      <th className="text-left px-3 py-2 font-medium w-40">Custom Label</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {UI_ELEMENTS.map((el, idx) => {
+                      const settings = uiPermissionMatrix[el] || { isVisible: true, isEnabled: true, customLabel: '' };
+                      return (
+                        <tr key={el} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                          <td className="px-3 py-1.5 text-xs font-medium text-gray-700">
+                            {el.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+                          </td>
+                          <td className="text-center px-3 py-1.5">
+                            <input
+                              type="checkbox"
+                              checked={settings.isVisible}
+                              onChange={(e) => {
+                                setUIPermissionMatrix(prev => ({
+                                  ...prev,
+                                  [el]: { ...prev[el], isVisible: e.target.checked }
+                                }));
+                              }}
+                              className="w-4 h-4 rounded text-blue-600"
+                            />
+                          </td>
+                          <td className="text-center px-3 py-1.5">
+                            <input
+                              type="checkbox"
+                              checked={settings.isEnabled}
+                              onChange={(e) => {
+                                setUIPermissionMatrix(prev => ({
+                                  ...prev,
+                                  [el]: { ...prev[el], isEnabled: e.target.checked }
+                                }));
+                              }}
+                              className="w-4 h-4 rounded text-green-600"
+                            />
+                          </td>
+                          <td className="px-3 py-1.5">
+                            <input
+                              type="text"
+                              value={settings.customLabel}
+                              onChange={(e) => {
+                                setUIPermissionMatrix(prev => ({
+                                  ...prev,
+                                  [el]: { ...prev[el], customLabel: e.target.value }
+                                }));
+                              }}
+                              placeholder="Custom name..."
+                              className="w-full text-xs px-2 py-1 border rounded bg-white"
+                            />
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
-              <div className="flex items-center gap-4">
-                <label className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={uiPermissionData.isVisible}
-                    onChange={(e) => setUIPermissionData({ ...uiPermissionData, isVisible: e.target.checked })}
-                  />
-                  <span className="text-sm">Visible</span>
-                </label>
-                <label className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={uiPermissionData.isEnabled}
-                    onChange={(e) => setUIPermissionData({ ...uiPermissionData, isEnabled: e.target.checked })}
-                  />
-                  <span className="text-sm">Enabled</span>
-                </label>
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Custom Label (optional)</label>
-                <Input
-                  placeholder="Custom display name..."
-                  value={uiPermissionData.customLabel}
-                  onChange={(e) => setUIPermissionData({ ...uiPermissionData, customLabel: e.target.value })}
-                />
-              </div>
-              <div className="flex gap-2 justify-end">
-                <Button variant="outline" onClick={() => setShowUIPermission(false)}>
-                  Cancel
-                </Button>
-                <Button onClick={handleSetUIPermission}>
-                  Set Permission
-                </Button>
+              <div className="flex items-center justify-between">
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const allVisible: Record<string, any> = {};
+                      UI_ELEMENTS.forEach(el => {
+                        allVisible[el] = { ...uiPermissionMatrix[el], isVisible: true, isEnabled: true };
+                      });
+                      setUIPermissionMatrix(allVisible);
+                    }}
+                    className="text-xs text-blue-600 hover:underline"
+                  >
+                    Enable All
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const allHidden: Record<string, any> = {};
+                      UI_ELEMENTS.forEach(el => {
+                        allHidden[el] = { ...uiPermissionMatrix[el], isVisible: false, isEnabled: false };
+                      });
+                      setUIPermissionMatrix(allHidden);
+                    }}
+                    className="text-xs text-red-600 hover:underline"
+                  >
+                    Disable All
+                  </button>
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" onClick={() => setShowUIPermission(false)}>
+                    Cancel
+                  </Button>
+                  <Button onClick={handleSetUIPermission}>
+                    Save All Permissions
+                  </Button>
+                </div>
               </div>
             </div>
           </div>

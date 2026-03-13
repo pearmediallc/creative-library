@@ -93,7 +93,9 @@ export function MediaLibraryPage() {
   // Bulk editor state - checkboxes always visible
   const [selectionMode, setSelectionMode] = useState(true);
   const [selectedFiles, setSelectedFiles] = useState<string[]>([]);
+  const [selectedFolders, setSelectedFolders] = useState<string[]>([]);
   const [showBulkEditor, setShowBulkEditor] = useState(false);
+  const folderRefsMap = useRef<Map<string, HTMLElement>>(new Map());
 
   // Metadata viewer state
   const [metadataViewerFile, setMetadataViewerFile] = useState<{
@@ -272,6 +274,24 @@ export function MediaLibraryPage() {
           setSelectedFiles(prev => {
             const newSet = new Set(prev);
             intersectingIds.forEach(id => newSet.add(id));
+            return Array.from(newSet);
+          });
+        }
+        // Also check folder cards for lasso selection
+        const intersectingFolderIds: string[] = [];
+        folderRefsMap.current.forEach((el, id) => {
+          const cardRect = el.getBoundingClientRect();
+          const folderIntersects =
+            cardRect.left < rect.right &&
+            cardRect.right > rect.left &&
+            cardRect.top < rect.bottom &&
+            cardRect.bottom > rect.top;
+          if (folderIntersects) intersectingFolderIds.push(id);
+        });
+        if (intersectingFolderIds.length > 0) {
+          setSelectedFolders(prev => {
+            const newSet = new Set(prev);
+            intersectingFolderIds.forEach(id => newSet.add(id));
             return Array.from(newSet);
           });
         }
@@ -1147,7 +1167,7 @@ export function MediaLibraryPage() {
               <div className="flex-1">
                 <input
                   type="text"
-                  placeholder="Search by filename..."
+                  placeholder="Search files across all folders..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -1256,13 +1276,29 @@ export function MediaLibraryPage() {
                 <p className="text-muted-foreground">Loading...</p>
               </div>
             ) : (
-              <>
+              <div ref={gridContainerRef} className="relative select-none" onMouseDown={handleLassoMouseDown}>
+                {/* Lasso overlay */}
+                {lassoActive && lassoRect && (
+                  <div
+                    style={{
+                      position: 'fixed',
+                      left: lassoRect.left,
+                      top: lassoRect.top,
+                      width: lassoRect.right - lassoRect.left,
+                      height: lassoRect.bottom - lassoRect.top,
+                      border: '2px dashed #3b82f6',
+                      backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                      pointerEvents: 'none',
+                      zIndex: 50,
+                    }}
+                  />
+                )}
                 {/* FOLDERS FIRST */}
                 {folders.length > 0 && (
                   <div>
                     <h2 className="text-lg font-semibold mb-4">Folders</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                      {folders.map((folder: any) => (
+                      {[...folders].sort((a: any, b: any) => (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' })).map((folder: any) => (
                         <div
                           key={folder.id}
                           onDrop={(e) => handleFolderDrop(e, folder.id)}
@@ -1278,6 +1314,19 @@ export function MediaLibraryPage() {
                             }}
                             onClick={() => handleFolderSelect(folder.id)}
                             onContextMenu={(e) => handleFolderContextMenu(folder, e)}
+                            isSelected={selectedFolders.includes(folder.id)}
+                            onToggleSelect={(e) => {
+                              e.stopPropagation();
+                              setSelectedFolders(prev =>
+                                prev.includes(folder.id)
+                                  ? prev.filter(id => id !== folder.id)
+                                  : [...prev, folder.id]
+                              );
+                            }}
+                            cardRef={(el) => {
+                              if (el) folderRefsMap.current.set(folder.id, el);
+                              else folderRefsMap.current.delete(folder.id);
+                            }}
                           />
                         </div>
                       ))}
@@ -1287,27 +1336,8 @@ export function MediaLibraryPage() {
 
                 {/* FILES */}
                 {filteredFiles.length > 0 ? (
-                  <div
-                    ref={gridContainerRef}
-                    className="relative select-none"
-                    onMouseDown={handleLassoMouseDown}
-                  >
-                    {/* Lasso overlay */}
-                    {lassoActive && lassoRect && (
-                      <div
-                        style={{
-                          position: 'fixed',
-                          left: lassoRect.left,
-                          top: lassoRect.top,
-                          width: lassoRect.right - lassoRect.left,
-                          height: lassoRect.bottom - lassoRect.top,
-                          border: '2px dashed #3b82f6',
-                          backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                          pointerEvents: 'none',
-                          zIndex: 50,
-                        }}
-                      />
-                    )}
+                  <div className="relative">
+
                     {folders.length > 0 && <h2 className="text-lg font-semibold mb-4 mt-8">Files</h2>}
                     {viewMode === 'grid' ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -1781,7 +1811,7 @@ export function MediaLibraryPage() {
                     <p className="text-muted-foreground">No files or folders found</p>
                   </Card>
                 ) : null}
-              </>
+              </div>
             )}
           </div>
         </div>

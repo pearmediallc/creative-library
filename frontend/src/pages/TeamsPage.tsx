@@ -350,6 +350,7 @@ function CreateTeamModal({
                       setShowUserDropdown(e.target.value.length > 0);
                     }}
                     onFocus={() => searchQuery.length > 0 && setShowUserDropdown(true)}
+                    onBlur={() => setTimeout(() => setShowUserDropdown(false), 200)}
                     placeholder="Search users by name or email..."
                     className="w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
                     disabled={submitting || loadingUsers}

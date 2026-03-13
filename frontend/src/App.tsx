@@ -31,6 +31,8 @@ import { AccessRequestsPage } from './pages/AccessRequestsPage';
 import { LaunchRequestsPage } from './pages/LaunchRequestsPage';
 import { UploadStatusSidebar } from './components/UploadStatusSidebar';
 import { UploadNotifications } from './components/UploadNotifications';
+import { UploadProvider } from './contexts/UploadContext';
+import { UploadProgressWidget } from './components/UploadProgressWidget';
 
 function PrivateRoute({ children }: { children: React.ReactElement }) {
   const { user, loading } = useAuth();
@@ -322,9 +324,12 @@ function App() {
     <BrowserRouter>
       <AuthProvider>
         <PermissionsProvider>
-          <AppRoutes />
-          <UploadStatusSidebar />
-          <UploadNotifications />
+          <UploadProvider>
+            <AppRoutes />
+            <UploadStatusSidebar />
+            <UploadNotifications />
+            <UploadProgressWidget />
+          </UploadProvider>
         </PermissionsProvider>
       </AuthProvider>
     </BrowserRouter>

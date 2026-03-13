@@ -83,7 +83,9 @@ export function FolderTree({
   };
 
   const getChildFolders = (parentId: string | null) => {
-    return folders.filter(f => f.parent_folder_id === parentId);
+    return folders
+      .filter(f => f.parent_folder_id === parentId)
+      .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
   };
 
   const renderFolder = (folder: FolderNode) => {

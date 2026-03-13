@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { X, Upload, CheckCircle, XCircle, AlertCircle, Loader, Trash2, RotateCcw, FolderOpen, ChevronRight, ChevronDown, Folder } from 'lucide-react';
 import { useFileUpload, formatBytes, formatSpeed, formatTimeRemaining } from '../hooks/useFileUpload';
 
@@ -112,15 +112,29 @@ export function BatchUploadModal({
         });
       } else if (entry.isDirectory) {
         const dirReader = entry.createReader();
-        return new Promise((resolve) => {
-          dirReader.readEntries(async (entries: any[]) => {
-            for (const subEntry of entries) {
-              const newPath = path ? `${path}/${entry.name}` : entry.name;
-              await processEntry(subEntry, newPath);
-            }
-            resolve();
+        // readEntries may not return all entries at once for large directories
+        // Keep calling until it returns an empty array
+        const readAllEntries = (): Promise<any[]> => {
+          return new Promise((resolve) => {
+            const allEntries: any[] = [];
+            const readBatch = () => {
+              dirReader.readEntries((entries: any[]) => {
+                if (entries.length === 0) {
+                  resolve(allEntries);
+                } else {
+                  allEntries.push(...entries);
+                  readBatch();
+                }
+              });
+            };
+            readBatch();
           });
-        });
+        };
+        const entries = await readAllEntries();
+        for (const subEntry of entries) {
+          const newPath = path ? `${path}/${entry.name}` : entry.name;
+          await processEntry(subEntry, newPath);
+        }
       }
     };
 
@@ -176,6 +190,19 @@ export function BatchUploadModal({
     e.stopPropagation();
   }, []);
 
+  const [uploadJustFinished, setUploadJustFinished] = useState(false);
+
+  // Detect when upload finishes and call onSuccess if no errors
+  // This runs after React re-renders with fresh stats
+  useEffect(() => {
+    if (uploadJustFinished && !isUploading) {
+      setUploadJustFinished(false);
+      if (stats.error === 0 && stats.success > 0) {
+        onSuccess();
+      }
+    }
+  }, [uploadJustFinished, isUploading, stats.error, stats.success, onSuccess]);
+
   const handleUpload = async () => {
     await uploadAll({
       editorId,
@@ -188,9 +215,7 @@ export function BatchUploadModal({
       addMetadata,
     });
 
-    if (stats.error === 0) {
-      onSuccess();
-    }
+    setUploadJustFinished(true);
   };
 
   const handleClose = () => {
@@ -428,7 +453,7 @@ export function BatchUploadModal({
                   onChange={handleFolderSelect}
                   className="hidden"
                   id="folder-input"
-                  {...({ webkitdirectory: '', directory: '' } as any)}
+                  {...({ webkitdirectory: 'true', directory: 'true' } as any)}
                 />
                 <label
                   htmlFor="folder-input"
@@ -590,7 +615,7 @@ export function BatchUploadModal({
                   className="hidden"
                   id="add-more-folders"
                   disabled={isUploading}
-                  {...({ webkitdirectory: '', directory: '' } as any)}
+                  {...({ webkitdirectory: 'true', directory: 'true' } as any)}
                 />
                 <label
                   htmlFor="add-more-folders"

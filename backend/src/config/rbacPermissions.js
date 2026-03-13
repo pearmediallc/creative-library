@@ -14,6 +14,30 @@ const RBAC_PERMISSIONS = {
     users: ['view', 'create', 'edit', 'delete', 'assign_roles'],
     teams: ['view', 'create', 'edit', 'delete', 'manage_members'],
   },
+  ceo: {
+    media: ['view', 'upload', 'download', 'edit', 'delete', 'move', 'copy', 'share', 'bulk_edit', 'bulk_delete', 'bulk_download', 'bulk_move', 'bulk_copy'],
+    folders: ['view', 'create', 'rename', 'delete', 'share', 'color'],
+    file_requests: ['view', 'create', 'edit', 'delete', 'duplicate', 'close', 'launch', 'reopen', 'reassign', 'upload'],
+    workload: ['view', 'manage_capacity'],
+    users: ['view', 'create', 'edit', 'delete', 'assign_roles'],
+    teams: ['view', 'create', 'edit', 'delete', 'manage_members'],
+  },
+  head_media_buying: {
+    media: ['view', 'upload', 'download', 'edit', 'delete', 'move', 'copy', 'share', 'bulk_edit', 'bulk_delete', 'bulk_download', 'bulk_move', 'bulk_copy'],
+    folders: ['view', 'create', 'rename', 'delete', 'share', 'color'],
+    file_requests: ['view', 'create', 'edit', 'delete', 'duplicate', 'close', 'launch', 'reopen', 'reassign', 'upload'],
+    workload: ['view', 'manage_capacity'],
+    users: ['view', 'create', 'edit', 'delete', 'assign_roles'],
+    teams: ['view', 'create', 'edit', 'delete', 'manage_members'],
+  },
+  creative_head: {
+    media: ['view', 'upload', 'download', 'edit', 'delete', 'move', 'copy', 'share', 'bulk_edit', 'bulk_delete', 'bulk_download', 'bulk_move', 'bulk_copy'],
+    folders: ['view', 'create', 'rename', 'delete', 'share', 'color'],
+    file_requests: ['view', 'create', 'edit', 'delete', 'duplicate', 'close', 'launch', 'reopen', 'reassign', 'upload'],
+    workload: ['view', 'manage_capacity'],
+    users: ['view', 'create', 'edit', 'delete', 'assign_roles'],
+    teams: ['view', 'create', 'edit', 'delete', 'manage_members'],
+  },
   buyer: {
     media: ['view', 'download', 'share', 'bulk_download'],
     folders: ['view', 'create', 'share'],
@@ -71,7 +95,7 @@ const ALL_ACTIONS = {
 /**
  * All role names
  */
-const ROLES = ['admin', 'buyer', 'creative', 'vertical_head', 'team_lead', 'assistant_team_lead'];
+const ROLES = ['admin', 'ceo', 'head_media_buying', 'creative_head', 'buyer', 'creative', 'vertical_head', 'team_lead', 'assistant_team_lead'];
 
 /**
  * Check if a given set of roles (primary + additional) has permission for a resource action.
