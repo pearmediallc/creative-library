@@ -279,12 +279,15 @@ export function AdminPage() {
                       <option value="team_lead">Team Lead</option>
                       <option value="assistant_team_lead">Assistant Team Lead (ATL)</option>
                       <option value="admin">Admin</option>
+                      <option value="ceo">CEO</option>
+                      <option value="head_media_buying">Head of Media Buying</option>
+                      <option value="creative_head">Creative Head</option>
                     </select>
                   </div>
                   <div className="space-y-2 col-span-2">
                     <label className="text-sm font-medium">Additional Roles (optional)</label>
                     <div className="flex flex-wrap gap-2">
-                      {['creative', 'buyer', 'team_lead', 'assistant_team_lead', 'vertical_head', 'admin'].filter(r => r !== formData.role).map(r => (
+                      {['creative', 'buyer', 'team_lead', 'assistant_team_lead', 'vertical_head', 'admin', 'ceo', 'head_media_buying', 'creative_head'].filter(r => r !== formData.role).map(r => (
                         <label key={r} className="flex items-center gap-1.5 px-2 py-1 rounded border border-input hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer">
                           <input
                             type="checkbox"
@@ -466,7 +469,7 @@ export function AdminPage() {
                         <div className="col-span-4 mt-2">
                           <label className="text-sm font-medium text-muted-foreground mb-1 block">Additional Roles</label>
                           <div className="flex flex-wrap gap-2">
-                            {['creative', 'buyer', 'team_lead', 'assistant_team_lead', 'vertical_head', 'admin'].filter(r => r !== formData.role).map(r => (
+                            {['creative', 'buyer', 'team_lead', 'assistant_team_lead', 'vertical_head', 'admin', 'ceo', 'head_media_buying', 'creative_head'].filter(r => r !== formData.role).map(r => (
                               <label key={r} className="flex items-center gap-1 text-sm px-2 py-0.5 rounded border border-input hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer">
                                 <input
                                   type="checkbox"

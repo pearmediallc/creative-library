@@ -71,21 +71,42 @@ async function createTeam(req, res) {
 async function getUserTeams(req, res) {
   try {
     const userId = req.user.id;
+    const userRole = req.user.role;
 
-    const result = await query(
-      `SELECT
-        t.*,
-        tm.team_role,
-        u.name as owner_username,
-        (SELECT COUNT(*) FROM team_members WHERE team_id = t.id) as member_count,
-        (SELECT COUNT(*) FROM folders WHERE team_id = t.id) as folder_count
-       FROM teams t
-       JOIN team_members tm ON t.id = tm.team_id
-       LEFT JOIN users u ON t.owner_id = u.id
-       WHERE tm.user_id = $1
-       ORDER BY t.created_at DESC`,
-      [userId]
-    );
+    // Admin-level roles can see ALL teams; others see only their teams
+    const adminRoles = ['admin', 'ceo', 'head_media_buying', 'creative_head', 'buyer', 'team_lead', 'assistant_team_lead', 'vertical_head'];
+    const isAdmin = adminRoles.includes(userRole);
+
+    let result;
+    if (isAdmin) {
+      result = await query(
+        `SELECT
+          t.*,
+          'admin' as team_role,
+          u.name as owner_username,
+          (SELECT COUNT(*) FROM team_members WHERE team_id = t.id) as member_count,
+          (SELECT COUNT(*) FROM folders WHERE team_id = t.id) as folder_count
+         FROM teams t
+         LEFT JOIN users u ON t.owner_id = u.id
+         ORDER BY t.created_at DESC`
+      );
+    } else {
+      // For non-admins: show teams they belong to OR teams they own
+      result = await query(
+        `SELECT
+          t.*,
+          COALESCE(tm.team_role, 'owner') as team_role,
+          u.name as owner_username,
+          (SELECT COUNT(*) FROM team_members WHERE team_id = t.id) as member_count,
+          (SELECT COUNT(*) FROM folders WHERE team_id = t.id) as folder_count
+         FROM teams t
+         LEFT JOIN team_members tm ON t.id = tm.team_id AND tm.user_id = $1
+         LEFT JOIN users u ON t.owner_id = u.id
+         WHERE tm.user_id = $1 OR t.owner_id = $1
+         ORDER BY t.created_at DESC`,
+        [userId]
+      );
+    }
 
     res.json({
       success: true,

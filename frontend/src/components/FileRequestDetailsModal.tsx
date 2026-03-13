@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { X, Copy, Calendar, Folder, Mail, CheckCircle, Clock, FileText, Upload as UploadIcon, Rocket, XCircle, RotateCcw, UserPlus, Edit2, ChevronDown, ChevronRight, Download, Eye, Play, List, Grid3X3, LayoutGrid, Trash2 } from 'lucide-react';
 import { Button } from './ui/Button';
 import { fileRequestApi, mediaApi } from '../lib/api';
@@ -318,6 +318,7 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
   const [showReassignModal, setShowReassignModal] = useState(false);
   const [showUploadHistory, setShowUploadHistory] = useState(false);
   const [uploadViewMode, setUploadViewMode] = useState<'list' | 'grid' | 'tile'>('list');
+  const [uploadSearchTerm, setUploadSearchTerm] = useState('');
   const [reassignments, setReassignments] = useState<any[]>([]);
   const [expandedReassignments, setExpandedReassignments] = useState<Set<string>>(new Set());
 
@@ -331,6 +332,16 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
 
   // Duplicate modal state
   const [showDuplicateModal, setShowDuplicateModal] = useState(false);
+
+  // Filter uploads by search term
+  const filteredUploadsForSearch = useMemo(() => {
+    if (!uploadSearchTerm.trim() || !request) return request?.uploads || [];
+    const q = uploadSearchTerm.toLowerCase();
+    return request.uploads.filter((u: any) =>
+      u.original_filename?.toLowerCase().includes(q) ||
+      u.request_folder_name?.toLowerCase().includes(q)
+    );
+  }, [request?.uploads, uploadSearchTerm]);
 
   useEffect(() => {
     fetchRequestDetails();
@@ -2048,9 +2059,16 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
                               const files = Array.from(e.target.files || []);
                               setSelectedFiles(prev => [...prev, ...files]);
                             }}
-                            className="text-sm text-gray-700 dark:text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-green-50 file:text-green-700 hover:file:bg-green-100 dark:file:bg-green-900 dark:file:text-green-200"
+                            className="hidden"
+                            id="folder-upload-input"
                             disabled={uploading}
                           />
+                          <label
+                            htmlFor="folder-upload-input"
+                            className="inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium bg-green-50 text-green-700 hover:bg-green-100 dark:bg-green-900 dark:text-green-200 cursor-pointer"
+                          >
+                            Select Folder
+                          </label>
                         </div>
                       )}
 
@@ -2162,7 +2180,7 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-3">
                 <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Uploaded Files ({request.uploads.length})
+                  Uploaded Files ({filteredUploadsForSearch.length}{filteredUploadsForSearch.length !== request.uploads.length ? ` of ${request.uploads.length}` : ''})
                 </h3>
                 {/* View Mode Toggle */}
                 <div className="flex items-center border border-gray-200 dark:border-gray-600 rounded-md overflow-hidden">
@@ -2181,6 +2199,13 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
 
               {request.uploads.length > 0 && (
                 <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={uploadSearchTerm}
+                    onChange={(e) => setUploadSearchTerm(e.target.value)}
+                    placeholder="Search files..."
+                    className="h-7 px-2 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 dark:text-white focus:ring-1 focus:ring-blue-500 w-40"
+                  />
                   <label className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 cursor-pointer">
                     <input
                       type="checkbox"
@@ -2233,7 +2258,7 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
             {request.uploads.length > 0 ? (
               <FileRequestOrganizer
                 requestId={requestId}
-                uploads={request.uploads}
+                uploads={filteredUploadsForSearch}
                 canOrganize={!!(user && (
                   isAdminRole(user.role) ||
                   request.auto_assigned_head === user.id

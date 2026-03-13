@@ -669,23 +669,52 @@ export function RBACAdminPanel() {
 
         {/* Roles Tab */}
         {activeTab === 'roles' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {roles.map((role) => (
-              <Card key={role.id}>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Shield className="w-5 h-5 text-blue-600" />
-                    {role.name}
-                  </CardTitle>
-                  {role.is_system_role && (
-                    <span className="text-xs bg-gray-200 px-2 py-1 rounded">System Role</span>
-                  )}
-                </CardHeader>
-                <CardContent>
-                  <p className="text-gray-600 text-sm">{role.description}</p>
-                </CardContent>
-              </Card>
-            ))}
+          <div>
+            <h3 className="text-lg font-semibold mb-4">System Roles</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+              {roles.map((role) => (
+                <Card key={role.id}>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Shield className="w-5 h-5 text-blue-600" />
+                      {role.name}
+                    </CardTitle>
+                    {role.is_system_role && (
+                      <span className="text-xs bg-gray-200 px-2 py-1 rounded">System Role</span>
+                    )}
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-gray-600 text-sm">{role.description}</p>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+            <h3 className="text-lg font-semibold mb-4">Application Roles</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {[
+                { name: 'CEO', key: 'ceo', description: 'Full administrative access with all permissions' },
+                { name: 'Head of Media Buying', key: 'head_media_buying', description: 'Full administrative access to media buying operations' },
+                { name: 'Creative Head', key: 'creative_head', description: 'Full administrative access to creative operations' },
+                { name: 'Buyer', key: 'buyer', description: 'Can create file requests and view assigned files' },
+                { name: 'Creative', key: 'creative', description: 'Can upload files and manage assigned work' },
+                { name: 'Vertical Head', key: 'vertical_head', description: 'Manages verticals and oversees file requests' },
+                { name: 'Team Lead', key: 'team_lead', description: 'Manages team file requests across all verticals and analytics for assigned verticals' },
+                { name: 'Assistant Team Lead', key: 'assistant_team_lead', description: 'File requests and editor view across all verticals' },
+              ].map((role) => (
+                <Card key={role.key}>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Shield className="w-5 h-5 text-purple-600" />
+                      {role.name}
+                    </CardTitle>
+                    <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded">App Role</span>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-gray-600 text-sm">{role.description}</p>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
           </div>
         )}
 

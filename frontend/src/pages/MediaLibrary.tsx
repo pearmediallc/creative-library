@@ -424,6 +424,15 @@ export function MediaLibraryPage() {
     setCurrentPage(1);
   }, [filters.filters, currentFolderId, selectedOrgUser]);
 
+  // Debounced global search - refetch when search term changes
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetchData();
+      setCurrentPage(1);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
   // Handle opening file from URL parameter after files are loaded
   useEffect(() => {
     const pendingFileId = (window as any).__pendingFileId;
@@ -445,7 +454,22 @@ export function MediaLibraryPage() {
     try {
       setLoading(true);
 
-      if (currentFolderId) {
+      // Global search: when user is searching, fetch ALL files across all folders
+      if (searchTerm.trim()) {
+        const queryParams = filters.toQueryParams();
+        // Don't restrict to any folder - search globally
+        delete queryParams.folder_id;
+        queryParams.search = searchTerm.trim();
+
+        const [filesRes, editorsRes] = await Promise.all([
+          mediaApi.getAll(queryParams),
+          editorApi.getAll(),
+        ]);
+
+        setFiles(filesRes.data.data.files || []);
+        setEditors(editorsRes.data.data || []);
+        // Don't clear folders/breadcrumb during search - keep navigation state
+      } else if (currentFolderId) {
         // Fetch folder contents and breadcrumb
         const [contentsRes, breadcrumbRes, editorsRes] = await Promise.all([
           folderApi.getContents(currentFolderId),
