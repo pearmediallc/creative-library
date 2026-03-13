@@ -13,6 +13,7 @@ interface FolderNode {
   path: string[];
   s3_path: string;
   created_at: string;
+  color?: string;
   team_id?: string;
   team_name?: string;
 }
@@ -123,9 +124,9 @@ export function FolderTree({
           {/* Folder Icon */}
           <div onClick={() => onFolderSelect(folder.id)} className="flex items-center gap-2 flex-1 min-w-0">
             {isExpanded ? (
-              <FolderOpen className="w-4 h-4 text-yellow-500 flex-shrink-0" />
+              <FolderOpen className="w-4 h-4 flex-shrink-0" style={{ color: folder.color || '#f59e0b' }} />
             ) : (
-              <Folder className="w-4 h-4 text-yellow-500 flex-shrink-0" />
+              <Folder className="w-4 h-4 flex-shrink-0" style={{ color: folder.color || '#f59e0b' }} />
             )}
             <span className="text-sm truncate flex-1">{folder.name}</span>
             {folder.team_id && (

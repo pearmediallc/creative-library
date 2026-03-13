@@ -45,7 +45,7 @@ const RBAC_PERMISSIONS: Record<string, Record<string, string[]>> = {
   assistant_team_lead: {
     media: ['view', 'upload', 'download', 'edit', 'move', 'copy', 'share', 'bulk_edit', 'bulk_download', 'bulk_move', 'bulk_copy'],
     folders: ['view', 'create', 'rename', 'share', 'color'],
-    file_requests: ['view', 'create', 'edit', 'upload'],
+    file_requests: ['view', 'create', 'edit', 'reassign', 'upload'],
     workload: ['view'],
     teams: ['view'],
   },

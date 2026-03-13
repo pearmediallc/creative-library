@@ -733,18 +733,19 @@ export function FileRequestOrganizer({
           onClick={() => toggleFolder(folderId)}
         >
           {/* Thumbnail preview grid */}
-          <div className="aspect-[4/3] bg-gray-100 dark:bg-gray-800 relative overflow-hidden">
+          <div className="aspect-square bg-gray-100 dark:bg-gray-800 relative overflow-hidden">
             {previews.length > 0 ? (
-              <div className={`w-full h-full grid ${previews.length === 1 ? 'grid-cols-1' : 'grid-cols-2'} gap-px`}>
-                {previews.map((u, i) => (
-                  <img
-                    key={u.id}
-                    src={u.thumbnail_url}
-                    alt=""
-                    className="w-full h-full object-cover"
-                  />
+              <div className="w-full h-full grid grid-cols-2 grid-rows-2 gap-0.5">
+                {previews.map((u) => (
+                  <div key={u.id} className="overflow-hidden bg-gray-200 dark:bg-gray-700">
+                    <img
+                      src={u.thumbnail_url}
+                      alt=""
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
                 ))}
-                {previews.length < 4 && previews.length > 1 && Array.from({ length: 4 - previews.length }).map((_, i) => (
+                {Array.from({ length: Math.max(0, 4 - previews.length) }).map((_, i) => (
                   <div key={`empty-${i}`} className="bg-gray-200 dark:bg-gray-700" />
                 ))}
               </div>

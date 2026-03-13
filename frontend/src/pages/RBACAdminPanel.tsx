@@ -823,11 +823,28 @@ export function RBACAdminPanel() {
                   onChange={(e) => setUIPermissionData({ ...uiPermissionData, uiElement: e.target.value })}
                 >
                   <option value="dashboard">Dashboard</option>
-                  <option value="file_requests">File Requests</option>
                   <option value="media_library">Media Library</option>
+                  <option value="file_requests">File Requests</option>
+                  <option value="launch_requests">Launch Requests</option>
+                  <option value="starred">Starred</option>
+                  <option value="recents">Recents</option>
+                  <option value="shared_with_me">Shared with me</option>
+                  <option value="trash">Trash</option>
+                  <option value="shared_by_you">Shared by You</option>
+                  <option value="teams">Teams</option>
+                  <option value="settings">Settings</option>
+                  <option value="access_requests">Access Requests</option>
                   <option value="canvas">Canvas</option>
                   <option value="analytics">Analytics</option>
                   <option value="admin_panel">Admin Panel</option>
+                  <option value="editors">Editors</option>
+                  <option value="workload">Workload</option>
+                  <option value="metadata_extraction">Metadata Extraction</option>
+                  <option value="rbac_permissions">RBAC Permissions</option>
+                  <option value="activity_logs">Activity Logs</option>
+                  <option value="log_exports">Log Exports</option>
+                  <option value="faq_help">FAQ / Help</option>
+                  <option value="collections">Collections</option>
                 </select>
               </div>
               <div className="flex items-center gap-4">

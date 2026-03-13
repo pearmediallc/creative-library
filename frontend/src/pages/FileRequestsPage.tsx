@@ -5,7 +5,7 @@ import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { fileRequestApi, editorApi } from '../lib/api';
 import { formatDate, formatDateTime } from '../lib/utils';
-import { Inbox, Plus, Link as LinkIcon, Copy, XCircle, Trash2, CheckCircle, UserPlus, Search, Filter, List, Grid, Rocket, RotateCcw } from 'lucide-react';
+import { Inbox, Plus, Link as LinkIcon, Copy, XCircle, Trash2, CheckCircle, UserPlus, Search, Filter, List, Grid, Rocket, RotateCcw, Eye } from 'lucide-react';
 import { SearchableSelect } from '../components/ui/SearchableSelect';
 import { CreateFileRequestModal } from '../components/CreateFileRequestModal';
 import { FileRequestDetailsModal } from '../components/FileRequestDetailsModal';
@@ -599,34 +599,28 @@ export function FileRequestsPage() {
                       </td>
                       <td className="p-4">
                         <div className="flex items-center gap-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleCopyLink(request.request_token)}
-                            title="Copy Link"
-                          >
-                            <Copy className="w-4 h-4" />
-                          </Button>
+                          {/* 1. View Details */}
                           <Button
                             variant="ghost"
                             size="sm"
                             onClick={() => handleViewDetails(request)}
                             title="View Details"
                           >
-                            <LinkIcon className="w-4 h-4" />
+                            <Eye className="w-4 h-4" />
                           </Button>
-                          {isAdminRole(user?.role) && (
+                          {/* 2. Close */}
+                          {request.is_active && (
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => handleReassign(request)}
-                              title="Reassign"
+                              onClick={() => handleCloseRequest(request.id)}
+                              title="Close"
                             >
-                              <UserPlus className="w-4 h-4" />
+                              <XCircle className="w-4 h-4" />
                             </Button>
                           )}
-                          {/* Launch button - creator/buyer when status is uploaded */}
-                          {(user?.id === request.created_by || user?.id === request.assigned_buyer_id) &&
+                          {/* 3. Launch */}
+                          {(user?.id === request.created_by || user?.id === request.assigned_buyer_id || (request as any).assigned_buyer_ids?.includes(user?.id)) &&
                            request.status === 'uploaded' && (
                             <Button
                               variant="ghost"
@@ -638,7 +632,7 @@ export function FileRequestsPage() {
                               <Rocket className="w-4 h-4" />
                             </Button>
                           )}
-                          {/* Reopen button - creator/buyer when status is closed */}
+                          {/* 4. Reopen */}
                           {(user?.id === request.created_by || user?.id === request.assigned_buyer_id) &&
                            request.status === 'closed' && (
                             <Button
@@ -651,16 +645,16 @@ export function FileRequestsPage() {
                               <RotateCcw className="w-4 h-4" />
                             </Button>
                           )}
-                          {request.is_active && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleCloseRequest(request.id)}
-                              title="Close"
-                            >
-                              <XCircle className="w-4 h-4" />
-                            </Button>
-                          )}
+                          {/* 5. Copy Link */}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleCopyLink(request.request_token)}
+                            title="Copy Link"
+                          >
+                            <Copy className="w-4 h-4" />
+                          </Button>
+                          {/* 6. Delete */}
                           <Button
                             variant="ghost"
                             size="sm"
@@ -669,6 +663,17 @@ export function FileRequestsPage() {
                           >
                             <Trash2 className="w-4 h-4" />
                           </Button>
+                          {/* 7. Duplicate */}
+                          {(user?.role === 'buyer' || isAdminRole(user?.role)) && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleViewDetails(request)}
+                              title="Duplicate Request"
+                            >
+                              <Copy className="w-4 h-4 text-purple-500" />
+                            </Button>
+                          )}
                         </div>
                       </td>
                     </tr>

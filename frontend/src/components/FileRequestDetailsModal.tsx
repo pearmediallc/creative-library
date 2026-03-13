@@ -1124,9 +1124,12 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
     setShowDuplicateModal(true);
   };
 
-  // Determine if user can reassign
+  // Determine if user can reassign - admins, vertical heads, and ATLs with reassign permission
+  const userRole = user?.role as string;
   const canReassign = user && request && (
-    isAdminRole(user.role) ||
+    isAdminRole(userRole) ||
+    userRole === 'vertical_head' ||
+    userRole === 'assistant_team_lead' ||
     request.auto_assigned_head === user.id
   );
 

@@ -524,12 +524,24 @@ class PermissionController {
         return false;
       } else if (resourceType === 'folder') {
         const folder = await Folder.findById(resourceId);
-        if (folder && folder.created_by === userId) {
-          return true; // User created the folder
+
+        // Check if user owns the folder
+        if (folder && (folder.owner_id === userId || folder.created_by === userId)) {
+          return true;
         }
 
+        // Check if user has an explicit permission on this folder
+        const existingPerm = await query(
+          `SELECT 1 FROM file_permissions
+           WHERE resource_type = 'folder' AND resource_id = $1
+             AND grantee_type = 'user' AND grantee_id = $2
+             AND (expires_at IS NULL OR expires_at > NOW())
+           LIMIT 1`,
+          [resourceId, userId]
+        );
+        if (existingPerm.rows.length > 0) return true;
+
         // Check if user is the CREATOR of a file request targeting this folder
-        // Only request creators can share folders, not assigned buyers
         const fileRequestCreator = await query(
           `SELECT 1 FROM file_requests
            WHERE folder_id = $1
@@ -537,10 +549,7 @@ class PermissionController {
            LIMIT 1`,
           [resourceId, userId]
         );
-
-        if (fileRequestCreator.rows.length > 0) {
-          return true; // User created the file request for this folder
-        }
+        if (fileRequestCreator.rows.length > 0) return true;
 
         // Check if user is an assigned buyer on a file request targeting this folder
         const assignedBuyer = await query(
@@ -552,8 +561,11 @@ class PermissionController {
         );
         if (assignedBuyer.rows.length > 0) return true;
 
-        // Check if user owns the folder
-        if (folder && folder.owner_id === userId) return true;
+        // Check parent folder ownership (for nested folders)
+        if (folder && folder.parent_folder_id) {
+          const parentOwner = await query('SELECT owner_id FROM folders WHERE id = $1', [folder.parent_folder_id]);
+          if (parentOwner.rows.length > 0 && parentOwner.rows[0].owner_id === userId) return true;
+        }
 
         return false;
       }

@@ -57,10 +57,8 @@ class Folder extends BaseModel {
           SELECT
             f.*,
             (
-              SELECT COUNT(*)
-              FROM media_files mf
-              WHERE mf.folder_id = f.id
-                AND mf.is_deleted = FALSE
+              (SELECT COUNT(*) FROM media_files mf WHERE mf.folder_id = f.id AND mf.is_deleted = FALSE)
+              + (SELECT COUNT(*) FROM folders f2 WHERE f2.parent_folder_id = f.id AND f2.is_deleted = FALSE)
             )::int as file_count,
             0 as depth,
             ARRAY[f.id] as path
@@ -98,10 +96,8 @@ class Folder extends BaseModel {
           SELECT
             f.*,
             (
-              SELECT COUNT(*)
-              FROM media_files mf
-              WHERE mf.folder_id = f.id
-                AND mf.is_deleted = FALSE
+              (SELECT COUNT(*) FROM media_files mf WHERE mf.folder_id = f.id AND mf.is_deleted = FALSE)
+              + (SELECT COUNT(*) FROM folders f2 WHERE f2.parent_folder_id = f.id AND f2.is_deleted = FALSE)
             )::int as file_count,
             ft.depth + 1,
             ft.path || f.id
@@ -288,7 +284,7 @@ class Folder extends BaseModel {
           f.created_at,
           f.color,
           f.description,
-          COUNT(mf.id) as file_count
+          (COUNT(mf.id) + (SELECT COUNT(*) FROM folders f2 WHERE f2.parent_folder_id = f.id AND f2.is_deleted = FALSE))::int as file_count
         FROM folders f
         LEFT JOIN media_files mf ON mf.folder_id = f.id AND mf.is_deleted = FALSE
         WHERE f.parent_folder_id ${parentFolderId ? '= $1' : 'IS NULL'}
@@ -344,7 +340,8 @@ class Folder extends BaseModel {
       // Get subfolders with file_count (direct children only)
       const foldersResult = await query(
         `SELECT f.*,
-                (SELECT COUNT(*) FROM media_files mf WHERE mf.folder_id = f.id AND mf.is_deleted = FALSE)::int AS file_count
+                ((SELECT COUNT(*) FROM media_files mf WHERE mf.folder_id = f.id AND mf.is_deleted = FALSE)
+                 + (SELECT COUNT(*) FROM folders f2 WHERE f2.parent_folder_id = f.id AND f2.is_deleted = FALSE))::int AS file_count
          FROM folders f
          WHERE f.parent_folder_id = $1 AND f.is_deleted = FALSE
          ORDER BY f.name`,

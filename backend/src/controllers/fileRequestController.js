@@ -417,65 +417,9 @@ class FileRequestController {
 
       const fileRequest = result.rows[0];
 
-      // ✨ Ensure each request gets its own sub-folder inside the buyer's dated folder
-      // Desired structure: BuyerName-YYYY-MM-DD/<RequestTitle (or token)>/
-      // We create the subfolder AFTER the request insert so we can include a stable unique suffix.
-      if (targetFolderId) {
-        try {
-          const sanitizedTitle = (requestTitle || 'Request')
-            .trim()
-            .replace(/[\\/:*?"<>|]/g, '-')
-            .replace(/\s+/g, ' ')
-            .slice(0, 60);
-
-          const shortToken = (fileRequest.request_token || '').slice(0, 8) || fileRequest.id.slice(0, 8);
-          const subFolderName = `${sanitizedTitle}-${shortToken}`;
-
-          // Avoid duplicates if request is retried
-          const existingSub = await query(
-            `SELECT id FROM folders
-             WHERE parent_folder_id = $1
-               AND owner_id = $2
-               AND name = $3
-               AND is_deleted = FALSE
-             LIMIT 1`,
-            [targetFolderId, userId, subFolderName]
-          );
-
-          let subFolderId;
-          if (existingSub.rows.length > 0) {
-            subFolderId = existingSub.rows[0].id;
-          } else {
-            const requestSubFolder = await Folder.create({
-              name: subFolderName,
-              owner_id: userId,
-              parent_folder_id: targetFolderId,
-              description: `Assets for request: ${fileRequest.title}`,
-              color: '#10B981',
-              is_auto_created: true,
-              folder_type: 'file_request_item'
-            });
-            subFolderId = requestSubFolder.id;
-          }
-
-          // Point the request to the subfolder (uploads and browsing land here)
-          await query(
-            `UPDATE file_requests
-             SET folder_id = $1, updated_at = NOW()
-             WHERE id = $2`,
-            [subFolderId, fileRequest.id]
-          );
-
-          fileRequest.folder_id = subFolderId;
-        } catch (subFolderErr) {
-          // Non-fatal: request still exists, but folder structure will be flatter
-          logger.warn('Failed to create request subfolder (non-fatal)', {
-            requestId: fileRequest.id,
-            parentFolderId: targetFolderId,
-            error: subFolderErr.message
-          });
-        }
-      }
+      // The request's folder_id is already set to the nested type+vertical folder
+      // (e.g., "Stock-Video+Home-Insurance" inside "2026-03-13-Developer-test")
+      // No extra subfolder is needed - uploads go directly into the nested folder.
 
       // 🆕 INSERT PLATFORMS into junction table (if table exists)
       const hasPlatformVerticalTables = await this.checkPlatformVerticalTables();
@@ -2227,13 +2171,14 @@ class FileRequestController {
           }
         } else {
           // Fallback: if uploader is not matched as editor (admin/vertical head uploading),
-          // and there is exactly one editor assigned, credit that editor
-          const singleEditorCheck = await query(
+          // check if there are any editors assigned and credit them
+          const editorCheck = await query(
             `SELECT fre.editor_id FROM file_request_editors fre
              WHERE fre.request_id = $1 AND fre.status NOT IN ('reassigned', 'removed')`,
             [fileRequest.id]
           );
-          if (singleEditorCheck.rowCount === 1) {
+          if (editorCheck.rowCount === 1) {
+            // Single editor assigned - credit that editor
             await query(
               `UPDATE file_request_editors
                SET creatives_completed = LEAST(
@@ -2249,16 +2194,47 @@ class FileRequestController {
                    started_at = COALESCE(started_at, NOW()),
                    updated_at = CURRENT_TIMESTAMP
                WHERE request_id = $1 AND editor_id = $2`,
-              [fileRequest.id, singleEditorCheck.rows[0].editor_id]
+              [fileRequest.id, editorCheck.rows[0].editor_id]
             );
+          } else if (editorCheck.rowCount === 0) {
+            // NO editors assigned at all (VH/admin uploading solo)
+            // Auto-create a virtual editor entry for the uploader so progress tracks correctly
+            // First check if uploader has an editor record
+            const uploaderEditor = await query(
+              `SELECT id FROM editors WHERE user_id = $1 AND is_active = TRUE LIMIT 1`,
+              [userId]
+            );
+            if (uploaderEditor.rows.length > 0) {
+              const uploaderEditorId = uploaderEditor.rows[0].id;
+              // Create file_request_editors entry for the uploader
+              await query(
+                `INSERT INTO file_request_editors (request_id, editor_id, status, num_creatives_assigned, creatives_completed, deliverables_uploaded, started_at)
+                 VALUES ($1, $2, 'in_progress', COALESCE((SELECT num_creatives FROM file_requests WHERE id = $1), 0), 1, 1, NOW())
+                 ON CONFLICT (request_id, editor_id) DO UPDATE SET
+                   creatives_completed = COALESCE(file_request_editors.creatives_completed, 0) + 1,
+                   deliverables_uploaded = COALESCE(file_request_editors.deliverables_uploaded, 0) + 1,
+                   status = CASE
+                     WHEN COALESCE(NULLIF(file_request_editors.num_creatives_assigned, 0), 999999) <= COALESCE(file_request_editors.creatives_completed, 0) + 1 THEN 'completed'
+                     ELSE 'in_progress'
+                   END,
+                   started_at = COALESCE(file_request_editors.started_at, NOW()),
+                   updated_at = CURRENT_TIMESTAMP`,
+                [fileRequest.id, uploaderEditorId]
+              );
+            } else {
+              // Uploader is not an editor (pure admin/buyer) - track via num_creatives on the request directly
+              // Update total uploaded count on the request so progress can be calculated
+              logger.info('Non-editor upload, tracking via request num_creatives only', { requestId: fileRequest.id, userId });
+            }
           }
         }
       } catch (e) {
         logger.warn('Per-editor quota progress update failed (non-fatal)', { requestId: fileRequest.id, editorId, error: e.message });
       }
 
-      // Auto-set completed_at when all editors reach 100% (progress bar touches 100%)
+      // Auto-set completed_at when progress hits 100% (two checks: editor-based and request-based)
       try {
+        // Check 1: Editor-based progress (when editors are assigned)
         const progressCheck = await query(
           `SELECT
             COALESCE(SUM(fre.num_creatives_assigned), 0) as total_assigned,
@@ -2271,8 +2247,27 @@ class FileRequestController {
           [fileRequest.id]
         );
         const { total_assigned, total_completed } = progressCheck.rows[0] || {};
-        if (total_assigned > 0 && total_completed >= total_assigned) {
-          // Auto-mark request as 'uploaded' (completed from editor side) when progress hits 100%
+
+        // Check 2: Request-level progress (total files uploaded vs num_creatives requested)
+        const requestProgressCheck = await query(
+          `SELECT
+            COALESCE(fr.num_creatives, 0) as num_creatives_requested,
+            COUNT(DISTINCT mf.id) as total_files_uploaded
+          FROM file_requests fr
+          LEFT JOIN file_request_uploads fru ON fru.file_request_id = fr.id AND COALESCE(fru.is_deleted, FALSE) = FALSE
+          LEFT JOIN media_files mf ON mf.upload_session_id = fru.id AND mf.is_deleted = FALSE
+          WHERE fr.id = $1
+          GROUP BY fr.id, fr.num_creatives`,
+          [fileRequest.id]
+        );
+        const numRequested = parseInt(requestProgressCheck.rows[0]?.num_creatives_requested || 0);
+        const totalFilesUploaded = parseInt(requestProgressCheck.rows[0]?.total_files_uploaded || 0);
+
+        const editorBasedComplete = total_assigned > 0 && total_completed >= total_assigned;
+        const requestBasedComplete = numRequested > 0 && totalFilesUploaded >= numRequested;
+
+        if (editorBasedComplete || requestBasedComplete) {
+          // Auto-mark request as 'uploaded' (completed from editor/creative side)
           await query(
             `UPDATE file_requests
              SET status = CASE
@@ -2294,7 +2289,11 @@ class FileRequestController {
                AND status IN ('pending', 'assigned', 'in_progress', 'picked_up', 'accepted')`,
             [fileRequest.id]
           );
-          logger.info('Auto-completed: all creatives uploaded, progress hit 100%', { requestId: fileRequest.id, total_assigned, total_completed });
+          logger.info('Auto-completed: creatives target reached', {
+            requestId: fileRequest.id,
+            editorBased: { total_assigned, total_completed },
+            requestBased: { numRequested, totalFilesUploaded }
+          });
         }
       } catch (compErr) {
         logger.warn('Auto-completion check failed (non-fatal)', { error: compErr.message });
