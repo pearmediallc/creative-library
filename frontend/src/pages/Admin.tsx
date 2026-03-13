@@ -459,6 +459,9 @@ export function AdminPage() {
                           <option value="team_lead">Team Lead</option>
                           <option value="assistant_team_lead">ATL</option>
                           <option value="admin">Admin</option>
+                          <option value="ceo">CEO</option>
+                          <option value="head_media_buying">Head of Media Buying</option>
+                          <option value="creative_head">Creative Head</option>
                         </select>
                         <Input
                           type="number"
