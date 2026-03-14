@@ -69,13 +69,18 @@ class AdminController {
         upload_limit_monthly
       });
 
-      // Save additional_roles if provided
+      // Save additional_roles if provided (handle missing column gracefully)
       const { additional_roles } = req.body;
       if (additional_roles && Array.isArray(additional_roles) && additional_roles.length > 0) {
         try {
           await query('UPDATE users SET additional_roles = $1 WHERE id = $2', [additional_roles, user.id]);
         } catch (arErr) {
-          logger.warn('Failed to save additional_roles', { error: arErr.message });
+          try {
+            await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS additional_roles TEXT[] DEFAULT '{}'`);
+            await query('UPDATE users SET additional_roles = $1 WHERE id = $2', [additional_roles, user.id]);
+          } catch (retryErr) {
+            logger.warn('Failed to save additional_roles', { error: retryErr.message });
+          }
         }
       }
 
@@ -167,6 +172,7 @@ class AdminController {
         });
       }
 
+      // Build updates WITHOUT additional_roles (handle separately to prevent column-missing failures)
       const updates = {};
       if (req.body.name) updates.name = req.body.name;
       if (req.body.role) updates.role = req.body.role;
@@ -174,9 +180,23 @@ class AdminController {
         updates.upload_limit_monthly = req.body.upload_limit_monthly;
       }
       if (req.body.is_active !== undefined) updates.is_active = req.body.is_active;
-      if (req.body.additional_roles !== undefined) updates.additional_roles = req.body.additional_roles;
 
       const updatedUser = await User.update(req.params.id, updates);
+
+      // Save additional_roles separately so a missing column doesn't block the main update
+      if (req.body.additional_roles !== undefined) {
+        try {
+          await query('UPDATE users SET additional_roles = $1 WHERE id = $2', [req.body.additional_roles, req.params.id]);
+        } catch (arErr) {
+          // Column might not exist — create it and retry
+          try {
+            await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS additional_roles TEXT[] DEFAULT '{}'`);
+            await query('UPDATE users SET additional_roles = $1 WHERE id = $2', [req.body.additional_roles, req.params.id]);
+          } catch (retryErr) {
+            logger.warn('Failed to save additional_roles', { error: retryErr.message });
+          }
+        }
+      }
 
       // Save vertical assignments if provided
       if (req.body.assigned_verticals && Array.isArray(req.body.assigned_verticals)) {
@@ -191,7 +211,11 @@ class AdminController {
 
           // Also update vertical_heads table if user is a vertical head / team_lead
           const effectiveRole = req.body.role || user.role;
-          if (['team_lead', 'creative'].includes(effectiveRole)) {
+          const additionalRoles = req.body.additional_roles || [];
+          const isVH = ['team_lead', 'creative'].includes(effectiveRole) ||
+                       additionalRoles.includes('vertical_head') ||
+                       additionalRoles.includes('team_lead');
+          if (isVH) {
             // Remove old vertical_heads entries for this user
             await query('DELETE FROM vertical_heads WHERE head_editor_id = $1', [req.params.id]);
             for (const vertical of req.body.assigned_verticals) {

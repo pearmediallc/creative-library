@@ -118,7 +118,8 @@ class AuthService {
     const payload = {
       id: user.id,
       email: user.email,
-      role: user.role
+      role: user.role,
+      additional_roles: user.additional_roles || []
     };
 
     const token = jwt.sign(payload, process.env.JWT_SECRET, {

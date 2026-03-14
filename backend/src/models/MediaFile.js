@@ -551,37 +551,24 @@ class MediaFile extends BaseModel {
     const fullAccessRoles = ['admin', 'ceo', 'head_media_buying', 'creative_head'];
 
     if (!fullAccessRoles.includes(userRole)) {
-      if (userRole === 'team_lead' || userRole === 'assistant_team_lead') {
-        // Team leads / VH see: their own uploads + files in their assigned verticals + shared files
-        whereClause += ` AND (uploaded_by = $1 OR assigned_buyer_id = $1 OR id IN (
-          SELECT resource_id FROM file_permissions
-          WHERE grantee_type = 'user'
-          AND grantee_id = $1
-          AND resource_type = 'file'
-        ) OR id IN (
-          SELECT DISTINCT mf2.id FROM media_files mf2
-          LEFT JOIN file_request_uploads fru ON fru.id = mf2.upload_session_id
-          LEFT JOIN file_request_verticals frv ON frv.file_request_id = fru.file_request_id
-          WHERE LOWER(frv.vertical) IN (
-            SELECT LOWER(vertical) FROM vertical_heads WHERE head_editor_id = $1
-            UNION
-            SELECT LOWER(vertical) FROM user_vertical_assignments WHERE user_id = $1
-          )
-        ))`;
-        params.push(userId);
-      } else {
-        // Other non-admin users only see:
-        // 1. Files they uploaded
-        // 2. Files assigned to them (if buyer)
-        // 3. Files shared with them (via file_permissions)
-        whereClause += ` AND (uploaded_by = $1 OR assigned_buyer_id = $1 OR id IN (
-          SELECT resource_id FROM file_permissions
-          WHERE grantee_type = 'user'
-          AND grantee_id = $1
-          AND resource_type = 'file'
-        ))`;
-        params.push(userId);
-      }
+      // For ALL non-admin/non-senior users: check if they have assigned verticals
+      // This covers team_lead, assistant_team_lead, AND creatives with VH additional role
+      whereClause += ` AND (uploaded_by = $1 OR assigned_buyer_id = $1 OR id IN (
+        SELECT resource_id FROM file_permissions
+        WHERE grantee_type = 'user'
+        AND grantee_id = $1
+        AND resource_type = 'file'
+      ) OR id IN (
+        SELECT DISTINCT mf2.id FROM media_files mf2
+        LEFT JOIN file_request_uploads fru ON fru.id = mf2.upload_session_id
+        LEFT JOIN file_request_verticals frv ON frv.file_request_id = fru.file_request_id
+        WHERE LOWER(frv.vertical) IN (
+          SELECT LOWER(vertical) FROM vertical_heads WHERE head_editor_id = $1
+          UNION
+          SELECT LOWER(vertical) FROM user_vertical_assignments WHERE user_id = $1
+        )
+      ))`;
+      params.push(userId);
     }
 
     const sql = `

@@ -55,8 +55,10 @@ export function DashboardPage() {
   const [showVerticalDashboard, setShowVerticalDashboard] = useState(false);
   const [editorDashboard, setEditorDashboard] = useState<EditorDashboardData | null>(null);
 
-  const canViewAnalytics = hasFullDashboard(user?.role);
-  const isEditorUser = isEditor(user?.role);
+  const additionalRoles: string[] = (user as any)?.additional_roles || [];
+  const hasVHAccess = additionalRoles.some(r => ['vertical_head', 'team_lead', 'assistant_team_lead', 'ceo', 'head_media_buying', 'creative_head'].includes(r));
+  const canViewAnalytics = hasFullDashboard(user?.role) || additionalRoles.some(r => ['ceo', 'head_media_buying', 'creative_head'].includes(r));
+  const isEditorUser = isEditor(user?.role) && !hasVHAccess;
   const isBuyerUser = isBuyer(user?.role);
 
   useEffect(() => {
@@ -68,7 +70,7 @@ export function DashboardPage() {
           return;
         }
 
-        // Editors get personal dashboard only
+        // Editors get personal dashboard only (unless they have VH/admin additional roles)
         if (isEditorUser) {
           try {
             const editorRes = await analyticsApi.getEditorDashboard();
@@ -85,7 +87,7 @@ export function DashboardPage() {
         setStats(statsRes.data.data);
 
         // Check if user can see vertical dashboard
-        if (isAdminRole(user?.role) || hasFullDashboard(user?.role)) {
+        if (isAdminRole(user?.role) || hasFullDashboard(user?.role) || hasVHAccess) {
           setShowVerticalDashboard(true);
         } else {
           try {
