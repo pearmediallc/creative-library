@@ -234,7 +234,18 @@ class AdminController {
 
       logger.info('User updated by admin', { userId: req.params.id, updates, updatedBy: req.user.id });
 
-      const { password_hash, ...sanitizedUser } = updatedUser;
+      // Re-fetch the user to get the complete record including additional_roles
+      const freshUser = await User.findById(req.params.id);
+      const { password_hash, ...sanitizedUser } = freshUser || updatedUser;
+
+      // Attach vertical assignments to the response
+      try {
+        const vaResult = await query(
+          'SELECT ARRAY_AGG(vertical) as verticals FROM user_vertical_assignments WHERE user_id = $1',
+          [req.params.id]
+        );
+        sanitizedUser.assigned_verticals = vaResult.rows[0]?.verticals || [];
+      } catch (_) { /* table may not exist */ }
 
       res.json({
         success: true,

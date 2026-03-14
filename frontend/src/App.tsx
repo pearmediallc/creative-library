@@ -77,7 +77,11 @@ function AdminRoute({ children }: { children: React.ReactElement }) {
     return <Navigate to="/login" />;
   }
 
-  if (user.role !== 'admin' && user.role !== 'team_lead') {
+  const additionalRoles: string[] = (user as any)?.additional_roles || [];
+  const hasAdminAccess = user.role === 'admin' || user.role === 'team_lead' ||
+    additionalRoles.some(r => ['admin', 'team_lead', 'ceo', 'head_media_buying', 'creative_head'].includes(r));
+
+  if (!hasAdminAccess) {
     return <Navigate to="/" />;
   }
 
@@ -197,9 +201,9 @@ function AppRoutes() {
       <Route
         path="/analytics"
         element={
-          <AdminRoute>
+          <PrivateRoute>
             <AnalyticsPage />
-          </AdminRoute>
+          </PrivateRoute>
         }
       />
       <Route
@@ -245,9 +249,9 @@ function AppRoutes() {
       <Route
         path="/workload"
         element={
-          <AdminRoute>
+          <PrivateRoute>
             <WorkloadDashboardPage />
-          </AdminRoute>
+          </PrivateRoute>
         }
       />
       <Route

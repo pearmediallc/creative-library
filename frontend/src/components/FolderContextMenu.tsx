@@ -5,7 +5,7 @@ interface FolderContextMenuProps {
   isOpen: boolean;
   position: { x: number; y: number };
   onClose: () => void;
-  onRename: () => void;
+  onRename?: () => void;
   onDelete: () => void;
   onCreateSubfolder: () => void;
   onProperties: () => void;
@@ -59,14 +59,14 @@ export function FolderContextMenu({
   if (!isOpen) return null;
 
   const menuItems = [
-    {
+    ...(onRename ? [{
       icon: Edit2,
       label: 'Rename',
       onClick: () => {
         onRename();
         onClose();
       }
-    },
+    }] : []),
     {
       icon: FolderPlus,
       label: 'Create Subfolder',

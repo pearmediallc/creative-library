@@ -10,7 +10,7 @@ interface FileContextMenuProps {
   onDownload: () => void;
   onShare: () => void;
   onStar: () => void;
-  onRename: () => void;
+  onRename?: () => void;
   onMove: () => void;
   onCopy?: () => void;
   onVersions: () => void;
@@ -102,14 +102,14 @@ export function FileContextMenu({
         onClose();
       }
     }] : []),
-    {
+    ...(onRename ? [{
       icon: Edit2,
       label: 'Rename',
       onClick: () => {
         onRename();
         onClose();
       }
-    },
+    }] : []),
     {
       icon: FolderInput,
       label: 'Move to folder',

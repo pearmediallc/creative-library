@@ -10,7 +10,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const logger = require('./utils/logger');
-const { connectDatabase } = require('./config/database');
+const { connectDatabase, query } = require('./config/database');
 
 // Import routes
 const authRoutes = require('./routes/auth');
@@ -187,6 +187,63 @@ async function startServer() {
     logger.info('Connecting to database...');
     await connectDatabase();
     logger.info('✅ Database connected');
+
+    // Ensure critical columns exist
+    try {
+      await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS additional_roles TEXT[] DEFAULT '{}'`);
+      logger.info('✅ Schema verified: additional_roles column exists');
+    } catch (schemaErr) {
+      logger.warn('Schema check warning:', schemaErr.message);
+    }
+
+    // Run creative distribution trigger fix
+    try {
+      await query(`
+        CREATE OR REPLACE FUNCTION validate_creative_distribution()
+        RETURNS TRIGGER AS $$
+        DECLARE
+          total_assigned INTEGER;
+          total_requested INTEGER;
+          request_id_val UUID;
+        BEGIN
+          IF TG_OP = 'DELETE' THEN
+            request_id_val := OLD.request_id;
+          ELSE
+            request_id_val := NEW.request_id;
+          END IF;
+
+          SELECT COALESCE(num_creatives, 0) INTO total_requested
+          FROM file_requests WHERE id = request_id_val;
+
+          SELECT COALESCE(SUM(num_creatives_assigned), 0) INTO total_assigned
+          FROM file_request_editors
+          WHERE request_id = request_id_val
+            AND status NOT IN ('reassigned', 'declined', 'cancelled');
+
+          IF TG_OP = 'INSERT' OR TG_OP = 'UPDATE' THEN
+            IF NEW.status NOT IN ('reassigned', 'declined', 'cancelled') THEN
+              total_assigned := total_assigned + NEW.num_creatives_assigned;
+            END IF;
+            IF TG_OP = 'UPDATE' THEN
+              IF OLD.status NOT IN ('reassigned', 'declined', 'cancelled') THEN
+                total_assigned := total_assigned - OLD.num_creatives_assigned;
+              END IF;
+            END IF;
+          END IF;
+
+          IF total_assigned > total_requested AND total_requested > 0 THEN
+            RAISE EXCEPTION 'Creative distribution error: Total assigned (%) exceeds requested (%) for request %',
+              total_assigned, total_requested, request_id_val;
+          END IF;
+
+          RETURN NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+      `);
+      logger.info('✅ Creative distribution trigger updated (excludes reassigned editors)');
+    } catch (triggerErr) {
+      logger.warn('Trigger update warning:', triggerErr.message);
+    }
 
     // Initialize cron jobs
     if (process.env.ENABLE_CRON_JOBS === 'true') {

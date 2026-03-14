@@ -892,7 +892,7 @@ class AnalyticsController {
         JOIN file_requests fr ON fr.id = fre.request_id
         LEFT JOIN file_request_verticals frv ON frv.file_request_id = fr.id
         LEFT JOIN users u_buyer ON u_buyer.id = fr.assigned_buyer_id
-        LEFT JOIN users u_creator ON u_creator.id = fr.creator_id
+        LEFT JOIN users u_creator ON u_creator.id = fr.created_by
         WHERE fre.editor_id = $1
           AND fre.status NOT IN ('reassigned', 'removed')
           AND fr.is_active = TRUE

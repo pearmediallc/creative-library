@@ -2408,7 +2408,11 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
               ? request.assigned_editors.map(e => ({ id: e.id, name: e.display_name || e.name }))
               : []
           }
-          numCreatives={Math.max(0, (request.num_creatives_requested || 0) - (request.upload_count || 0))}
+          numCreatives={Math.max(0, (request.num_creatives_requested || 0) - (
+            request.assigned_editors
+              ? request.assigned_editors.reduce((sum, e) => sum + (e.creatives_completed || 0), 0)
+              : (request.upload_count || 0)
+          ))}
           onClose={() => setShowReassignModal(false)}
           onSuccess={handleReassignSuccess}
         />

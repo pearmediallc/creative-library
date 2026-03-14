@@ -12,7 +12,7 @@ const { authenticateToken, requireRole } = require('../middleware/auth');
 router.use(authenticateToken);
 // Vertical heads are 'creative' role but listed in vertical_heads table
 // So we allow admin, team_lead, creative, and buyer - the controller handles data filtering
-router.use(requireRole('admin', 'team_lead', 'creative', 'buyer'));
+router.use(requireRole('admin', 'team_lead', 'creative', 'buyer', 'editor'));
 
 // Get workload overview for all editors
 router.get('/overview', workloadController.getOverview.bind(workloadController));

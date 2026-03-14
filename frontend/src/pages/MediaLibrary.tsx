@@ -2026,7 +2026,7 @@ export function MediaLibraryPage() {
         isOpen={contextMenuFolder !== null}
         position={contextMenuPosition}
         onClose={() => setContextMenuFolder(null)}
-        onRename={handleRenameFolder}
+        onRename={user?.role === 'buyer' ? undefined : handleRenameFolder}
         onDelete={handleDeleteFolder}
         onCreateSubfolder={handleCreateSubfolder}
         onProperties={handleFolderProperties}
@@ -2046,7 +2046,7 @@ export function MediaLibraryPage() {
           onShare={handleFileShare}
           onStar={handleFileStar}
           onTags={() => handleFileTags()}
-          onRename={handleFileRename}
+          onRename={user?.role === 'buyer' ? undefined : handleFileRename}
           onMove={handleFileMove}
           onCopy={handleFileCopy}
           onVersions={handleFileVersions}
