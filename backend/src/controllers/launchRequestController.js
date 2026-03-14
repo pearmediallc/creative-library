@@ -443,9 +443,11 @@ class LaunchRequestController {
           ORDER BY u.name
         `, [id]),
         pool.query(`
-          SELECT lru.*, u.name AS uploader_name
+          SELECT lru.*, u.name AS uploader_name,
+                 mf.thumbnail_url, mf.cloudfront_url
           FROM launch_request_uploads lru
           LEFT JOIN users u ON lru.uploaded_by = u.id
+          LEFT JOIN media_files mf ON mf.id = lru.file_id
           WHERE lru.launch_request_id = $1
           ORDER BY lru.created_at DESC
         `, [id]),
@@ -1411,7 +1413,9 @@ class LaunchRequestController {
       const upload = uploadResult.rows[0];
 
       // Access control: admin, creator, creative head, buyer head, assigned editors, assigned buyers
-      const isAdmin = ['admin', 'ceo', 'head_media_buying', 'creative_head'].includes(userRole);
+      const additionalRoles = req.user.additional_roles || [];
+      const allRoles = [userRole, ...additionalRoles];
+      const isAdmin = allRoles.some(r => ['admin', 'team_lead', 'ceo', 'head_media_buying', 'creative_head'].includes(r));
       const isCreator = upload.created_by === userId;
       const isCreativeHead = upload.creative_head_id === userId;
       const isBuyerHead = upload.buyer_head_id === userId;

@@ -40,6 +40,8 @@ interface UploadFile {
   id: string;
   original_filename?: string;
   s3_url?: string;
+  thumbnail_url?: string;
+  cloudfront_url?: string;
   file_size?: number;
   mime_type?: string;
   uploader_name?: string;
@@ -1250,8 +1252,10 @@ export function LaunchRequestDetailsModal({ request: initialRequest, onClose, on
                                 )}
                                 <div className="aspect-video bg-gray-100 dark:bg-gray-800 flex items-center justify-center"
                                   onClick={() => setPreviewUpload(upload)}>
-                                  {isImage && upload.s3_url ? (
-                                    <img src={upload.s3_url} alt={upload.original_filename} className="w-full h-full object-cover" />
+                                  {isImage && (upload.cloudfront_url || upload.s3_url) ? (
+                                    <img src={upload.cloudfront_url || upload.s3_url} alt={upload.original_filename} className="w-full h-full object-cover" />
+                                  ) : isVideo && upload.thumbnail_url ? (
+                                    <img src={upload.thumbnail_url} alt={upload.original_filename} className="w-full h-full object-cover" />
                                   ) : isVideo ? (
                                     <div className="flex flex-col items-center text-gray-400">
                                       <Play className="w-8 h-8" />
@@ -1285,8 +1289,10 @@ export function LaunchRequestDetailsModal({ request: initialRequest, onClose, on
                                 selectedUploadIds.includes(upload.id) ? 'ring-2 ring-blue-500' : 'hover:border-blue-300'
                               }`} onClick={() => setPreviewUpload(upload)}>
                                 <div className="aspect-square bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
-                                  {isImage && upload.s3_url ? (
-                                    <img src={upload.s3_url} alt={upload.original_filename} className="w-full h-full object-cover" />
+                                  {isImage && (upload.cloudfront_url || upload.s3_url) ? (
+                                    <img src={upload.cloudfront_url || upload.s3_url} alt={upload.original_filename} className="w-full h-full object-cover" />
+                                  ) : isVideo && upload.thumbnail_url ? (
+                                    <img src={upload.thumbnail_url} alt={upload.original_filename} className="w-full h-full object-cover" />
                                   ) : isVideo ? (
                                     <Play className="w-6 h-6 text-gray-400" />
                                   ) : (
@@ -1319,8 +1325,10 @@ export function LaunchRequestDetailsModal({ request: initialRequest, onClose, on
                               {/* Thumbnail */}
                               <div className="w-10 h-10 rounded overflow-hidden bg-gray-100 dark:bg-gray-800 flex items-center justify-center shrink-0 cursor-pointer"
                                 onClick={() => setPreviewUpload(upload)}>
-                                {isImage && upload.s3_url ? (
-                                  <img src={upload.s3_url} alt="" className="w-full h-full object-cover" />
+                                {isImage && (upload.cloudfront_url || upload.s3_url) ? (
+                                  <img src={upload.cloudfront_url || upload.s3_url} alt="" className="w-full h-full object-cover" />
+                                ) : isVideo && upload.thumbnail_url ? (
+                                  <img src={upload.thumbnail_url} alt="" className="w-full h-full object-cover" />
                                 ) : isVideo ? (
                                   <Play className="w-4 h-4 text-gray-400" />
                                 ) : (
@@ -1356,9 +1364,11 @@ export function LaunchRequestDetailsModal({ request: initialRequest, onClose, on
                               <X className="w-6 h-6" />
                             </button>
                             {(previewUpload.mime_type || '').startsWith('video') ? (
-                              <video src={previewUpload.s3_url} controls autoPlay className="w-full max-h-[80vh] rounded-lg" />
+                              <video src={previewUpload.cloudfront_url || previewUpload.s3_url} controls autoPlay
+                                poster={previewUpload.thumbnail_url || undefined}
+                                className="w-full max-h-[80vh] rounded-lg" />
                             ) : (previewUpload.mime_type || '').startsWith('image') ? (
-                              <img src={previewUpload.s3_url} alt={previewUpload.original_filename} className="w-full max-h-[80vh] object-contain rounded-lg" />
+                              <img src={previewUpload.cloudfront_url || previewUpload.s3_url} alt={previewUpload.original_filename} className="w-full max-h-[80vh] object-contain rounded-lg" />
                             ) : (
                               <div className="bg-white dark:bg-gray-800 rounded-lg p-12 text-center">
                                 <File className="w-16 h-16 text-gray-400 mx-auto mb-4" />
