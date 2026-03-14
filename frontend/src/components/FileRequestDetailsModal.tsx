@@ -362,8 +362,8 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
         const hasCompletedUploads = requestUploads.some(task => task.status === 'completed');
 
         if (hasCompletedUploads) {
-          // Refresh request details to show newly uploaded files
-          fetchRequestDetails();
+          // Refresh request details to show newly uploaded files (silent to avoid flicker)
+          fetchRequestDetails(true);
         }
       });
     };
@@ -446,9 +446,9 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
     }
   };
 
-  const fetchRequestDetails = async () => {
+  const fetchRequestDetails = async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const response = await fileRequestApi.getOne(requestId);
       setRequest(response.data.data);
 
@@ -782,12 +782,13 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
       setUploadComments('');
       setUploadTargetFolder('');
 
-      // Close form and refresh after short delay
+      // Close form and refresh once after short delay (no flickering)
       setTimeout(() => {
         setUploadSuccess(false);
         setShowUploadForm(false);
         fetchRequestDetails();
-        onUpdate();
+        // Don't call onUpdate() here - it causes double refresh/flicker
+        // The parent will see updated data when the modal closes
       }, 1500);
     } catch (error: any) {
       console.error('Upload failed:', error);
@@ -2407,7 +2408,7 @@ export function FileRequestDetailsModal({ requestId, onClose, onUpdate }: FileRe
               ? request.assigned_editors.map(e => ({ id: e.id, name: e.display_name || e.name }))
               : []
           }
-          numCreatives={request.num_creatives_requested || 0}
+          numCreatives={Math.max(0, (request.num_creatives_requested || 0) - (request.upload_count || 0))}
           onClose={() => setShowReassignModal(false)}
           onSuccess={handleReassignSuccess}
         />

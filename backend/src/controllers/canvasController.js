@@ -77,7 +77,7 @@ class CanvasController {
 
       // Verify request exists and user has access
       const fileRequestResult = await query(
-        'SELECT id, created_by AS creator_id, editor_id, folder_id, assigned_buyer_id FROM file_requests WHERE id = $1',
+        'SELECT id, created_by AS creator_id, editor_id, folder_id, assigned_buyer_id, assigned_buyer_ids FROM file_requests WHERE id = $1',
         [requestId]
       );
 
@@ -361,8 +361,29 @@ class CanvasController {
         }, []);
       }
 
+      // Create or find "Creatives" subfolder inside the request folder
+      let targetFolderId = fileRequest.folder_id;
+      if (fileRequest.folder_id) {
+        try {
+          const existingCreativeFolder = await query(
+            `SELECT id FROM folders WHERE name = 'Creatives' AND parent_id = $1 LIMIT 1`,
+            [fileRequest.folder_id]
+          );
+          if (existingCreativeFolder.rows.length > 0) {
+            targetFolderId = existingCreativeFolder.rows[0].id;
+          } else {
+            const newFolder = await query(
+              `INSERT INTO folders (name, parent_id, created_by) VALUES ('Creatives', $1, $2) RETURNING id`,
+              [fileRequest.folder_id, userId]
+            );
+            targetFolderId = newFolder.rows[0].id;
+          }
+        } catch (folderErr) {
+          logger.warn('Could not create Creatives subfolder, using request folder', { error: folderErr.message });
+        }
+      }
+
       // Upload file using media service
-      // Use null for editorId (canvas attachments don't have an editor)
       const mediaFile = await mediaService.uploadMedia(
         req.file,
         userId,
@@ -370,8 +391,8 @@ class CanvasController {
         {
           tags: ['canvas-attachment', `request-${requestId}`],
           description: `Canvas attachment for request ${requestId}`,
-          folder_id: fileRequest.folder_id,
-          request_id: requestId  // ✨ Store in file request folder structure
+          folder_id: targetFolderId,
+          request_id: requestId
         }
       );
 

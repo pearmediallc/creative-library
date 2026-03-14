@@ -45,9 +45,9 @@ class LaunchRequestController {
       const userRole = req.user.role;
       const userName = req.user.name || '';
 
-      // Only admin/strategist can create launch requests
-      if (!isAdminRole(userRole) && userRole !== 'buyer') {
-        return res.status(403).json({ success: false, error: 'Only admins and buyers can create launch requests' });
+      // Admin, buyer, creative/editor can create launch requests
+      if (!isAdminRole(userRole) && userRole !== 'buyer' && userRole !== 'creative' && userRole !== 'editor') {
+        return res.status(403).json({ success: false, error: 'You do not have permission to create launch requests' });
       }
 
       const {
@@ -116,6 +116,18 @@ class LaunchRequestController {
         );
       }
 
+      // Auto-assign editor when creator is a creative/editor role
+      let effectiveEditorIds = [...editor_ids];
+      if ((userRole === 'creative' || userRole === 'editor') && editor_ids.length === 0) {
+        const editorRecord = await client.query(
+          'SELECT id FROM editors WHERE user_id = $1 LIMIT 1',
+          [userId]
+        );
+        if (editorRecord.rows.length > 0) {
+          effectiveEditorIds.push(editorRecord.rows[0].id);
+        }
+      }
+
       // Assign editors (creative side)
       const assignedEditorUserIds = []; // Track for notifications
       if (editor_distribution.length > 0) {
@@ -136,8 +148,8 @@ class LaunchRequestController {
             assignedEditorUserIds.push(editorUserResult.rows[0].user_id);
           }
         }
-      } else if (editor_ids.length > 0) {
-        for (const editorId of editor_ids) {
+      } else if (effectiveEditorIds.length > 0) {
+        for (const editorId of effectiveEditorIds) {
           await client.query(
             `INSERT INTO launch_request_editors (launch_request_id, editor_id)
              VALUES ($1, $2)
@@ -287,10 +299,11 @@ class LaunchRequestController {
         )`);
         params.push(userId);
         paramIdx++;
-      } else if (userRole === 'creative') {
-        // Creatives see requests where they are creative_head OR assigned as editor
+      } else if (userRole === 'creative' || userRole === 'editor') {
+        // Creatives/editors see requests where they are creative_head OR assigned as editor OR created by them
         whereConditions.push(`(
           lr.creative_head_id = $${paramIdx}
+          OR lr.created_by = $${paramIdx}
           OR EXISTS (SELECT 1 FROM launch_request_editors lre
             JOIN editors e ON lre.editor_id = e.id
             WHERE lre.launch_request_id = lr.id AND e.user_id = $${paramIdx})

@@ -493,6 +493,9 @@ export function RBACAdminPanel() {
                             onClick={() => {
                               setShowAssignRole(true);
                               setAssignRoleData({ ...assignRoleData, userId: selectedUser.id });
+                              // Pre-populate currently assigned roles
+                              const currentRoles = userDetailPermissions?.roles || [];
+                              setAssignRoleSelections(new Set(currentRoles.map((r: any) => r.role_name)));
                             }}
                           >
                             <UserPlus className="w-4 h-4 mr-2" />
@@ -502,8 +505,21 @@ export function RBACAdminPanel() {
                             size="sm"
                             variant="outline"
                             onClick={() => {
+                              // Pre-populate existing permissions from userDetailPermissions
+                              const existingPerms = userDetailPermissions?.permissions || [];
+                              const permMap: Record<string, Set<string>> = {};
+                              const expandedSet = new Set<string>();
+                              existingPerms.forEach((p: any) => {
+                                if (p.permission === 'allow') {
+                                  if (!permMap[p.resource_type]) {
+                                    permMap[p.resource_type] = new Set();
+                                  }
+                                  permMap[p.resource_type].add(p.action);
+                                  expandedSet.add(p.resource_type);
+                                }
+                              });
                               setShowGrantPermission(true);
-                              setGrantPermissionData({ ...grantPermissionData, userId: selectedUser.id, selectedPermissions: {}, expandedResources: new Set() });
+                              setGrantPermissionData({ ...grantPermissionData, userId: selectedUser.id, selectedPermissions: permMap, expandedResources: expandedSet });
                             }}
                           >
                             <Shield className="w-4 h-4 mr-2" />

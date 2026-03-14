@@ -56,6 +56,12 @@ router.get('/unified',
   analyticsController.getUnifiedAnalytics.bind(analyticsController)
 );
 
+// Get personal editor dashboard (any authenticated user)
+router.get('/editor-dashboard',
+  authenticateToken,
+  analyticsController.getEditorDashboard.bind(analyticsController)
+);
+
 // Get vertical dashboard analytics (Admin and Vertical Heads)
 router.get('/vertical-dashboard',
   authenticateToken,

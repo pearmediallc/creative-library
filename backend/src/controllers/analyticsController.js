@@ -841,6 +841,102 @@ class AnalyticsController {
       next(error);
     }
   }
+
+  /**
+   * Get personal dashboard for an editor
+   * Shows only their assigned/completed video counts across all verticals
+   * GET /api/analytics/editor-dashboard
+   */
+  async getEditorDashboard(req, res, next) {
+    try {
+      const userId = req.user.id;
+
+      // Find the editor record for this user
+      const editorResult = await query(
+        `SELECT id, name, display_name FROM editors WHERE user_id = $1 AND is_active = TRUE LIMIT 1`,
+        [userId]
+      );
+
+      if (editorResult.rows.length === 0) {
+        return res.json({
+          success: true,
+          data: {
+            total_assigned: 0,
+            total_completed: 0,
+            total_pending: 0,
+            active_requests: 0,
+            completed_requests: 0,
+            requests: []
+          }
+        });
+      }
+
+      const editorId = editorResult.rows[0].id;
+      const editorName = editorResult.rows[0].display_name || editorResult.rows[0].name;
+
+      // Get all assignments for this editor with progress
+      const assignmentsResult = await query(`
+        SELECT
+          fre.request_id,
+          fr.title,
+          fr.status as request_status,
+          fr.request_type,
+          fre.status as editor_status,
+          fre.num_creatives_assigned,
+          fre.creatives_completed,
+          fre.created_at as assigned_at,
+          STRING_AGG(DISTINCT frv.vertical, ', ') as verticals,
+          u_buyer.name as buyer_name,
+          u_creator.name as creator_name
+        FROM file_request_editors fre
+        JOIN file_requests fr ON fr.id = fre.request_id
+        LEFT JOIN file_request_verticals frv ON frv.file_request_id = fr.id
+        LEFT JOIN users u_buyer ON u_buyer.id = fr.assigned_buyer_id
+        LEFT JOIN users u_creator ON u_creator.id = fr.creator_id
+        WHERE fre.editor_id = $1
+          AND fre.status NOT IN ('reassigned', 'removed')
+          AND fr.is_active = TRUE
+        GROUP BY fre.request_id, fr.title, fr.status, fr.request_type, fre.status,
+                 fre.num_creatives_assigned, fre.creatives_completed, fre.created_at,
+                 u_buyer.name, u_creator.name
+        ORDER BY fre.created_at DESC
+      `, [editorId]);
+
+      const requests = assignmentsResult.rows;
+      const totalAssigned = requests.reduce((sum, r) => sum + (parseInt(r.num_creatives_assigned) || 0), 0);
+      const totalCompleted = requests.reduce((sum, r) => sum + (parseInt(r.creatives_completed) || 0), 0);
+      const activeRequests = requests.filter(r => ['pending', 'assigned', 'in_progress', 'picked_up'].includes(r.editor_status)).length;
+      const completedRequests = requests.filter(r => r.editor_status === 'completed').length;
+
+      res.json({
+        success: true,
+        data: {
+          editor_name: editorName,
+          total_assigned: totalAssigned,
+          total_completed: totalCompleted,
+          total_pending: totalAssigned - totalCompleted,
+          active_requests: activeRequests,
+          completed_requests: completedRequests,
+          requests: requests.map(r => ({
+            request_id: r.request_id,
+            title: r.title,
+            request_status: r.request_status,
+            request_type: r.request_type,
+            editor_status: r.editor_status,
+            assigned: parseInt(r.num_creatives_assigned) || 0,
+            completed: parseInt(r.creatives_completed) || 0,
+            verticals: r.verticals || '',
+            buyer: r.buyer_name || '',
+            creator: r.creator_name || '',
+            assigned_at: r.assigned_at
+          }))
+        }
+      });
+    } catch (error) {
+      logger.error('Editor dashboard error', { error: error.message, stack: error.stack });
+      next(error);
+    }
+  }
 }
 
 module.exports = new AnalyticsController();

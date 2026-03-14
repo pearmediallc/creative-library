@@ -137,6 +137,22 @@ class MediaFile extends BaseModel {
       // Admin users have no restrictions (no additional conditions)
     }
 
+    // Vertical-based filtering for team leads with assigned verticals
+    if (filters.assigned_verticals && filters.assigned_verticals.length > 0) {
+      conditions.push(`(
+        mf.id IN (
+          SELECT DISTINCT mf2.id FROM media_files mf2
+          LEFT JOIN file_request_uploads fru ON fru.id = mf2.upload_session_id
+          LEFT JOIN file_request_verticals frv ON frv.file_request_id = fru.file_request_id
+          WHERE LOWER(frv.vertical) = ANY(ARRAY[${filters.assigned_verticals.map((_, i) => `LOWER($${paramIndex + i})`).join(',')}]::text[])
+        )
+        OR mf.uploaded_by = $${paramIndex + filters.assigned_verticals.length}
+      )`);
+      filters.assigned_verticals.forEach(v => params.push(v));
+      params.push(filters.user_id || '');
+      paramIndex += filters.assigned_verticals.length + 1;
+    }
+
     // ✨ Deprecated: Old uploaded_by filter (replaced by RBAC above)
     // Keeping for backwards compatibility but RBAC takes precedence
     if (filters.uploaded_by && !filters.user_id) {

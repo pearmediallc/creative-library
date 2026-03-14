@@ -187,7 +187,8 @@ class MediaController {
         const assignmentCheck = await query(
           `SELECT 1 FROM file_request_uploads fru
            JOIN file_request_editors fre ON fre.file_request_id = fru.file_request_id
-           WHERE fru.file_id = $1 AND fre.editor_id = $2
+           JOIN editors e ON fre.editor_id = e.id
+           WHERE fru.file_id = $1 AND e.user_id = $2
            LIMIT 1`,
           [req.params.id, req.user.id]
         );
@@ -432,10 +433,32 @@ class MediaController {
         'download'
       );
 
-      // 🆕 Canvas Brief Access: Check if user is assigned to the file request
+      // Check if buyer is assigned via assigned_buyer_ids (plural) on file request
+      let isAssignedBuyer = false;
+      if (userRole === 'buyer' && !isBuyer) {
+        const requestTag = file.tags && file.tags.find(t => t.startsWith('request-'));
+        if (requestTag) {
+          const reqId = requestTag.replace('request-', '');
+          const buyerCheck = await query(
+            `SELECT 1 FROM file_requests WHERE id = $1 AND ($2 = ANY(assigned_buyer_ids) OR assigned_buyer_id = $2) LIMIT 1`,
+            [reqId, userId]
+          );
+          if (buyerCheck.rows.length === 0) {
+            // Also check launch_requests
+            const lrBuyerCheck = await query(
+              `SELECT 1 FROM launch_request_buyers WHERE launch_request_id = $1 AND buyer_id = $2 LIMIT 1`,
+              [reqId, userId]
+            ).catch(() => ({ rows: [] }));
+            isAssignedBuyer = lrBuyerCheck.rows.length > 0;
+          } else {
+            isAssignedBuyer = true;
+          }
+        }
+      }
+
+      // Canvas Brief Access: Check if user is assigned to the file request
       let isAssignedCreative = false;
       if (file.tags && (file.tags.includes('canvas-brief') || file.tags.includes('canvas-attachment'))) {
-        // Extract request ID from tags (format: 'request-{uuid}')
         const requestTag = file.tags.find(t => t.startsWith('request-'));
         if (requestTag) {
           const canvasRequestId = requestTag.replace('request-', '');
@@ -450,7 +473,7 @@ class MediaController {
         }
       }
 
-      if (!isOwner && !isAdmin && !isBuyer && !hasDownloadPermission && !isAssignedCreative) {
+      if (!isOwner && !isAdmin && !isBuyer && !isAssignedBuyer && !hasDownloadPermission && !isAssignedCreative) {
         console.log('🚫 Permission denied for user:', userId);
         return res.status(403).json({
           success: false,

@@ -3,7 +3,7 @@ import { DashboardLayout } from '../components/layout/DashboardLayout';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Card } from '../components/ui/Card';
-import { mediaApi, editorApi, folderApi, adminApi, starredApi } from '../lib/api';
+import { mediaApi, editorApi, folderApi, adminApi, starredApi, permissionApi } from '../lib/api';
 import { MediaFile, Editor } from '../types';
 import { formatBytes, formatDate } from '../lib/utils';
 import { Image as ImageIcon, Video, X, Download, Trash2, Info, PackageOpen, Calendar, Filter, Clock, FolderInput, Share2, Star, LayoutGrid, List, FileText, Tag, FolderPlus, BarChart3 } from 'lucide-react';
@@ -214,7 +214,8 @@ export function MediaLibraryPage() {
   });
 
   // Admin org-wide browsing state
-  const [orgViewMode, setOrgViewMode] = useState<'personal' | 'org-wide'>('personal');
+  const [orgViewMode, setOrgViewMode] = useState<'personal' | 'org-wide' | 'shared'>('personal');
+  const [sharedFoldersList, setSharedFoldersList] = useState<any[]>([]);
   const [orgUsers, setOrgUsers] = useState<Array<{ id: string; name: string; email: string; role: string; file_count?: number }>>([]);
   const [selectedOrgUser, setSelectedOrgUser] = useState<string | null>(null);
   const [orgUserSearch, setOrgUserSearch] = useState('');
@@ -419,10 +420,28 @@ export function MediaLibraryPage() {
     }
   }, [orgViewMode, isAdmin]);
 
+  // Fetch shared folders when shared tab is activated
   useEffect(() => {
-    fetchData();
-    setCurrentPage(1);
-  }, [filters.filters, currentFolderId, selectedOrgUser]);
+    if (orgViewMode === 'shared') {
+      const fetchSharedFolders = async () => {
+        try {
+          const res = await permissionApi.getSharedWithMe();
+          setSharedFoldersList(res.data.data || []);
+        } catch (err) {
+          console.error('Failed to fetch shared folders:', err);
+          setSharedFoldersList([]);
+        }
+      };
+      fetchSharedFolders();
+    }
+  }, [orgViewMode]);
+
+  useEffect(() => {
+    if (orgViewMode !== 'shared') {
+      fetchData();
+      setCurrentPage(1);
+    }
+  }, [filters.filters, currentFolderId, selectedOrgUser, orgViewMode]);
 
   // Debounced global search - refetch when search term changes
   useEffect(() => {
@@ -450,9 +469,9 @@ export function MediaLibraryPage() {
     }
   }, [files, lightbox.isOpen]);
 
-  const fetchData = async () => {
+  const fetchData = async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
 
       // Global search: when user is searching, fetch ALL files across all folders
       if (searchTerm.trim()) {
@@ -864,23 +883,33 @@ export function MediaLibraryPage() {
   };
 
   const handleFolderPickerSelect = async (targetFolderId: string | null) => {
-    if (selectedFiles.length === 0) return;
-
     try {
-      if (folderPickerOperation === 'move') {
-        await mediaApi.bulkMove(selectedFiles, targetFolderId);
-        alert(`Successfully moved ${selectedFiles.length} file(s)`);
-      } else if (folderPickerOperation === 'copy') {
-        await mediaApi.bulkCopy(selectedFiles, targetFolderId);
-        alert(`Successfully copied ${selectedFiles.length} file(s)`);
+      // Handle bulk folder move
+      if (selectedFolders.length > 0 && folderPickerOperation === 'move') {
+        for (const folderId of selectedFolders) {
+          await folderApi.update(folderId, { parent_id: targetFolderId } as any);
+        }
+        alert(`Successfully moved ${selectedFolders.length} folder(s)`);
+        setSelectedFolders([]);
+        await fetchData();
+        setFolderTreeRefreshKey(k => k + 1);
+      } else if (selectedFiles.length > 0) {
+        // Handle file operations
+        if (folderPickerOperation === 'move') {
+          await mediaApi.bulkMove(selectedFiles, targetFolderId);
+          alert(`Successfully moved ${selectedFiles.length} file(s)`);
+        } else if (folderPickerOperation === 'copy') {
+          await mediaApi.bulkCopy(selectedFiles, targetFolderId);
+          alert(`Successfully copied ${selectedFiles.length} file(s)`);
+        }
+        setSelectedFiles([]);
+        setSelectionMode(false);
+        setContextMenuFile(null);
+        fetchData();
       }
-      setSelectedFiles([]);
-      setSelectionMode(false);
-      setContextMenuFile(null);
-      fetchData();
     } catch (error: any) {
-      console.error(`Failed to ${folderPickerOperation} files:`, error);
-      alert(error.response?.data?.error || `Failed to ${folderPickerOperation} files`);
+      console.error(`Failed to ${folderPickerOperation}:`, error);
+      alert(error.response?.data?.error || `Failed to ${folderPickerOperation}`);
     } finally {
       setShowFolderPicker(false);
     }
@@ -1000,30 +1029,40 @@ export function MediaLibraryPage() {
                 <h1 className="text-3xl font-bold">Media Library</h1>
                 <p className="text-muted-foreground">Manage your creative assets</p>
                 {/* Admin org-wide toggle */}
-                {isAdmin && (
-                  <div className="flex mt-2 border rounded-md overflow-hidden w-fit">
-                    <button
-                      onClick={() => { setOrgViewMode('personal'); setSelectedOrgUser(null); }}
-                      className={`px-3 py-1.5 text-sm font-medium transition-colors ${
-                        orgViewMode === 'personal'
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-                      }`}
-                    >
-                      My Library
+                <div className="flex mt-2 border rounded-md overflow-hidden w-fit">
+                  <button
+                    onClick={() => { setOrgViewMode('personal'); setSelectedOrgUser(null); }}
+                    className={`px-3 py-1.5 text-sm font-medium transition-colors ${
+                      orgViewMode === 'personal'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                    }`}
+                  >
+                    My Library
+                  </button>
+                  <button
+                    onClick={() => setOrgViewMode('shared')}
+                    className={`px-3 py-1.5 text-sm font-medium transition-colors ${
+                      orgViewMode === 'shared'
+                        ? 'bg-purple-600 text-white'
+                        : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                    }`}
+                  >
+                    Shared Folders
+                  </button>
+                  {isAdmin && (
+                  <button
+                    onClick={() => setOrgViewMode('org-wide')}
+                    className={`px-3 py-1.5 text-sm font-medium transition-colors ${
+                      orgViewMode === 'org-wide'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                    }`}
+                  >
+                    Org-Wide Library
                     </button>
-                    <button
-                      onClick={() => setOrgViewMode('org-wide')}
-                      className={`px-3 py-1.5 text-sm font-medium transition-colors ${
-                        orgViewMode === 'org-wide'
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-                      }`}
-                    >
-                      Org-Wide Library
-                    </button>
+                  )}
                   </div>
-                )}
               </div>
               <div className="flex gap-2 flex-wrap">
                 {canUpload && (
@@ -1295,7 +1334,42 @@ export function MediaLibraryPage() {
             </div>
 
             {/* Content */}
-            {orgViewMode === 'org-wide' && !selectedOrgUser ? null : loading ? (
+            {orgViewMode === 'shared' ? (
+              <div className="space-y-4">
+                <h2 className="text-lg font-semibold">Shared With Me</h2>
+                {sharedFoldersList.length === 0 ? (
+                  <Card className="p-12 text-center">
+                    <p className="text-muted-foreground">No folders have been shared with you yet</p>
+                  </Card>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                    {sharedFoldersList.map((item: any) => (
+                      <div
+                        key={item.folder_id || item.id}
+                        className="bg-white dark:bg-gray-800 border rounded-lg p-4 cursor-pointer hover:border-blue-400 transition-colors"
+                        onClick={() => {
+                          setOrgViewMode('personal');
+                          handleFolderSelect(item.folder_id || item.id);
+                        }}
+                      >
+                        <div className="flex items-center gap-3">
+                          <FolderInput className="w-8 h-8 text-purple-500" />
+                          <div className="min-w-0">
+                            <p className="font-medium truncate">{item.folder_name || item.name}</p>
+                            <p className="text-xs text-muted-foreground">
+                              Shared by {item.shared_by_name || item.owner_name || 'Unknown'}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              Permission: {item.permission_type || item.permissions?.join(', ') || 'view'}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : orgViewMode === 'org-wide' && !selectedOrgUser ? null : loading ? (
               <div className="flex items-center justify-center h-96">
                 <p className="text-muted-foreground">Loading...</p>
               </div>
@@ -1320,7 +1394,49 @@ export function MediaLibraryPage() {
                 {/* FOLDERS FIRST */}
                 {folders.length > 0 && (
                   <div>
-                    <h2 className="text-lg font-semibold mb-4">Folders</h2>
+                    <div className="flex items-center justify-between mb-4">
+                      <h2 className="text-lg font-semibold">Folders</h2>
+                      {selectedFolders.length > 0 && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-blue-600 font-medium">
+                            {selectedFolders.length} folder{selectedFolders.length !== 1 ? 's' : ''} selected
+                          </span>
+                          <button
+                            onClick={() => {
+                              setFolderPickerOperation('move');
+                              setShowFolderPicker(true);
+                            }}
+                            className="px-3 py-1.5 text-xs bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors"
+                          >
+                            Move
+                          </button>
+                          <button
+                            onClick={async () => {
+                              if (!window.confirm(`Delete ${selectedFolders.length} selected folder(s)? This will also delete all files inside.`)) return;
+                              try {
+                                for (const folderId of selectedFolders) {
+                                  await folderApi.delete(folderId, true);
+                                }
+                                setSelectedFolders([]);
+                                await fetchData();
+                                setFolderTreeRefreshKey(k => k + 1);
+                              } catch (error: any) {
+                                alert('Failed to delete folders: ' + (error.response?.data?.error || error.message));
+                              }
+                            }}
+                            className="px-3 py-1.5 text-xs bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors"
+                          >
+                            Delete
+                          </button>
+                          <button
+                            onClick={() => setSelectedFolders([])}
+                            className="px-3 py-1.5 text-xs bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+                          >
+                            Clear
+                          </button>
+                        </div>
+                      )}
+                    </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                       {[...folders].sort((a: any, b: any) => (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' })).map((folder: any) => (
                         <div
@@ -1846,7 +1962,7 @@ export function MediaLibraryPage() {
         <BatchUploadModal
           isOpen={showUploadModal}
           onClose={() => setShowUploadModal(false)}
-          onSuccess={fetchData}
+          onSuccess={() => fetchData(true)}
           editorId={editors.length > 0 ? editors[0].id : ''}
           currentFolderId={currentFolderId}
           editors={editors}

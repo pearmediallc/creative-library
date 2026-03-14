@@ -46,6 +46,7 @@ interface LaunchRequest {
   assigned_editors?: string;
   assigned_buyers?: string;
   upload_count?: number;
+  created_by?: string;
   created_by_name?: string;
   created_at: string;
   status: string;
@@ -68,7 +69,7 @@ export function LaunchRequestsPage() {
   const [platformFilter, setPlatformFilter] = useState('');
   const [showFilters, setShowFilters] = useState(false);
 
-  const canCreate = isAdminRole(user?.role);
+  const canCreate = isAdminRole(user?.role) || user?.role === 'buyer' || user?.role === 'creative' || user?.role === 'editor';
 
   const fetchRequests = async () => {
     setLoading(true);
@@ -386,7 +387,7 @@ export function LaunchRequestsPage() {
                             </Button>
                           )}
                           {/* Reopen button - admin/strategist only, when status is closed */}
-                          {(isAdminRole(user?.role) || user?.id === request.created_by_name) && request.status === 'closed' && (
+                          {(isAdminRole(user?.role) || user?.id === request.created_by) && request.status === 'closed' && (
                             <Button
                               variant="ghost" size="sm"
                               className="text-orange-600 hover:text-orange-700"
@@ -396,7 +397,7 @@ export function LaunchRequestsPage() {
                               <RefreshCw className="w-4 h-4" />
                             </Button>
                           )}
-                          {(isAdminRole(user?.role) || user?.id === request.created_by_name) && (
+                          {(isAdminRole(user?.role) || user?.id === request.created_by) && (
                             <Button
                               variant="ghost" size="sm"
                               onClick={() => handleDelete(request.id)}

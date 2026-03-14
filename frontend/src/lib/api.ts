@@ -942,6 +942,9 @@ export const analyticsApi = {
     bulk_fetch?: boolean;
   }) => api.get('/analytics/unified', { params }),
 
+  // Get personal editor dashboard
+  getEditorDashboard: () => api.get('/analytics/editor-dashboard'),
+
   // Get vertical dashboard analytics
   getVerticalDashboard: () => api.get('/analytics/vertical-dashboard'),
 

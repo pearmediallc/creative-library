@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Card } from './ui/Card';
 import { analyticsApi } from '../lib/api';
-import { TrendingUp, Video, FileText, CheckCircle, Clock, ChevronDown, ChevronUp, Calendar, User, Users } from 'lucide-react';
+import { TrendingUp, Video, FileText, CheckCircle, Clock, ChevronDown, ChevronUp, Calendar, User, Users, XCircle, ArrowUpDown } from 'lucide-react';
 import { getVerticalBadgeClasses } from '../constants/statusColors';
 
 interface VerticalStats {
@@ -67,6 +67,8 @@ export function VerticalDashboard() {
   const [detailedData, setDetailedData] = useState<VerticalDetails | null>(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [summary, setSummary] = useState<{ total_requests: number; total_creatives: number; completed_creatives: number }>({ total_requests: 0, total_creatives: 0, completed_creatives: 0 });
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [buyerFilter, setBuyerFilter] = useState<string>('');
 
   useEffect(() => {
     fetchVerticalStats();
@@ -105,8 +107,10 @@ export function VerticalDashboard() {
     if (expandedVertical === vertical) {
       setExpandedVertical(null);
       setDetailedData(null);
+      setBuyerFilter('');
     } else {
       setExpandedVertical(vertical);
+      setBuyerFilter('');
       await fetchVerticalDetails(vertical);
     }
   };
@@ -180,6 +184,12 @@ export function VerticalDashboard() {
     );
   }
 
+  // Sort stats by total requests
+  const sortedStats = [...stats].sort((a, b) => {
+    const diff = a.combined_total - b.combined_total;
+    return sortOrder === 'asc' ? diff : -diff;
+  });
+
   if (stats.length === 0) {
     return (
       <Card className="p-6">
@@ -206,7 +216,7 @@ export function VerticalDashboard() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <Card className="p-4">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
@@ -251,6 +261,20 @@ export function VerticalDashboard() {
 
         <Card className="p-4">
           <div className="flex items-center gap-3">
+            <div className="p-2 bg-red-100 dark:bg-red-900/30 rounded-lg">
+              <XCircle className="w-5 h-5 text-red-600 dark:text-red-400" />
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Closed</p>
+              <p className="text-2xl font-bold text-foreground">
+                {stats.reduce((sum, v) => sum + (v.file_requests.closed + v.launch_requests.closed), 0)}
+              </p>
+            </div>
+          </div>
+        </Card>
+
+        <Card className="p-4">
+          <div className="flex items-center gap-3">
             <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg">
               <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400" />
             </div>
@@ -264,6 +288,44 @@ export function VerticalDashboard() {
         </Card>
       </div>
 
+      {/* Filters */}
+      <div className="flex items-center gap-4 flex-wrap">
+        <button
+          onClick={() => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')}
+          className="flex items-center gap-2 px-3 py-2 text-sm border rounded-lg hover:bg-muted transition-colors"
+        >
+          <ArrowUpDown className="w-4 h-4" />
+          {sortOrder === 'desc' ? 'Most Requests First' : 'Least Requests First'}
+        </button>
+        {/* Buyer filter - filters expanded detail tables */}
+        {detailedData && expandedVertical && (() => {
+          const allBuyers = new Set<string>();
+          detailedData.file_requests.forEach(r => { if (r.buyer) allBuyers.add(r.buyer); });
+          detailedData.launch_requests.forEach(r => { if (r.buyer) allBuyers.add(r.buyer); });
+          if (allBuyers.size === 0) return null;
+          return (
+            <select
+              value={buyerFilter}
+              onChange={e => setBuyerFilter(e.target.value)}
+              className="px-3 py-2 text-sm border rounded-lg bg-background"
+            >
+              <option value="">All Buyers</option>
+              {Array.from(allBuyers).sort().map(b => (
+                <option key={b} value={b}>{b}</option>
+              ))}
+            </select>
+          );
+        })()}
+        {buyerFilter && (
+          <button
+            onClick={() => setBuyerFilter('')}
+            className="text-sm text-muted-foreground hover:text-foreground"
+          >
+            Clear filter
+          </button>
+        )}
+      </div>
+
       {/* Vertical Table */}
       <Card className="overflow-hidden">
         <div className="overflow-x-auto">
@@ -275,12 +337,13 @@ export function VerticalDashboard() {
                 <th className="text-center p-4 font-medium text-muted-foreground">Videos</th>
                 <th className="text-center p-4 font-medium text-muted-foreground">Pending</th>
                 <th className="text-center p-4 font-medium text-muted-foreground">Launched</th>
+                <th className="text-center p-4 font-medium text-muted-foreground">Closed</th>
                 <th className="text-center p-4 font-medium text-muted-foreground">Creatives Progress</th>
                 <th className="text-left p-4 font-medium text-muted-foreground">Editors Working</th>
               </tr>
             </thead>
             <tbody className="divide-y">
-              {stats.map((vertical) => {
+              {sortedStats.map((vertical) => {
                 // Merge editors from both file requests and launch requests
                 const allEditors = new Set([
                   ...vertical.file_requests.editors_working.split(', ').filter(Boolean),
@@ -333,6 +396,14 @@ export function VerticalDashboard() {
                           </span>
                         </div>
                       </td>
+                      <td className="p-4 text-center">
+                        <div className="flex items-center justify-center gap-1">
+                          <XCircle className="w-4 h-4 text-gray-500" />
+                          <span className="font-medium">
+                            {vertical.file_requests.closed + vertical.launch_requests.closed}
+                          </span>
+                        </div>
+                      </td>
                       <td className="p-4">
                         <div className="space-y-1">
                           <div className="flex items-center justify-between text-sm">
@@ -354,7 +425,7 @@ export function VerticalDashboard() {
                     {/* Expanded Details Row */}
                     {isExpanded && (
                       <tr>
-                        <td colSpan={7} className="p-0 bg-muted/30">
+                        <td colSpan={8} className="p-0 bg-muted/30">
                           <div className="p-6">
                             {detailsLoading ? (
                               <div className="flex items-center justify-center py-8">
@@ -364,11 +435,19 @@ export function VerticalDashboard() {
                             ) : detailedData ? (
                               <div className="space-y-6">
                                 {/* File Requests Section */}
-                                {detailedData.file_requests.length > 0 && (
+                                {(() => {
+                                  const filteredFR = buyerFilter
+                                    ? detailedData.file_requests.filter(r => r.buyer === buyerFilter)
+                                    : detailedData.file_requests;
+                                  const filteredLR = buyerFilter
+                                    ? detailedData.launch_requests.filter(r => r.buyer === buyerFilter)
+                                    : detailedData.launch_requests;
+                                  return (<>
+                                {filteredFR.length > 0 && (
                                   <div>
                                     <h4 className="font-semibold mb-3 flex items-center gap-2">
                                       <FileText className="w-4 h-4" />
-                                      File Requests ({detailedData.file_requests.length})
+                                      File Requests ({filteredFR.length})
                                     </h4>
                                     <div className="overflow-x-auto">
                                       <table className="w-full text-sm">
@@ -387,7 +466,7 @@ export function VerticalDashboard() {
                                           </tr>
                                         </thead>
                                         <tbody className="divide-y">
-                                          {detailedData.file_requests.map((req) => (
+                                          {filteredFR.map((req) => (
                                             <tr key={req.id} className="hover:bg-muted/30">
                                               <td className="p-3 max-w-xs truncate" title={req.title}>{req.title}</td>
                                               <td className="p-3">{req.request_type}</td>
@@ -436,11 +515,11 @@ export function VerticalDashboard() {
                                 )}
 
                                 {/* Launch Requests Section */}
-                                {detailedData.launch_requests.length > 0 && (
+                                {filteredLR.length > 0 && (
                                   <div>
                                     <h4 className="font-semibold mb-3 flex items-center gap-2">
                                       <FileText className="w-4 h-4" />
-                                      Launch Requests ({detailedData.launch_requests.length})
+                                      Launch Requests ({filteredLR.length})
                                     </h4>
                                     <div className="overflow-x-auto">
                                       <table className="w-full text-sm">
@@ -459,7 +538,7 @@ export function VerticalDashboard() {
                                           </tr>
                                         </thead>
                                         <tbody className="divide-y">
-                                          {detailedData.launch_requests.map((req) => (
+                                          {filteredLR.map((req) => (
                                             <tr key={req.id} className="hover:bg-muted/30">
                                               <td className="p-3 max-w-xs truncate" title={req.title}>{req.title}</td>
                                               <td className="p-3">{req.request_type}</td>
@@ -507,9 +586,13 @@ export function VerticalDashboard() {
                                   </div>
                                 )}
 
-                                {detailedData.file_requests.length === 0 && detailedData.launch_requests.length === 0 && (
-                                  <p className="text-center text-muted-foreground py-8">No requests found for this vertical</p>
+                                {filteredFR.length === 0 && filteredLR.length === 0 && (
+                                  <p className="text-center text-muted-foreground py-8">
+                                    {buyerFilter ? `No requests found for buyer "${buyerFilter}"` : 'No requests found for this vertical'}
+                                  </p>
                                 )}
+                                  </>);
+                                })()}
                               </div>
                             ) : (
                               <p className="text-center text-muted-foreground py-8">Failed to load details</p>

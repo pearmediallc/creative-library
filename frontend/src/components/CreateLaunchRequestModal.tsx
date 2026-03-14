@@ -5,6 +5,7 @@ import { Input } from './ui/Input';
 import { MultiSelect } from './ui/MultiSelect';
 import { SearchableSelect } from './ui/SearchableSelect';
 import { launchRequestApi, editorApi, authApi } from '../lib/api';
+import { useAuth, isAdminRole } from '../contexts/AuthContext';
 import { FILE_REQUEST_TYPES } from '../constants/fileRequestTypes';
 import { PLATFORMS } from '../constants/platforms';
 import { VERTICALS } from '../constants/verticals';
@@ -41,6 +42,8 @@ interface LRTemplate {
 }
 
 export function CreateLaunchRequestModal({ onClose, onSuccess }: Props) {
+  const { user } = useAuth();
+  const isEditorCreator = user?.role === 'creative' || user?.role === 'editor';
   // ── form state ────────────────────────────────────────────────────────────
   const [requestType, setRequestType] = useState('');
   const [platforms, setPlatforms] = useState<string[]>([]);
@@ -427,16 +430,24 @@ export function CreateLaunchRequestModal({ onClose, onSuccess }: Props) {
           {showAdvanced && (
             <div className="space-y-5 border-t pt-4">
 
-              {/* Assign Editors */}
-              <div>
-                <label className="block text-sm font-medium mb-1.5">Assign Editors (Creative Side)</label>
-                <MultiSelect
-                  options={editors.map(e => ({ id: e.id, label: e.name }))}
-                  selectedIds={selectedEditorIds}
-                  onChange={setSelectedEditorIds}
-                  placeholder="Select editors..."
-                />
-              </div>
+              {/* Assign Editors - hidden when editor creates (they are auto-assigned) */}
+              {!isEditorCreator && (
+                <div>
+                  <label className="block text-sm font-medium mb-1.5">Assign Editors (Creative Side)</label>
+                  <MultiSelect
+                    options={editors.map(e => ({ id: e.id, label: e.name }))}
+                    selectedIds={selectedEditorIds}
+                    onChange={setSelectedEditorIds}
+                    placeholder="Select editors..."
+                  />
+                </div>
+              )}
+              {isEditorCreator && (
+                <p className="text-sm text-muted-foreground bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg">
+                  You will be automatically assigned as the editor for this request.
+                  You can assign it to a team lead or buyer below.
+                </p>
+              )}
 
               {/* Assign Media Buyers */}
               <div>

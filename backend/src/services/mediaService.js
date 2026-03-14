@@ -360,7 +360,26 @@ class MediaService {
       // - All other users (editors, creatives, etc.) can only see their own uploads
 
       // For non-admins, apply RBAC filtering
-      if (!isAdminRole(userRole)) {
+      // team_lead with assigned verticals should only see files from those verticals in global search
+      if (userRole === 'team_lead' && filters.search) {
+        // Team lead needs user_id for the OR fallback (own uploads) in findWithFilters
+        filters.user_id = userId;
+        // Check if team lead has assigned verticals
+        try {
+          const vertResult = await query(
+            `SELECT vertical FROM vertical_heads WHERE head_editor_id = $1
+             UNION SELECT vertical FROM user_vertical_assignments WHERE user_id = $1`,
+            [userId]
+          );
+          if (vertResult.rows.length > 0) {
+            filters.assigned_verticals = vertResult.rows.map(r => r.vertical);
+            logger.info('Team lead with verticals - filtering by assigned verticals', { userId, verticals: filters.assigned_verticals });
+          } else {
+            // No assigned verticals = admin-equivalent, see all
+            logger.info('Team lead with no verticals - showing all files', { userId });
+          }
+        } catch (_) { /* table may not exist */ }
+      } else if (!isAdminRole(userRole)) {
         filters.user_id = userId;
         filters.user_role = userRole;
         logger.info('Non-admin user - applying RBAC filters', { userId, userRole });
