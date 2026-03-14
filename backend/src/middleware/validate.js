@@ -94,14 +94,22 @@ const schemas = {
     email: Joi.string().email().required(),
     password: Joi.string().min(8).max(100).required(),
     role: Joi.string().valid('admin', 'team_lead', 'creative', 'buyer').required(),
-    upload_limit_monthly: Joi.number().integer().min(0).max(10000).default(100)
+    upload_limit_monthly: Joi.number().integer().min(0).max(10000).default(100),
+    additional_roles: Joi.array().items(Joi.string().valid(
+      'team_lead', 'assistant_team_lead', 'vertical_head', 'ceo', 'head_media_buying', 'creative_head'
+    )).default([]),
+    assigned_verticals: Joi.array().items(Joi.string().max(100)).default([])
   }),
 
   updateUser: Joi.object({
     name: Joi.string().min(2).max(255),
     role: Joi.string().valid('admin', 'team_lead', 'creative', 'buyer'),
     upload_limit_monthly: Joi.number().integer().min(0).max(10000),
-    is_active: Joi.boolean()
+    is_active: Joi.boolean(),
+    additional_roles: Joi.array().items(Joi.string().valid(
+      'team_lead', 'assistant_team_lead', 'vertical_head', 'ceo', 'head_media_buying', 'creative_head'
+    )).default([]),
+    assigned_verticals: Joi.array().items(Joi.string().max(100)).default([])
   }),
 
   // Editor Management

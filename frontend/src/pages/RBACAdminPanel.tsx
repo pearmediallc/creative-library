@@ -509,7 +509,6 @@ export function RBACAdminPanel() {
                               const existingPerms = userDetailPermissions?.permissions || [];
                               const roleDefaults = userDetailPermissions?.roleDefaultPermissions || [];
                               const permMap: Record<string, Set<string>> = {};
-                              const expandedSet = new Set<string>();
                               // Add explicit permissions
                               existingPerms.forEach((p: any) => {
                                 if (p.permission === 'allow') {
@@ -517,7 +516,6 @@ export function RBACAdminPanel() {
                                     permMap[p.resource_type] = new Set();
                                   }
                                   permMap[p.resource_type].add(p.action);
-                                  expandedSet.add(p.resource_type);
                                 }
                               });
                               // Add role-based default permissions (from primary + additional roles)
@@ -527,11 +525,11 @@ export function RBACAdminPanel() {
                                     permMap[p.resource_type] = new Set();
                                   }
                                   permMap[p.resource_type].add(p.action);
-                                  expandedSet.add(p.resource_type);
                                 }
                               });
                               setShowGrantPermission(true);
-                              setGrantPermissionData({ ...grantPermissionData, userId: selectedUser.id, selectedPermissions: permMap, expandedResources: expandedSet });
+                              // All sections start collapsed (accordion style)
+                              setGrantPermissionData({ ...grantPermissionData, userId: selectedUser.id, selectedPermissions: permMap, expandedResources: new Set<string>() });
                             }}
                           >
                             <Shield className="w-4 h-4 mr-2" />

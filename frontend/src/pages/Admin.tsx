@@ -27,6 +27,7 @@ export function AdminPage() {
     additional_roles: [] as string[],
   });
   const [verticalSearch, setVerticalSearch] = useState('');
+  const [userSearch, setUserSearch] = useState('');
   const [error, setError] = useState('');
 
   // Password reset state
@@ -425,12 +426,28 @@ export function AdminPage() {
         {/* Users List */}
         <Card>
           <CardHeader>
-            <CardTitle>Users</CardTitle>
-            <CardDescription>Manage user accounts and permissions</CardDescription>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle>Users</CardTitle>
+                <CardDescription>Manage user accounts and permissions</CardDescription>
+              </div>
+              <div className="flex items-center gap-2">
+                <Input
+                  placeholder="Search users..."
+                  value={userSearch}
+                  onChange={(e) => setUserSearch(e.target.value)}
+                  className="w-56 h-9"
+                />
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {users.map((user) => (
+              {users.filter(u => {
+                if (!userSearch) return true;
+                const q = userSearch.toLowerCase();
+                return u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q) || u.role.toLowerCase().includes(q);
+              }).map((user) => (
                 <div key={user.id} className="flex items-center justify-between p-4 border rounded-lg">
                   <div className="flex items-center gap-4 flex-1">
                     <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
