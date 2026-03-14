@@ -803,6 +803,10 @@ export const launchRequestApi = {
     });
   },
 
+  // ── Download uploaded file ──────────────────────────────────────────────
+  downloadUpload: (launchRequestId: string, uploadId: string) =>
+    api.get(`/launch-requests/${launchRequestId}/uploads/${uploadId}/download`),
+
   // ── Templates ───────────────────────────────────────────────────────────
   getTemplates: () => api.get('/launch-requests/templates/list'),
   saveTemplate: (data: {

@@ -1366,6 +1366,82 @@ class LaunchRequestController {
   }
 
   // ─────────────────────────────────────────────
+  // DOWNLOAD (proxy file from S3 for buyers/any authorized user)
+  // ─────────────────────────────────────────────
+
+  async downloadUpload(req, res) {
+    try {
+      const { id, uploadId } = req.params;
+      const userId = req.user.id;
+      const userRole = req.user.role;
+
+      // Fetch the upload record
+      const uploadResult = await pool.query(
+        `SELECT lru.*, lr.created_by, lr.creative_head_id, lr.buyer_head_id
+         FROM launch_request_uploads lru
+         JOIN launch_requests lr ON lr.id = lru.launch_request_id
+         WHERE lru.id = $1 AND lru.launch_request_id = $2`,
+        [uploadId, id]
+      );
+
+      if (uploadResult.rows.length === 0) {
+        return res.status(404).json({ success: false, error: 'Upload not found' });
+      }
+
+      const upload = uploadResult.rows[0];
+
+      // Access control: admin, creator, creative head, buyer head, assigned editors, assigned buyers
+      const isAdmin = ['admin', 'ceo', 'head_media_buying', 'creative_head'].includes(userRole);
+      const isCreator = upload.created_by === userId;
+      const isCreativeHead = upload.creative_head_id === userId;
+      const isBuyerHead = upload.buyer_head_id === userId;
+      const isUploader = upload.uploaded_by === userId;
+
+      let isAssignedBuyer = false;
+      if (!isAdmin && !isCreator && !isCreativeHead && !isBuyerHead && !isUploader) {
+        const buyerCheck = await pool.query(
+          `SELECT 1 FROM launch_request_buyers WHERE launch_request_id = $1 AND buyer_id = $2 LIMIT 1`,
+          [id, userId]
+        );
+        isAssignedBuyer = buyerCheck.rows.length > 0;
+      }
+
+      let isAssignedEditor = false;
+      if (!isAdmin && !isCreator && !isCreativeHead && !isBuyerHead && !isUploader && !isAssignedBuyer) {
+        const editorCheck = await pool.query(
+          `SELECT 1 FROM launch_request_editors lre
+           JOIN editors e ON lre.editor_id = e.id
+           WHERE lre.launch_request_id = $1 AND e.user_id = $2 LIMIT 1`,
+          [id, userId]
+        );
+        isAssignedEditor = editorCheck.rows.length > 0;
+      }
+
+      if (!isAdmin && !isCreator && !isCreativeHead && !isBuyerHead && !isUploader && !isAssignedBuyer && !isAssignedEditor) {
+        return res.status(403).json({ success: false, error: 'You do not have permission to download this file' });
+      }
+
+      // Generate presigned URL and return it (frontend will open it)
+      if (upload.s3_key) {
+        const { getPresignedDownloadUrl } = require('../config/aws');
+        const presignedUrl = await getPresignedDownloadUrl(upload.s3_key);
+        return res.json({ success: true, data: { url: presignedUrl, filename: upload.original_filename } });
+      }
+
+      // Fallback: return the stored s3_url
+      if (upload.s3_url) {
+        return res.json({ success: true, data: { url: upload.s3_url, filename: upload.original_filename } });
+      }
+
+      return res.status(404).json({ success: false, error: 'File not available for download' });
+
+    } catch (err) {
+      logger.error('Launch request download error:', err);
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  }
+
+  // ─────────────────────────────────────────────
   // TEMPLATES
   // ─────────────────────────────────────────────
 

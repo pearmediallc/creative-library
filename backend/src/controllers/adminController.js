@@ -188,6 +188,21 @@ class AdminController {
               [req.params.id, vertical]
             );
           }
+
+          // Also update vertical_heads table if user is a vertical head / team_lead
+          const effectiveRole = req.body.role || user.role;
+          if (['team_lead', 'creative'].includes(effectiveRole)) {
+            // Remove old vertical_heads entries for this user
+            await query('DELETE FROM vertical_heads WHERE head_editor_id = $1', [req.params.id]);
+            for (const vertical of req.body.assigned_verticals) {
+              await query(
+                `INSERT INTO vertical_heads (vertical, head_editor_id)
+                 VALUES ($1, $2)
+                 ON CONFLICT (vertical) DO UPDATE SET head_editor_id = $2, updated_at = NOW()`,
+                [vertical, req.params.id]
+              );
+            }
+          }
         } catch (vaErr) {
           logger.warn('Failed to save vertical assignments', { error: vaErr.message });
         }

@@ -1189,15 +1189,31 @@ export function LaunchRequestDetailsModal({ request: initialRequest, onClose, on
                               {upload.comments ? ` · ${upload.comments}` : ''}
                             </p>
                           </div>
-                          {upload.s3_url && (
-                            <a
-                              href={upload.s3_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
+                          {(upload.s3_url || upload.id) && (
+                            <button
+                              onClick={async () => {
+                                try {
+                                  const resp = await launchRequestApi.downloadUpload(request.id, upload.id);
+                                  const url = resp.data?.data?.url;
+                                  if (url) {
+                                    const a = document.createElement('a');
+                                    a.href = url;
+                                    a.target = '_blank';
+                                    a.rel = 'noopener noreferrer';
+                                    a.download = upload.original_filename || 'download';
+                                    document.body.appendChild(a);
+                                    a.click();
+                                    document.body.removeChild(a);
+                                  }
+                                } catch (err) {
+                                  console.error('Download failed:', err);
+                                  alert('Failed to download file. Please try again.');
+                                }
+                              }}
                               className="text-xs text-blue-600 hover:underline shrink-0 font-medium"
                             >
                               Download
-                            </a>
+                            </button>
                           )}
                         </div>
                       ))}

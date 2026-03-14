@@ -75,6 +75,9 @@ router.delete('/:id/buyers/:buyerId/access', authenticateToken, (req, res) => la
 // Upload a creative file (authenticated — editors/creative head)
 router.post('/:id/upload', authenticateToken, upload.single('file'), (req, res) => launchRequestController.upload(req, res));
 
+// Download an uploaded file (authenticated — buyers, editors, admins)
+router.get('/:id/uploads/:uploadId/download', authenticateToken, (req, res) => launchRequestController.downloadUpload(req, res));
+
 // ─── CANVAS BRIEF ───────────────────────────────────────────────────────────
 
 // Get canvas for launch request
