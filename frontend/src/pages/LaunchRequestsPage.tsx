@@ -5,7 +5,7 @@ import { Button } from '../components/ui/Button';
 import { launchRequestApi } from '../lib/api';
 import { formatDateTime } from '../lib/utils';
 import {
-  Plus, Search, Rocket, Trash2, Copy, Link as LinkIcon, Filter, RefreshCw
+  Plus, Search, Rocket, Trash2, Copy, Eye, Filter, RefreshCw
 } from 'lucide-react';
 import { SearchableSelect } from '../components/ui/SearchableSelect';
 import { CreateLaunchRequestModal } from '../components/CreateLaunchRequestModal';
@@ -373,7 +373,7 @@ export function LaunchRequestsPage() {
                             onClick={() => handleViewDetails(request)}
                             title="View Details"
                           >
-                            <LinkIcon className="w-4 h-4" />
+                            <Eye className="w-4 h-4" />
                           </Button>
                           {/* Launch button - buyer/admin only, when status is buyer_assigned */}
                           {(user?.role === 'buyer' || isAdminRole(user?.role)) && request.status === 'buyer_assigned' && (

@@ -199,30 +199,35 @@ async function getUserPermissions(req, res) {
     const permissions = await permissionService.getUserPermissions(userId);
 
     // Also fetch role-based default permissions for this user's primary + additional roles
+    // Use the rbacPermissions config as source of truth (matches users.role names directly)
     let roleDefaultPermissions = [];
     try {
+      const { getMergedPermissions } = require('../config/rbacPermissions');
       const userResult = await query(
         `SELECT role, additional_roles FROM users WHERE id = $1`,
         [userId]
       );
       if (userResult.rows.length > 0) {
         const user = userResult.rows[0];
-        const allRoles = [user.role, ...(user.additional_roles || [])].filter(Boolean);
+        const primaryRole = user.role;
+        const additionalRoles = user.additional_roles || [];
 
-        if (allRoles.length > 0) {
-          const rdpResult = await query(
-            `SELECT rdp.resource_type, rdp.action, rdp.permission, r.name as role_name
-             FROM role_default_permissions rdp
-             JOIN roles r ON rdp.role_id = r.id
-             WHERE r.name = ANY($1)
-             ORDER BY rdp.resource_type, rdp.action`,
-            [allRoles]
-          );
-          roleDefaultPermissions = rdpResult.rows;
+        // Get merged permissions from config (uses exact role name matching)
+        const mergedPerms = getMergedPermissions(primaryRole, additionalRoles);
+
+        // Convert to flat array format matching what frontend expects
+        for (const [resourceType, actions] of Object.entries(mergedPerms)) {
+          for (const action of actions) {
+            roleDefaultPermissions.push({
+              resource_type: resourceType,
+              action: action,
+              permission: 'allow',
+              role_name: primaryRole
+            });
+          }
         }
       }
     } catch (rdpErr) {
-      // role_default_permissions table may not exist
       console.warn('Could not fetch role default permissions:', rdpErr.message);
     }
 

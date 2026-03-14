@@ -57,7 +57,20 @@ class User extends BaseModel {
          WHERE id = $1`,
         [id]
       );
-      return result[0] || null;
+      const user = result[0] || null;
+      if (user) {
+        // Fetch assigned_verticals from user_vertical_assignments table
+        try {
+          const vaResult = await this.raw(
+            `SELECT ARRAY_AGG(vertical) as verticals FROM user_vertical_assignments WHERE user_id = $1`,
+            [id]
+          );
+          user.assigned_verticals = vaResult[0]?.verticals || [];
+        } catch (vaErr) {
+          user.assigned_verticals = [];
+        }
+      }
+      return user;
     } catch (err) {
       // Fallback if additional_roles column doesn't exist yet
       if (err.message && err.message.includes('additional_roles')) {
@@ -68,7 +81,10 @@ class User extends BaseModel {
           [id]
         );
         const user = result[0] || null;
-        if (user) user.additional_roles = [];
+        if (user) {
+          user.additional_roles = [];
+          user.assigned_verticals = [];
+        }
         return user;
       }
       throw err;

@@ -457,6 +457,26 @@ class LaunchRequestController {
         `, [id])
       ]);
 
+      // Generate presigned URLs for uploads so frontend can show thumbnails/previews
+      let uploadsWithUrls = uploads.rows;
+      try {
+        const { getPresignedDownloadUrl } = require('../config/aws');
+        uploadsWithUrls = await Promise.all(uploads.rows.map(async (upload) => {
+          if (upload.s3_key) {
+            try {
+              const presignedUrl = await getPresignedDownloadUrl(upload.s3_key);
+              return { ...upload, s3_url: presignedUrl };
+            } catch (e) {
+              return upload;
+            }
+          }
+          return upload;
+        }));
+      } catch (e) {
+        // If presigned URL generation fails, fall back to raw s3_urls
+        logger.warn('Failed to generate presigned URLs for launch request uploads:', e.message);
+      }
+
       return res.json({
         success: true,
         data: {
@@ -465,7 +485,7 @@ class LaunchRequestController {
           verticals: verticals.rows.map(r => r.vertical),
           editors: editors.rows,
           buyers: buyers.rows,
-          uploads: uploads.rows,
+          uploads: uploadsWithUrls,
           reassignments: reassignments.rows
         }
       });

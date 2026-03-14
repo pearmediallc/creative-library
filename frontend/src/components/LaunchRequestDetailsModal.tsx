@@ -170,7 +170,7 @@ export function LaunchRequestDetailsModal({ request: initialRequest, onClose, on
   const [availableBuyers, setAvailableBuyers] = useState<any[]>([]);
   const [availableCreativeUsers, setAvailableCreativeUsers] = useState<any[]>([]);
   const [showSection, setShowSection] = useState<Record<string, boolean>>({
-    summary: true, creative: true, buyer: false, uploads: false, history: false
+    summary: true, creative: true, buyer: false, uploads: true, history: false
   });
 
   const toggleSection = (key: string) =>

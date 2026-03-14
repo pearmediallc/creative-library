@@ -105,8 +105,21 @@ class AuthService {
     // Generate token
     const token = this.generateToken(user);
 
+    // Fetch assigned_verticals from separate table
+    const sanitized = this.sanitizeUser(user);
+    try {
+      const { query } = require('../config/database');
+      const vaResult = await query(
+        'SELECT ARRAY_AGG(vertical) as verticals FROM user_vertical_assignments WHERE user_id = $1',
+        [user.id]
+      );
+      sanitized.assigned_verticals = vaResult.rows[0]?.verticals || [];
+    } catch (vaErr) {
+      sanitized.assigned_verticals = [];
+    }
+
     return {
-      user: this.sanitizeUser(user),
+      user: sanitized,
       token
     };
   }

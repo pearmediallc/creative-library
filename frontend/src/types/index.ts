@@ -7,6 +7,7 @@ export interface User {
   upload_limit_monthly: number;
   view_all_requests?: boolean;
   additional_roles?: string[];
+  assigned_verticals?: string[];
   created_at: string;
 }
 

@@ -50,8 +50,8 @@ export function RBACPermissionsMatrix() {
       const res = await rbacApi.getPermissionMatrix();
       const data = res.data.data;
       setMatrix(data);
-      // Expand all resources by default
-      setExpandedResources(new Set(data.resources));
+      // Start all resources collapsed (accordion style)
+      setExpandedResources(new Set());
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to load permission matrix');
     } finally {
