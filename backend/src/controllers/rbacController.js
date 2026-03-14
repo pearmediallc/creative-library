@@ -202,7 +202,6 @@ async function getUserPermissions(req, res) {
     // Use the rbacPermissions config as source of truth (matches users.role names directly)
     let roleDefaultPermissions = [];
     try {
-      const { getMergedPermissions } = require('../config/rbacPermissions');
       const userResult = await query(
         `SELECT role, additional_roles FROM users WHERE id = $1`,
         [userId]

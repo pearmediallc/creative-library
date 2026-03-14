@@ -723,7 +723,7 @@ class AnalyticsController {
           fr.launched_at,
           fr.closed_at,
           u_creator.name as creator_name,
-          u_buyer.name as buyer_name,
+          COALESCE(u_buyer.name, u_first_buyer.name, u_creator.name) as buyer_name,
           fea.assigned_editors,
           COALESCE(fea.total_assigned, 0) as total_creatives,
           COALESCE(fua.upload_count, 0) as completed_creatives,
@@ -733,10 +733,15 @@ class AnalyticsController {
         JOIN file_requests fr ON fr.id = frv.file_request_id
         LEFT JOIN users u_creator ON u_creator.id = fr.created_by
         LEFT JOIN users u_buyer ON u_buyer.id = fr.assigned_buyer_id
+        LEFT JOIN users u_first_buyer ON u_first_buyer.id = (
+          CASE WHEN fr.assigned_buyer_ids IS NOT NULL AND array_length(fr.assigned_buyer_ids, 1) > 0
+               THEN fr.assigned_buyer_ids[1]
+               ELSE NULL END
+        )
         LEFT JOIN fr_editor_agg fea ON fea.request_id = fr.id
         LEFT JOIN fr_upload_agg fua ON fua.file_request_id = fr.id
         WHERE frv.vertical = $1 AND fr.is_active = TRUE
-        GROUP BY fr.id, u_creator.name, u_buyer.name, fea.assigned_editors, fea.total_assigned, fua.upload_count, fea.first_assignment_at, fea.last_accepted_at
+        GROUP BY fr.id, u_creator.name, u_buyer.name, u_first_buyer.name, fea.assigned_editors, fea.total_assigned, fua.upload_count, fea.first_assignment_at, fea.last_accepted_at
         ORDER BY fr.created_at DESC
       `;
 
