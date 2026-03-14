@@ -505,11 +505,23 @@ export function RBACAdminPanel() {
                             size="sm"
                             variant="outline"
                             onClick={() => {
-                              // Pre-populate existing permissions from userDetailPermissions
+                              // Pre-populate existing permissions + role default permissions
                               const existingPerms = userDetailPermissions?.permissions || [];
+                              const roleDefaults = userDetailPermissions?.roleDefaultPermissions || [];
                               const permMap: Record<string, Set<string>> = {};
                               const expandedSet = new Set<string>();
+                              // Add explicit permissions
                               existingPerms.forEach((p: any) => {
+                                if (p.permission === 'allow') {
+                                  if (!permMap[p.resource_type]) {
+                                    permMap[p.resource_type] = new Set();
+                                  }
+                                  permMap[p.resource_type].add(p.action);
+                                  expandedSet.add(p.resource_type);
+                                }
+                              });
+                              // Add role-based default permissions (from primary + additional roles)
+                              roleDefaults.forEach((p: any) => {
                                 if (p.permission === 'allow') {
                                   if (!permMap[p.resource_type]) {
                                     permMap[p.resource_type] = new Set();

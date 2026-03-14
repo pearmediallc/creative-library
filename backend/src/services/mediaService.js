@@ -361,7 +361,7 @@ class MediaService {
 
       // For non-admins, apply RBAC filtering
       // team_lead with assigned verticals should only see files from those verticals in global search
-      if (userRole === 'team_lead' && filters.search) {
+      if (userRole === 'team_lead') {
         // Team lead needs user_id for the OR fallback (own uploads) in findWithFilters
         filters.user_id = userId;
         // Check if team lead has assigned verticals

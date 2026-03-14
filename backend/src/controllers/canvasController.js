@@ -361,25 +361,25 @@ class CanvasController {
         }, []);
       }
 
-      // Create or find "Creatives" subfolder inside the request folder
+      // Create or find "Canvas Brief" subfolder inside the request folder
       let targetFolderId = fileRequest.folder_id;
       if (fileRequest.folder_id) {
         try {
-          const existingCreativeFolder = await query(
-            `SELECT id FROM folders WHERE name = 'Creatives' AND parent_id = $1 LIMIT 1`,
+          const existingBriefFolder = await query(
+            `SELECT id FROM folders WHERE name = 'Canvas Brief' AND parent_id = $1 LIMIT 1`,
             [fileRequest.folder_id]
           );
-          if (existingCreativeFolder.rows.length > 0) {
-            targetFolderId = existingCreativeFolder.rows[0].id;
+          if (existingBriefFolder.rows.length > 0) {
+            targetFolderId = existingBriefFolder.rows[0].id;
           } else {
             const newFolder = await query(
-              `INSERT INTO folders (name, parent_id, created_by) VALUES ('Creatives', $1, $2) RETURNING id`,
+              `INSERT INTO folders (name, parent_id, created_by) VALUES ('Canvas Brief', $1, $2) RETURNING id`,
               [fileRequest.folder_id, userId]
             );
             targetFolderId = newFolder.rows[0].id;
           }
         } catch (folderErr) {
-          logger.warn('Could not create Creatives subfolder, using request folder', { error: folderErr.message });
+          logger.warn('Could not create Canvas Brief subfolder, using request folder', { error: folderErr.message });
         }
       }
 

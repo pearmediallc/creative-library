@@ -50,13 +50,29 @@ class User extends BaseModel {
    * Get user with safe fields (no password)
    */
   async getSafeUser(id) {
-    const result = await this.raw(
-      `SELECT id, name, email, role, upload_limit_monthly, is_active, created_at
-       FROM ${this.tableName}
-       WHERE id = $1`,
-      [id]
-    );
-    return result[0] || null;
+    try {
+      const result = await this.raw(
+        `SELECT id, name, email, role, upload_limit_monthly, is_active, created_at, additional_roles
+         FROM ${this.tableName}
+         WHERE id = $1`,
+        [id]
+      );
+      return result[0] || null;
+    } catch (err) {
+      // Fallback if additional_roles column doesn't exist yet
+      if (err.message && err.message.includes('additional_roles')) {
+        const result = await this.raw(
+          `SELECT id, name, email, role, upload_limit_monthly, is_active, created_at
+           FROM ${this.tableName}
+           WHERE id = $1`,
+          [id]
+        );
+        const user = result[0] || null;
+        if (user) user.additional_roles = [];
+        return user;
+      }
+      throw err;
+    }
   }
 
   /**

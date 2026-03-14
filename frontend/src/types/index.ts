@@ -6,6 +6,7 @@ export interface User {
   is_active: boolean;
   upload_limit_monthly: number;
   view_all_requests?: boolean;
+  additional_roles?: string[];
   created_at: string;
 }
 

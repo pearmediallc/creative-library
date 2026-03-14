@@ -198,9 +198,37 @@ async function getUserPermissions(req, res) {
     const { userId } = req.params;
     const permissions = await permissionService.getUserPermissions(userId);
 
+    // Also fetch role-based default permissions for this user's primary + additional roles
+    let roleDefaultPermissions = [];
+    try {
+      const userResult = await query(
+        `SELECT role, additional_roles FROM users WHERE id = $1`,
+        [userId]
+      );
+      if (userResult.rows.length > 0) {
+        const user = userResult.rows[0];
+        const allRoles = [user.role, ...(user.additional_roles || [])].filter(Boolean);
+
+        if (allRoles.length > 0) {
+          const rdpResult = await query(
+            `SELECT rdp.resource_type, rdp.action, rdp.permission, r.name as role_name
+             FROM role_default_permissions rdp
+             JOIN roles r ON rdp.role_id = r.id
+             WHERE r.name = ANY($1)
+             ORDER BY rdp.resource_type, rdp.action`,
+            [allRoles]
+          );
+          roleDefaultPermissions = rdpResult.rows;
+        }
+      }
+    } catch (rdpErr) {
+      // role_default_permissions table may not exist
+      console.warn('Could not fetch role default permissions:', rdpErr.message);
+    }
+
     res.json({
       success: true,
-      data: permissions
+      data: { ...permissions, roleDefaultPermissions }
     });
   } catch (error) {
     console.error('Error getting user permissions:', error);

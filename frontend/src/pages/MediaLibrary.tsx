@@ -1040,16 +1040,6 @@ export function MediaLibraryPage() {
                   >
                     My Library
                   </button>
-                  <button
-                    onClick={() => setOrgViewMode('shared')}
-                    className={`px-3 py-1.5 text-sm font-medium transition-colors ${
-                      orgViewMode === 'shared'
-                        ? 'bg-purple-600 text-white'
-                        : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-                    }`}
-                  >
-                    Shared Folders
-                  </button>
                   {isAdmin && (
                   <button
                     onClick={() => setOrgViewMode('org-wide')}
@@ -1401,6 +1391,19 @@ export function MediaLibraryPage() {
                           <span className="text-sm text-blue-600 font-medium">
                             {selectedFolders.length} folder{selectedFolders.length !== 1 ? 's' : ''} selected
                           </span>
+                          <button
+                            onClick={() => {
+                              // Share the first selected folder (share dialog handles one at a time)
+                              const folderId = selectedFolders[0];
+                              const folder = folders.find((f: any) => f.id === folderId);
+                              if (folder) {
+                                setShareDialogFile({ id: folder.id, name: folder.name, type: 'folder' });
+                              }
+                            }}
+                            className="px-3 py-1.5 text-xs bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition-colors"
+                          >
+                            Share
+                          </button>
                           <button
                             onClick={() => {
                               setFolderPickerOperation('move');

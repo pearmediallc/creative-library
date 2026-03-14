@@ -25,9 +25,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (storedToken && storedUser) {
       setToken(storedToken);
-      setUser(JSON.parse(storedUser));
+      const parsedUser = JSON.parse(storedUser);
+      setUser(parsedUser);
+
+      // Refresh user data from server to pick up role/permission changes
+      authApi.me().then(res => {
+        const freshUser = res.data?.data || res.data?.user;
+        if (freshUser && freshUser.id) {
+          // Merge fresh server data with stored user (keep token valid)
+          const merged = { ...parsedUser, ...freshUser };
+          setUser(merged);
+          localStorage.setItem('user', JSON.stringify(merged));
+        }
+      }).catch(() => {
+        // Token may be expired — force logout
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        setToken(null);
+        setUser(null);
+      }).finally(() => {
+        setLoading(false);
+      });
+    } else {
+      setLoading(false);
     }
-    setLoading(false);
   }, []);
 
   const login = async (email: string, password: string) => {

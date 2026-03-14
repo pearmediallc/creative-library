@@ -26,10 +26,24 @@ class AdminController {
         }, {});
       } catch (_) { /* table may not exist yet */ }
 
-      // Sanitize password hashes and add verticals
+      // Fetch additional_roles separately in case the column doesn't exist in SELECT *
+      let additionalRolesMap = {};
+      try {
+        const arResult = await query('SELECT id, additional_roles FROM users WHERE additional_roles IS NOT NULL AND array_length(additional_roles, 1) > 0');
+        additionalRolesMap = arResult.rows.reduce((acc, row) => {
+          acc[row.id] = row.additional_roles;
+          return acc;
+        }, {});
+      } catch (_) { /* column may not exist */ }
+
+      // Sanitize password hashes and add verticals + additional_roles
       const sanitizedUsers = users.map(user => {
         const { password_hash, ...rest } = user;
         rest.assigned_verticals = verticalMap[user.id] || [];
+        // Ensure additional_roles is always present (from column or from separate query)
+        if (!rest.additional_roles || !Array.isArray(rest.additional_roles)) {
+          rest.additional_roles = additionalRolesMap[user.id] || [];
+        }
         return rest;
       });
 
@@ -185,16 +199,23 @@ class AdminController {
 
       // Save additional_roles separately so a missing column doesn't block the main update
       if (req.body.additional_roles !== undefined) {
+        const rolesArray = Array.isArray(req.body.additional_roles) ? req.body.additional_roles : [];
+        logger.info('Saving additional_roles', { userId: req.params.id, additional_roles: rolesArray });
+
+        // Always ensure the column exists first
         try {
-          await query('UPDATE users SET additional_roles = $1 WHERE id = $2', [req.body.additional_roles, req.params.id]);
+          await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS additional_roles TEXT[] DEFAULT '{}'`);
+        } catch (colErr) {
+          logger.warn('ALTER TABLE for additional_roles failed (may already exist)', { error: colErr.message });
+        }
+
+        try {
+          await query('UPDATE users SET additional_roles = $1::text[] WHERE id = $2', [rolesArray, req.params.id]);
+          // Verify it was saved
+          const verify = await query('SELECT additional_roles FROM users WHERE id = $1', [req.params.id]);
+          logger.info('additional_roles saved and verified', { userId: req.params.id, saved: verify.rows[0]?.additional_roles });
         } catch (arErr) {
-          // Column might not exist — create it and retry
-          try {
-            await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS additional_roles TEXT[] DEFAULT '{}'`);
-            await query('UPDATE users SET additional_roles = $1 WHERE id = $2', [req.body.additional_roles, req.params.id]);
-          } catch (retryErr) {
-            logger.warn('Failed to save additional_roles', { error: retryErr.message });
-          }
+          logger.error('Failed to save additional_roles', { error: arErr.message, stack: arErr.stack });
         }
       }
 

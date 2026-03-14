@@ -102,10 +102,15 @@ class AuthController {
    */
   async me(req, res, next) {
     try {
-      // req.user is set by authenticateToken middleware
+      // Fetch fresh user data from DB (not just JWT payload) to reflect admin changes
+      const User = require('../models/User');
+      const freshUser = await User.getSafeUser(req.user.id);
+      if (!freshUser) {
+        return res.status(404).json({ success: false, error: 'User not found' });
+      }
       res.json({
         success: true,
-        data: { user: req.user }
+        data: { user: freshUser }
       });
     } catch (error) {
       logger.error('Get current user error', { error: error.message, userId: req.user?.id });
