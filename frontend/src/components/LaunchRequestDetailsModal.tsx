@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import {
   X, Upload, CheckCircle, RefreshCw, UserPlus, FileText,
   ChevronDown, ChevronUp, Paperclip, FolderOpen, Users,
-  Loader2, AlertCircle, Rocket, XCircle
+  Loader2, AlertCircle, Rocket, XCircle,
+  Download, Eye, Play, Image, File, List, Grid3X3, LayoutGrid
 } from 'lucide-react';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
@@ -128,6 +129,30 @@ export function LaunchRequestDetailsModal({ request: initialRequest, onClose, on
   // ── upload queue (progress sidebar) ──────────────────────────────────────
   const [uploadQueue, setUploadQueue] = useState<Array<{ name: string; status: 'pending' | 'uploading' | 'done' | 'error'; error?: string }>>([]);
   const [showUploadQueue, setShowUploadQueue] = useState(false);
+
+  // ── upload display ────────────────────────────────────────────────────────
+  const [uploadViewMode, setUploadViewMode] = useState<'list' | 'grid' | 'tile'>('list');
+  const [previewUpload, setPreviewUpload] = useState<any>(null);
+
+  const handleUploadDownload = async (upload: any) => {
+    try {
+      const resp = await launchRequestApi.downloadUpload(request.id, upload.id);
+      const url = resp.data?.data?.url;
+      if (url) {
+        const a = document.createElement('a');
+        a.href = url;
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        a.download = upload.original_filename || 'download';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      }
+    } catch (err) {
+      console.error('Download failed:', err);
+      alert('Failed to download file. Please try again.');
+    }
+  };
 
   // ── buyer file access / testing assignment ────────────────────────────────
   const [selectedUploadIds, setSelectedUploadIds] = useState<string[]>([]);
@@ -1163,60 +1188,194 @@ export function LaunchRequestDetailsModal({ request: initialRequest, onClose, on
                         </div>
                       )}
 
-                      {/* File list with checkboxes */}
-                      {(request.uploads || []).map(upload => (
-                        <div key={upload.id} className={`flex items-center gap-3 p-2.5 border rounded-lg transition-colors ${
-                          selectedUploadIds.includes(upload.id) ? 'border-indigo-300 bg-indigo-50/50 dark:bg-indigo-950/20' : 'hover:bg-muted/50'
-                        }`}>
-                          {/* Checkbox (buyer head / admin only) */}
-                          {(isBuyerHead || isAdmin) && (
-                            <input
-                              type="checkbox"
-                              className="rounded border-border w-4 h-4 shrink-0"
-                              checked={selectedUploadIds.includes(upload.id)}
-                              onChange={e => {
-                                if (e.target.checked) setSelectedUploadIds(prev => [...prev, upload.id]);
-                                else setSelectedUploadIds(prev => prev.filter(id => id !== upload.id));
-                              }}
-                            />
-                          )}
-                          <Paperclip className="w-4 h-4 text-muted-foreground shrink-0" />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium truncate">{upload.original_filename}</p>
-                            <p className="text-xs text-muted-foreground">
-                              By {upload.uploader_name} · {formatDateTime(upload.created_at)}
-                              {upload.file_size ? ` · ${(upload.file_size / 1024 / 1024).toFixed(2)} MB` : ''}
-                              {upload.comments ? ` · ${upload.comments}` : ''}
-                            </p>
-                          </div>
-                          {(upload.s3_url || upload.id) && (
+                      {/* View mode toggle + search */}
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center border border-gray-200 dark:border-gray-600 rounded-md overflow-hidden">
+                          {([['list', List, 'List'], ['grid', Grid3X3, 'Grid'], ['tile', LayoutGrid, 'Tiles']] as const).map(([mode, Icon, label]) => (
                             <button
-                              onClick={async () => {
+                              key={mode}
+                              onClick={() => setUploadViewMode(mode)}
+                              title={label}
+                              className={`p-1.5 transition-colors ${uploadViewMode === mode ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/40 dark:text-blue-400' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}`}
+                            >
+                              <Icon className="w-3.5 h-3.5" />
+                            </button>
+                          ))}
+                        </div>
+                        {selectedUploadIds.length > 0 && (
+                          <button
+                            onClick={async () => {
+                              for (const uid of selectedUploadIds) {
                                 try {
-                                  const resp = await launchRequestApi.downloadUpload(request.id, upload.id);
+                                  const resp = await launchRequestApi.downloadUpload(request.id, uid);
                                   const url = resp.data?.data?.url;
                                   if (url) {
                                     const a = document.createElement('a');
                                     a.href = url;
                                     a.target = '_blank';
-                                    a.rel = 'noopener noreferrer';
-                                    a.download = upload.original_filename || 'download';
+                                    a.download = (request.uploads || []).find((u: any) => u.id === uid)?.original_filename || 'download';
                                     document.body.appendChild(a);
                                     a.click();
                                     document.body.removeChild(a);
                                   }
-                                } catch (err) {
-                                  console.error('Download failed:', err);
-                                  alert('Failed to download file. Please try again.');
-                                }
-                              }}
-                              className="text-xs text-blue-600 hover:underline shrink-0 font-medium"
-                            >
-                              Download
-                            </button>
-                          )}
+                                } catch {}
+                              }
+                            }}
+                            className="px-3 py-1.5 text-xs bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200"
+                          >
+                            <Download className="w-3 h-3 inline mr-1" />
+                            Download Selected ({selectedUploadIds.length})
+                          </button>
+                        )}
+                      </div>
+
+                      {/* File display based on view mode */}
+                      {uploadViewMode === 'grid' ? (
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                          {(request.uploads || []).map((upload: any) => {
+                            const isImage = (upload.mime_type || '').startsWith('image');
+                            const isVideo = (upload.mime_type || '').startsWith('video');
+                            return (
+                              <div key={upload.id} className={`relative border rounded-lg overflow-hidden cursor-pointer group transition-all ${
+                                selectedUploadIds.includes(upload.id) ? 'ring-2 ring-blue-500 border-blue-400' : 'hover:border-blue-300'
+                              }`}>
+                                {(isBuyerHead || isAdmin) && (
+                                  <input type="checkbox" className="absolute top-2 left-2 z-10 w-4 h-4 rounded"
+                                    checked={selectedUploadIds.includes(upload.id)}
+                                    onChange={e => {
+                                      if (e.target.checked) setSelectedUploadIds(prev => [...prev, upload.id]);
+                                      else setSelectedUploadIds(prev => prev.filter(id => id !== upload.id));
+                                    }}
+                                  />
+                                )}
+                                <div className="aspect-video bg-gray-100 dark:bg-gray-800 flex items-center justify-center"
+                                  onClick={() => setPreviewUpload(upload)}>
+                                  {isImage && upload.s3_url ? (
+                                    <img src={upload.s3_url} alt={upload.original_filename} className="w-full h-full object-cover" />
+                                  ) : isVideo ? (
+                                    <div className="flex flex-col items-center text-gray-400">
+                                      <Play className="w-8 h-8" />
+                                      <span className="text-[10px] mt-1">Video</span>
+                                    </div>
+                                  ) : (
+                                    <File className="w-8 h-8 text-gray-400" />
+                                  )}
+                                </div>
+                                <div className="p-2">
+                                  <p className="text-xs font-medium truncate">{upload.original_filename}</p>
+                                  <p className="text-[10px] text-muted-foreground">{upload.uploader_name} · {upload.file_size ? `${(upload.file_size / 1024 / 1024).toFixed(1)} MB` : ''}</p>
+                                </div>
+                                <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 flex gap-1 transition-opacity">
+                                  <button onClick={(e) => { e.stopPropagation(); setPreviewUpload(upload); }}
+                                    className="p-1 bg-white/90 dark:bg-gray-800/90 rounded shadow-sm hover:bg-white"><Eye className="w-3.5 h-3.5" /></button>
+                                  <button onClick={async (e) => { e.stopPropagation(); await handleUploadDownload(upload); }}
+                                    className="p-1 bg-white/90 dark:bg-gray-800/90 rounded shadow-sm hover:bg-white"><Download className="w-3.5 h-3.5" /></button>
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
-                      ))}
+                      ) : uploadViewMode === 'tile' ? (
+                        <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
+                          {(request.uploads || []).map((upload: any) => {
+                            const isImage = (upload.mime_type || '').startsWith('image');
+                            const isVideo = (upload.mime_type || '').startsWith('video');
+                            return (
+                              <div key={upload.id} className={`relative border rounded-lg overflow-hidden cursor-pointer group ${
+                                selectedUploadIds.includes(upload.id) ? 'ring-2 ring-blue-500' : 'hover:border-blue-300'
+                              }`} onClick={() => setPreviewUpload(upload)}>
+                                <div className="aspect-square bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+                                  {isImage && upload.s3_url ? (
+                                    <img src={upload.s3_url} alt={upload.original_filename} className="w-full h-full object-cover" />
+                                  ) : isVideo ? (
+                                    <Play className="w-6 h-6 text-gray-400" />
+                                  ) : (
+                                    <File className="w-6 h-6 text-gray-400" />
+                                  )}
+                                </div>
+                                <p className="text-[10px] truncate px-1 py-0.5">{upload.original_filename}</p>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        /* List view (default) */
+                        (request.uploads || []).map((upload: any) => {
+                          const isImage = (upload.mime_type || '').startsWith('image');
+                          const isVideo = (upload.mime_type || '').startsWith('video');
+                          return (
+                            <div key={upload.id} className={`flex items-center gap-3 p-2.5 border rounded-lg transition-colors ${
+                              selectedUploadIds.includes(upload.id) ? 'border-indigo-300 bg-indigo-50/50 dark:bg-indigo-950/20' : 'hover:bg-muted/50'
+                            }`}>
+                              {(isBuyerHead || isAdmin) && (
+                                <input type="checkbox" className="rounded border-border w-4 h-4 shrink-0"
+                                  checked={selectedUploadIds.includes(upload.id)}
+                                  onChange={e => {
+                                    if (e.target.checked) setSelectedUploadIds(prev => [...prev, upload.id]);
+                                    else setSelectedUploadIds(prev => prev.filter(id => id !== upload.id));
+                                  }}
+                                />
+                              )}
+                              {/* Thumbnail */}
+                              <div className="w-10 h-10 rounded overflow-hidden bg-gray-100 dark:bg-gray-800 flex items-center justify-center shrink-0 cursor-pointer"
+                                onClick={() => setPreviewUpload(upload)}>
+                                {isImage && upload.s3_url ? (
+                                  <img src={upload.s3_url} alt="" className="w-full h-full object-cover" />
+                                ) : isVideo ? (
+                                  <Play className="w-4 h-4 text-gray-400" />
+                                ) : (
+                                  <File className="w-4 h-4 text-gray-400" />
+                                )}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium truncate">{upload.original_filename}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  By {upload.uploader_name} · {formatDateTime(upload.created_at)}
+                                  {upload.file_size ? ` · ${(upload.file_size / 1024 / 1024).toFixed(2)} MB` : ''}
+                                  {upload.comments ? ` · ${upload.comments}` : ''}
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-1 shrink-0">
+                                <button onClick={() => setPreviewUpload(upload)} className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded" title="Preview">
+                                  <Eye className="w-4 h-4 text-gray-500" />
+                                </button>
+                                <button onClick={() => handleUploadDownload(upload)} className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded" title="Download">
+                                  <Download className="w-4 h-4 text-blue-600" />
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+
+                      {/* Preview Modal */}
+                      {previewUpload && (
+                        <div className="fixed inset-0 z-[9999] bg-black/80 flex items-center justify-center" onClick={() => setPreviewUpload(null)}>
+                          <div className="relative max-w-4xl max-h-[90vh] w-full mx-4" onClick={e => e.stopPropagation()}>
+                            <button onClick={() => setPreviewUpload(null)} className="absolute -top-10 right-0 text-white hover:text-gray-300">
+                              <X className="w-6 h-6" />
+                            </button>
+                            {(previewUpload.mime_type || '').startsWith('video') ? (
+                              <video src={previewUpload.s3_url} controls autoPlay className="w-full max-h-[80vh] rounded-lg" />
+                            ) : (previewUpload.mime_type || '').startsWith('image') ? (
+                              <img src={previewUpload.s3_url} alt={previewUpload.original_filename} className="w-full max-h-[80vh] object-contain rounded-lg" />
+                            ) : (
+                              <div className="bg-white dark:bg-gray-800 rounded-lg p-12 text-center">
+                                <File className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                                <p className="text-lg font-medium">{previewUpload.original_filename}</p>
+                                <p className="text-sm text-muted-foreground mt-1">{previewUpload.file_size ? `${(previewUpload.file_size / 1024 / 1024).toFixed(2)} MB` : ''}</p>
+                                <button onClick={() => handleUploadDownload(previewUpload)} className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                                  <Download className="w-4 h-4 inline mr-2" />Download
+                                </button>
+                              </div>
+                            )}
+                            <div className="mt-2 text-white text-center">
+                              <p className="text-sm font-medium">{previewUpload.original_filename}</p>
+                              <p className="text-xs text-gray-300">{previewUpload.uploader_name} · {formatDateTime(previewUpload.created_at)}</p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </>
                   )}
                 </div>
