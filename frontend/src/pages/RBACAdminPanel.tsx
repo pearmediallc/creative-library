@@ -528,8 +528,9 @@ export function RBACAdminPanel() {
                                 }
                               });
                               setShowGrantPermission(true);
-                              // All sections start collapsed (accordion style)
-                              setGrantPermissionData({ ...grantPermissionData, userId: selectedUser.id, selectedPermissions: permMap, expandedResources: new Set<string>() });
+                              // Auto-expand sections that have pre-checked permissions so user can see them
+                              const expandedSections = new Set<string>(Object.keys(permMap).filter(k => permMap[k].size > 0));
+                              setGrantPermissionData({ ...grantPermissionData, userId: selectedUser.id, selectedPermissions: permMap, expandedResources: expandedSections });
                             }}
                           >
                             <Shield className="w-4 h-4 mr-2" />

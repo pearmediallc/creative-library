@@ -214,11 +214,22 @@ async function getUserPermissions(req, res) {
         // Get merged permissions from config (uses exact role name matching)
         const mergedPerms = getMergedPermissions(primaryRole, additionalRoles);
 
+        // Map config resource types to frontend RESOURCE_ACTION_MAP keys
+        const RESOURCE_TYPE_MAP = {
+          'media': 'media_file',
+          'folders': 'folder',
+          'file_requests': 'file_request',
+          'workload': 'workload',
+          'users': 'user',
+          'teams': 'teams'
+        };
+
         // Convert to flat array format matching what frontend expects
         for (const [resourceType, actions] of Object.entries(mergedPerms)) {
+          const mappedType = RESOURCE_TYPE_MAP[resourceType] || resourceType;
           for (const action of actions) {
             roleDefaultPermissions.push({
-              resource_type: resourceType,
+              resource_type: mappedType,
               action: action,
               permission: 'allow',
               role_name: primaryRole

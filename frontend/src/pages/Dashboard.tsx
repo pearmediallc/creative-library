@@ -56,7 +56,9 @@ export function DashboardPage() {
   const [editorDashboard, setEditorDashboard] = useState<EditorDashboardData | null>(null);
 
   const additionalRoles: string[] = (user as any)?.additional_roles || [];
-  const hasVHAccess = additionalRoles.some(r => ['vertical_head', 'team_lead', 'assistant_team_lead', 'ceo', 'head_media_buying', 'creative_head'].includes(r));
+  const assignedVerticals: string[] = (user as any)?.assigned_verticals || [];
+  const hasVHAccess = additionalRoles.some(r => ['vertical_head', 'team_lead', 'assistant_team_lead', 'ceo', 'head_media_buying', 'creative_head'].includes(r))
+    || assignedVerticals.length > 0; // User has assigned verticals = VH access
   const canViewAnalytics = hasFullDashboard(user?.role) || additionalRoles.some(r => ['ceo', 'head_media_buying', 'creative_head'].includes(r));
   const isEditorUser = isEditor(user?.role) && !hasVHAccess;
   const isBuyerUser = isBuyer(user?.role);
